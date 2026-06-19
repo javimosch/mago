@@ -179,33 +179,10 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	b.WriteString("## Your role\n" + a.Title + "\n\n")
 	b.WriteString("## Company state (STATE.md)\n" + readFileOr(c.stateFile(), "(empty)") + "\n\n")
 	b.WriteString(fmt.Sprintf("## Active task #%s: %s\nstatus: %s\n\n%s\n\n", t.ID, t.Title, t.Status, t.Body))
-	b.WriteString("## Skills (learnings/caveats/pitfalls from past work)\n" + c.allSkillsText() + "\n\n")
+	b.WriteString("## Skills (learnings/caveats/pitfalls from past work)\n" + c.selectSkillsText(a, t) + "\n\n")
 	b.WriteString("## Your recent runs\n" + c.recentJournalSummaries(a.Name, 3) + "\n\n")
 	b.WriteString("## Instruction\nWork on the active task for this tick. First check the progress log and state to " +
 		"see what is already done — do not repeat it. Make concrete progress, then emit your reflection JSON.\n")
-	return b.String()
-}
-
-func (c *Company) allSkillsText() string {
-	idx := readFileOr(c.skillsIndex(), "")
-	entries, err := os.ReadDir(c.skillsDir())
-	var b strings.Builder
-	if idx != "" {
-		b.WriteString(idx + "\n")
-	}
-	if err == nil {
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			if bb, err := os.ReadFile(filepath.Join(c.skillsDir(), e.Name(), "SKILL.md")); err == nil {
-				b.WriteString("\n--- skill: " + e.Name() + " ---\n" + string(bb) + "\n")
-			}
-		}
-	}
-	if strings.TrimSpace(b.String()) == "" {
-		return "(no skills yet)"
-	}
 	return b.String()
 }
 

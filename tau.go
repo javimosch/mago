@@ -58,6 +58,31 @@ func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string
 	return content, nil
 }
 
+// tauComplete is a lightweight one-shot call (no tools, no stream) used for
+// auxiliary reasoning like skill selection. Returns the model's content.
+func tauComplete(a *Agent, prompt string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tau", "-p",
+		"--provider", a.Provider, "--model", a.Model,
+		"--no-tools", "--no-stream", "--mode", "json", prompt)
+	cmd.Env = os.Environ()
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		var m map[string]any
+		if json.Unmarshal([]byte(strings.TrimSpace(lines[i])), &m) == nil {
+			if c, ok := m["content"].(string); ok && c != "" {
+				return c, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no content from tau")
+}
+
 // emitProgress streams the model's text chunks to stderr so the human can watch.
 func emitProgress(line string) {
 	var m map[string]any
