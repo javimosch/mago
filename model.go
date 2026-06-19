@@ -21,6 +21,7 @@ type Task struct {
 	Title     string
 	Status    string // open, in_progress, blocked, needs_human, done
 	Assignee  string
+	Project   string // which project repo/workspace this task targets ("" = default)
 	ClaimedAt string
 	Body      string
 }

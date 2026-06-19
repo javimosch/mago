@@ -12,9 +12,10 @@ import (
 // Company is a local mago company rooted at a directory containing .mago/.
 // Task/HITL operations are delegated to a TaskBackend (local files or GitHub).
 type Company struct {
-	Dir   string
-	Name  string
-	tasks TaskBackend
+	Dir    string
+	Name   string
+	ghRepo string
+	tasks  TaskBackend
 }
 
 func loadCompany(dir string) (*Company, error) {
@@ -25,9 +26,9 @@ func loadCompany(dir string) (*Company, error) {
 	if _, err := os.Stat(filepath.Join(abs, ".mago")); err != nil {
 		return nil, fmt.Errorf("not a mago company (no .mago/) at %s — run `mago init` first", abs)
 	}
-	c := &Company{Dir: abs, Name: filepath.Base(abs)}
-	if repo := os.Getenv("MAGO_GH_REPO"); repo != "" {
-		c.tasks = &githubBackend{repo: repo}
+	c := &Company{Dir: abs, Name: filepath.Base(abs), ghRepo: os.Getenv("MAGO_GH_REPO")}
+	if c.ghRepo != "" {
+		c.tasks = &githubBackend{repo: c.ghRepo}
 	} else {
 		c.tasks = &localBackend{c: c}
 	}
@@ -41,6 +42,19 @@ func (c *Company) runsDir() string      { return filepath.Join(c.magoDir(), "run
 func (c *Company) inboxDir() string     { return filepath.Join(c.magoDir(), "inbox") }
 func (c *Company) tasksDir() string     { return filepath.Join(c.Dir, "tasks") }
 func (c *Company) workspaceDir() string { return filepath.Join(c.Dir, "workspace") }
+func (c *Company) projectsDir() string  { return filepath.Join(c.Dir, "projects") }
+func (c *Company) projectDir(name string) string {
+	return filepath.Join(c.projectsDir(), name)
+}
+
+// workspaceFor resolves where a task's work happens: its project repo's workspace,
+// or the default workspace when the task targets no specific project.
+func (c *Company) workspaceFor(t *Task) string {
+	if t != nil && t.Project != "" {
+		return c.projectDir(t.Project)
+	}
+	return c.workspaceDir()
+}
 func (c *Company) stateFile() string    { return filepath.Join(c.Dir, "STATE.md") }
 func (c *Company) skillsIndex() string  { return filepath.Join(c.skillsDir(), "INDEX.md") }
 

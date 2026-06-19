@@ -20,17 +20,23 @@ func (c *Company) loadAgentNames() ([]string, error) {
 	return names, nil
 }
 
-// cmdTick reconciles the whole company: route open tasks to the best-fit agent by
-// role, then run each agent on its actionable task. No hand-ordering.
+// cmdTick reconciles the whole company once.
 func cmdTick(args []string) error {
 	dir, _ := parseCompanyDir(args)
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
+	_, err = reconcileOnce(comp)
+	return err
+}
+
+// reconcileOnce routes open tasks to best-fit agents by role, then runs each agent
+// on its actionable task. Returns whether any agent did work. No hand-ordering.
+func reconcileOnce(comp *Company) (bool, error) {
 	names, err := comp.loadAgentNames()
 	if err != nil || len(names) == 0 {
-		return fmt.Errorf("no agents in %s", comp.agentsDir())
+		return false, fmt.Errorf("no agents in %s", comp.agentsDir())
 	}
 	var agents []*Agent
 	for _, n := range names {
@@ -42,10 +48,9 @@ func cmdTick(args []string) error {
 		agents = append(agents, a)
 	}
 
-	// route open, unassigned tasks to a best-fit owner
 	tasks, err := comp.tasks.ListTasks()
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, t := range tasks {
 		if t.Status != "open" || t.Assignee != "" {
@@ -63,18 +68,20 @@ func cmdTick(args []string) error {
 		fmt.Fprintf(os.Stderr, "[route] task #%s -> %s\n", t.ID, owner)
 	}
 
-	// each agent works whatever is actionable for it
+	worked := false
 	for _, a := range agents {
 		res, err := runTick(comp, a.Name)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[tick] %s: %v\n", a.Name, err)
 			continue
 		}
-		if !res.worked {
+		if res.worked {
+			worked = true
+		} else {
 			fmt.Fprintf(os.Stderr, "[tick] %s: nothing to do\n", a.Name)
 		}
 	}
-	return nil
+	return worked, nil
 }
 
 // routeTask asks the cheap model which agent should own a task, given the roster.

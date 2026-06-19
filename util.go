@@ -55,6 +55,22 @@ func truncate(s string, n int) string {
 
 func ensureDir(p string) error { return os.MkdirAll(p, 0o755) }
 
+func dirListing(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return "(empty)"
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			name += "/"
+		}
+		b.WriteString("- " + name + "\n")
+	}
+	return b.String()
+}
+
 // stripFences removes a leading ```...``` code fence if the model wrapped its JSON.
 func stripFences(s string) string {
 	s = strings.TrimSpace(s)

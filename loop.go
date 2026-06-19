@@ -7,9 +7,10 @@ import (
 	"time"
 )
 
-// cmdLoop runs an agent on an adaptive cadence: the interval resets to --base when
-// the agent did real work, and doubles (up to --max) when it was idle. This is the
-// POC's cheapness dial — an idle company backs off and costs ~nothing.
+// cmdLoop runs ticks on an adaptive cadence: the interval resets to --base when work
+// happened, and doubles (up to --max) when idle. With no agent argument it loops the
+// full reconcile (route + all agents) — an unattended company; with an agent it loops
+// just that agent. This is the POC's cheapness dial.
 func cmdLoop(args []string) error {
 	dir, rest := parseCompanyDir(args)
 	base, maxI, maxTicks := 3, 60, 5
@@ -35,28 +36,32 @@ func cmdLoop(args []string) error {
 			pos = append(pos, rest[i])
 		}
 	}
-	if len(pos) < 1 {
-		return fmt.Errorf("usage: mago loop <agent> [--base secs] [--max secs] [--max-ticks n] [-C dir]")
-	}
-	agent := pos[0]
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
+	agent := ""
+	if len(pos) >= 1 {
+		agent = pos[0]
+	}
 
 	interval := base
 	for i := 0; i < maxTicks; i++ {
-		res, err := runTick(comp, agent)
-		sig := "error"
-		if err == nil {
-			sig = orDefault(res.signal, "idle")
+		var worked bool
+		if agent == "" {
+			worked, err = reconcileOnce(comp)
 		} else {
+			var res tickResult
+			res, err = runTick(comp, agent)
+			worked = res.worked
+		}
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "[loop] tick %d error: %v\n", i+1, err)
 		}
-		if err == nil && res.worked && res.signal != "idle" {
-			interval = base // active: stay responsive
+		if err == nil && worked {
+			interval = base
 		} else {
-			interval *= 2 // idle/blocked/error: back off
+			interval *= 2
 			if interval > maxI {
 				interval = maxI
 			}
@@ -65,8 +70,7 @@ func cmdLoop(args []string) error {
 		if i < maxTicks-1 {
 			next = strconv.Itoa(interval) + "s"
 		}
-		fmt.Fprintf(os.Stderr, "[loop] tick %d: worked=%v signal=%s -> next in %s\n",
-			i+1, err == nil && res.worked, sig, next)
+		fmt.Fprintf(os.Stderr, "[loop] tick %d: worked=%v -> next in %s\n", i+1, worked, next)
 		if i < maxTicks-1 {
 			time.Sleep(time.Duration(interval) * time.Second)
 		}

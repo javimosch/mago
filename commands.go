@@ -45,6 +45,7 @@ func cmdInit(args []string) error {
 		filepath.Join(abs, ".mago", "inbox"),
 		filepath.Join(abs, "tasks"),
 		filepath.Join(abs, "workspace"),
+		filepath.Join(abs, "projects"),
 	} {
 		if err := ensureDir(d); err != nil {
 			return err
@@ -66,16 +67,49 @@ func cmdTask(args []string) error {
 	if len(rest) < 2 || rest[0] != "add" {
 		return fmt.Errorf("usage: mago task add \"<title>\" [-C dir]")
 	}
+	project := ""
+	var words []string
+	for i := 1; i < len(rest); i++ {
+		if rest[i] == "--project" && i+1 < len(rest) {
+			project = rest[i+1]
+			i++
+			continue
+		}
+		words = append(words, rest[i])
+	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
-	t, err := comp.tasks.AddTask(strings.Join(rest[1:], " "))
+	t, err := comp.tasks.AddTask(strings.Join(words, " "), project)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("created task #%s: %s\n", t.ID, t.Title)
+	fmt.Printf("created task #%s: %s%s\n", t.ID, t.Title, ifStr(project != "", " [project: "+project+"]", ""))
 	return nil
+}
+
+func cmdProject(args []string) error {
+	dir, rest := parseCompanyDir(args)
+	if len(rest) < 2 || rest[0] != "add" {
+		return fmt.Errorf("usage: mago project add <name> [-C dir]")
+	}
+	comp, err := loadCompany(dir)
+	if err != nil {
+		return err
+	}
+	if err := ensureDir(comp.projectDir(rest[1])); err != nil {
+		return err
+	}
+	fmt.Printf("project %q ready at %s\n", rest[1], comp.projectDir(rest[1]))
+	return nil
+}
+
+func ifStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
 }
 
 func cmdStatus(args []string) error {

@@ -97,6 +97,15 @@ func (gi ghIssue) assignee() string {
 	return ""
 }
 
+func (gi ghIssue) project() string {
+	for _, l := range gi.Labels {
+		if strings.HasPrefix(l.Name, "project:") {
+			return strings.TrimPrefix(l.Name, "project:")
+		}
+	}
+	return ""
+}
+
 // toTask builds a Task; includes body + comments as the progress log.
 func (gi ghIssue) toTask() *Task {
 	body := gi.Body + "\n\n## Progress log\n"
@@ -108,6 +117,7 @@ func (gi ghIssue) toTask() *Task {
 		Title:    gi.Title,
 		Status:   gi.status(),
 		Assignee: gi.assignee(),
+		Project:  gi.project(),
 		Body:     strings.TrimSpace(body),
 	}
 }
@@ -186,14 +196,19 @@ func (b *githubBackend) ListTasks() ([]*Task, error) {
 
 func (b *githubBackend) FindTask(id string) (*Task, error) { return b.loadIssue(id) }
 
-func (b *githubBackend) AddTask(title string) (*Task, error) {
+func (b *githubBackend) AddTask(title, project string) (*Task, error) {
 	b.ensureLabels()
-	out, err := b.gh("issue", "create", "--title", title, "--body", "Created via mago.")
+	args := []string{"issue", "create", "--title", title, "--body", "Created via mago."}
+	if project != "" {
+		b.gh("label", "create", "project:"+project, "--color", "5319e7", "--force")
+		args = append(args, "--label", "project:"+project)
+	}
+	out, err := b.gh(args...)
 	if err != nil {
 		return nil, err
 	}
 	num := issueNumberFromURL(strings.TrimSpace(out))
-	return &Task{ID: num, Title: title, Status: "open"}, nil
+	return &Task{ID: num, Title: title, Status: "open", Project: project}, nil
 }
 
 func (b *githubBackend) PickActiveTask(agent string) (*Task, error) {

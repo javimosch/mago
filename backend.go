@@ -11,7 +11,7 @@ import (
 // TaskBackend is the "world" mago coordinates through: tasks, claims, progress,
 // status, and HITL. Local files for the POC; GitHub (issues/comments) for the product.
 type TaskBackend interface {
-	AddTask(title string) (*Task, error)
+	AddTask(title, project string) (*Task, error)
 	ListTasks() ([]*Task, error)
 	FindTask(id string) (*Task, error)
 	PickActiveTask(agent string) (*Task, error)
@@ -33,8 +33,8 @@ func (b *localBackend) taskPath(id string) string {
 }
 
 func (b *localBackend) save(t *Task) error {
-	fm := map[string]string{"id": t.ID, "title": t.Title, "status": t.Status, "assignee": t.Assignee, "claimed_at": t.ClaimedAt}
-	order := []string{"id", "title", "status", "assignee", "claimed_at"}
+	fm := map[string]string{"id": t.ID, "title": t.Title, "status": t.Status, "assignee": t.Assignee, "project": t.Project, "claimed_at": t.ClaimedAt}
+	order := []string{"id", "title", "status", "assignee", "project", "claimed_at"}
 	return os.WriteFile(b.taskPath(t.ID), []byte(renderFrontmatter(fm, order, t.Body)), 0o644)
 }
 
@@ -61,6 +61,7 @@ func (b *localBackend) ListTasks() ([]*Task, error) {
 			Title:     fm["title"],
 			Status:    orDefault(fm["status"], "open"),
 			Assignee:  fm["assignee"],
+			Project:   fm["project"],
 			ClaimedAt: fm["claimed_at"],
 			Body:      strings.TrimSpace(body),
 		})
@@ -82,7 +83,7 @@ func (b *localBackend) FindTask(id string) (*Task, error) {
 	return nil, fmt.Errorf("task #%s not found", id)
 }
 
-func (b *localBackend) AddTask(title string) (*Task, error) {
+func (b *localBackend) AddTask(title, project string) (*Task, error) {
 	ts, _ := b.ListTasks()
 	maxID := 0
 	for _, t := range ts {
@@ -90,7 +91,7 @@ func (b *localBackend) AddTask(title string) (*Task, error) {
 			maxID = n
 		}
 	}
-	t := &Task{ID: fmtID(maxID + 1), Title: title, Status: "open", Body: "## Description\n" + title + "\n\n## Progress log\n"}
+	t := &Task{ID: fmtID(maxID + 1), Title: title, Status: "open", Project: project, Body: "## Description\n" + title + "\n\n## Progress log\n"}
 	return t, b.save(t)
 }
 

@@ -48,25 +48,49 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 	if err := comp.tasks.Claim(task, agentName); err != nil {
 		return tickResult{}, err
 	}
-	fmt.Fprintf(os.Stderr, "=== mago tick: %s -> task #%s %q  [%s/%s] ===\n",
-		agentName, task.ID, task.Title, a.Provider, a.Model)
-	content, err := runTau(comp.workspaceDir(), a, buildSystemPrompt(a), comp.buildBriefing(a, task))
+	ws := comp.workspaceFor(task)
+	ensureDir(ws)
+	fmt.Fprintf(os.Stderr, "=== mago tick: %s -> task #%s %q [%s] [%s/%s] ===\n",
+		agentName, task.ID, task.Title, orDefault(task.Project, "default"), a.Provider, a.Model)
+	content, err := runTau(ws, a, buildSystemPrompt(a), comp.buildBriefing(a, task))
 	if err != nil {
 		return tickResult{}, err
 	}
 	refl, err := parseReflection(content)
 	if err != nil {
-		// A tick that can't produce a parseable reflection must not crash the loop.
-		// The work is already on disk; leave the task claimed and let the next tick
-		// re-ground from reality and finish it (self-healing).
+		// Recovery: ask once, with no tools, for just the reflection — this can't emit
+		// the malformed tool-call markup that broke the parse.
+		refl = comp.recoverReflection(a, task, ws)
+	}
+	if refl == nil {
+		// Still nothing parseable. Don't crash the loop: the work is already on disk;
+		// leave the task claimed and let the next tick re-ground and finish it.
 		comp.writeRawFailure(a, task, content)
-		fmt.Fprintf(os.Stderr, "warning: no parseable reflection this tick (raw saved to runs/); "+
-			"task #%s stays claimed and resumes next tick\n", task.ID)
+		fmt.Fprintf(os.Stderr, "warning: no parseable reflection this tick (raw saved); task #%s resumes next tick\n", task.ID)
+		comp.pushState(fmt.Sprintf("tick %s on #%s (incomplete)", agentName, task.ID))
 		return tickResult{worked: true, signal: "working"}, nil
 	}
 	comp.writeBack(a, task, refl, content)
 	comp.printRunResult(a, task, refl)
+	comp.pushState(fmt.Sprintf("tick %s on #%s: %s", agentName, task.ID, oneLine(refl.Summary)))
 	return tickResult{worked: true, signal: refl.CadenceSignal, status: refl.TaskStatus}, nil
+}
+
+// recoverReflection salvages a tick whose main output didn't parse, by asking the
+// model (no tools) to emit just the reflection given the task and workspace state.
+func (c *Company) recoverReflection(a *Agent, t *Task, ws string) *Reflection {
+	prompt := "You just finished a work tick on this task:\nTITLE: " + t.Title +
+		"\n\nThe workspace now contains:\n" + dirListing(ws) + "\n\nProduce your reflection now.\n\n" + reflectionInstruction
+	out, err := tauComplete(a, prompt)
+	if err != nil {
+		return nil
+	}
+	r, err := parseReflection(out)
+	if err != nil {
+		return nil
+	}
+	fmt.Fprintln(os.Stderr, "[recovery] salvaged the reflection via a follow-up call")
+	return r
 }
 
 // applyModelOverrides lets the smoke test switch provider/model via env without
