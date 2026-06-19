@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // writeBack is the worker doing all bookkeeping from the agent's reflection.
@@ -95,6 +96,10 @@ func (c *Company) appendSkill(skill, note, agent, ts string) {
 		body := "## Notes\n\n- " + ts + " [" + agent + "] " + note + "\n"
 		os.WriteFile(p, []byte(renderFrontmatter(fm, []string{"name", "description"}, body)), 0o644)
 		c.appendIndexLine(name, oneLine(truncate(note, 80)))
+		return
+	}
+	// dedupe: skip notes already recorded verbatim in this skill
+	if existing, err := os.ReadFile(p); err == nil && strings.Contains(string(existing), strings.TrimSpace(note)) {
 		return
 	}
 	if f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
