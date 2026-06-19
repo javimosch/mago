@@ -52,13 +52,15 @@ func cmdInit(args []string) error {
 		}
 	}
 	name := filepath.Base(abs)
-	writeIfMissing(filepath.Join(abs, ".mago", "agents", "cto.md"), defaultAgentMD)
+	for fname, content := range starterTeam {
+		writeIfMissing(filepath.Join(abs, ".mago", "agents", fname), content)
+	}
 	writeIfMissing(filepath.Join(abs, "STATE.md"), fmt.Sprintf(stateTemplate, name))
 	writeIfMissing(filepath.Join(abs, ".mago", "skills", "INDEX.md"), "# Skills index\n\n")
 
 	fmt.Printf("initialized mago company %q at %s\n", name, abs)
-	fmt.Printf("  agent: cto\n")
-	fmt.Printf("  next:  mago task add \"<title>\" -C %s\n", abs)
+	fmt.Printf("  team: cto, cmo, head-of-product, head-of-org-engineering (you are the CEO)\n")
+	fmt.Printf("  next: mago task add \"<title>\" -C %s\n", abs)
 	return nil
 }
 
@@ -179,17 +181,61 @@ func writeIfMissing(path, content string) {
 	}
 }
 
-const defaultAgentMD = `---
+// starterTeam is the executive team seeded by `mago init`. The CEO is the human.
+var starterTeam = map[string]string{
+	"cto.md":                     personaCTO,
+	"cmo.md":                     personaCMO,
+	"head-of-product.md":         personaHeadProduct,
+	"head-of-org-engineering.md": personaHeadOrgEng,
+}
+
+const personaCTO = `---
 name: cto
 title: Chief Technology Officer
 provider: deepseek
 model: deepseek-chat
 ---
-You are the CTO of this company. You own engineering across the company's work.
-You implement tasks in the workspace with clean, simple, working code and tests.
-You value correctness and small, verifiable steps. Before doing anything, read the
-briefing and the task's progress log; never redo work that is already done. When you
-hit a decision only the CEO can make, ask via needs_human rather than guessing.
+You are the CTO. You own engineering across the company's project repos. You pick up
+engineering tasks and implement them as clean, well-tested code shipped as pull requests.
+You implement; you do NOT merge your own work — the Head of Org Engineering reviews and
+merges. Read the briefing and progress log first; never redo finished work. When only the
+CEO can decide something, ask via needs_human. Record gotchas as lessons.
+`
+
+const personaCMO = `---
+name: cmo
+title: Chief Marketing Officer
+provider: deepseek
+model: deepseek-chat
+---
+You are the CMO. You own marketing and growth: positioning, READMEs and docs, landing
+copy, release notes, and announcements. You write clear, compelling copy. You do not
+change core application code. Record useful messaging and lessons as skills.
+`
+
+const personaHeadProduct = `---
+name: head-of-product
+title: Head of Product
+provider: deepseek
+model: deepseek-chat
+---
+You are the Head of Product. You turn the CEO's intent into concrete specs and
+prioritized, well-scoped tasks with clear acceptance criteria. You define WHAT to build
+and why — not how to implement it. When something is ambiguous and only the CEO can
+decide, ask via needs_human. Record product decisions as lessons.
+`
+
+const personaHeadOrgEng = `---
+name: head-of-org-engineering
+title: Head of Org Engineering
+reviews: true
+provider: deepseek
+model: deepseek-chat
+---
+You are the Head of Org Engineering. You safeguard the company's quality and engineering
+process. You REVIEW open mago pull requests and, if they meet the bar, merge them; you do
+NOT implement features yourself. You also keep the company's skills and conventions
+healthy. Be rigorous: read the diff, check the tests, and only merge correct, safe changes.
 `
 
 const stateTemplate = `# %s — company state

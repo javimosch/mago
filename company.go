@@ -88,6 +88,7 @@ func (c *Company) loadAgent(name string) (*Agent, error) {
 		Title:    orDefault(fm["title"], name),
 		Provider: orDefault(fm["provider"], "deepseek"),
 		Model:    orDefault(fm["model"], "deepseek-chat"),
+		Reviews:  fm["reviews"] == "true",
 		Persona:  strings.TrimSpace(body),
 	}, nil
 }
@@ -133,7 +134,7 @@ mago operating contract (read carefully):
 }
 
 func isReviewerRole(a *Agent) bool {
-	return strings.Contains(strings.ToLower(a.Name+" "+a.Title), "review")
+	return a.Reviews || strings.Contains(strings.ToLower(a.Name+" "+a.Title), "review")
 }
 
 // projectRepoInstructions gives ROLE-APPROPRIATE git/gh steps: implementers open a PR

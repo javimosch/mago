@@ -11,6 +11,7 @@ type Agent struct {
 	Title    string
 	Provider string
 	Model    string
+	Reviews  bool // designated PR reviewer/merger (frontmatter `reviews: true`)
 	Persona  string
 }
 
