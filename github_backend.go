@@ -126,16 +126,50 @@ func (b *githubBackend) listIssues(extra ...string) ([]ghIssue, error) {
 	return issues, nil
 }
 
-func (b *githubBackend) loadIssue(number string) (*Task, error) {
+func (b *githubBackend) viewIssue(number string) (ghIssue, error) {
+	var gi ghIssue
 	out, err := b.gh("issue", "view", number, "--json", "number,title,state,body,labels,comments")
+	if err != nil {
+		return gi, err
+	}
+	if err := json.Unmarshal([]byte(out), &gi); err != nil {
+		return gi, fmt.Errorf("parse issue %s: %w", number, err)
+	}
+	return gi, nil
+}
+
+func (b *githubBackend) loadIssue(number string) (*Task, error) {
+	gi, err := b.viewIssue(number)
 	if err != nil {
 		return nil, err
 	}
-	var gi ghIssue
-	if err := json.Unmarshal([]byte(out), &gi); err != nil {
-		return nil, fmt.Errorf("parse issue %s: %w", number, err)
-	}
 	return gi.toTask(), nil
+}
+
+// isMagoComment reports whether a comment was posted by mago (vs a human reply).
+// mago's comments start with a known marker; a human typing on GitHub does not.
+func isMagoComment(body string) bool {
+	t := strings.TrimSpace(body)
+	return strings.HasPrefix(t, "🔧") || strings.HasPrefix(t, "🙋") || strings.HasPrefix(t, "**")
+}
+
+// resumeAnsweredHITL polls mago:hitl issues and, when the last comment is a human
+// reply, flips the issue back to in-progress so the agent resumes. In production a
+// webhook does this instantly; here we poll on each tick.
+func (b *githubBackend) resumeAnsweredHITL() {
+	issues, err := b.listIssues("--label", labHITL)
+	if err != nil {
+		return
+	}
+	for _, gi := range issues {
+		full, err := b.viewIssue(strconv.Itoa(gi.Number))
+		if err != nil || len(full.Comments) == 0 {
+			continue
+		}
+		if last := full.Comments[len(full.Comments)-1]; !isMagoComment(last.Body) {
+			b.gh("issue", "edit", strconv.Itoa(gi.Number), "--remove-label", labHITL, "--add-label", labInProgress)
+		}
+	}
 }
 
 func (b *githubBackend) ListTasks() ([]*Task, error) {
@@ -163,6 +197,7 @@ func (b *githubBackend) AddTask(title string) (*Task, error) {
 }
 
 func (b *githubBackend) PickActiveTask(agent string) (*Task, error) {
+	b.resumeAnsweredHITL() // a human reply on a hitl issue makes it actionable again
 	issues, err := b.listIssues()
 	if err != nil {
 		return nil, err

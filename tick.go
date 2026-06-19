@@ -56,8 +56,13 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 	}
 	refl, err := parseReflection(content)
 	if err != nil {
+		// A tick that can't produce a parseable reflection must not crash the loop.
+		// The work is already on disk; leave the task claimed and let the next tick
+		// re-ground from reality and finish it (self-healing).
 		comp.writeRawFailure(a, task, content)
-		return tickResult{}, err
+		fmt.Fprintf(os.Stderr, "warning: no parseable reflection this tick (raw saved to runs/); "+
+			"task #%s stays claimed and resumes next tick\n", task.ID)
+		return tickResult{worked: true, signal: "working"}, nil
 	}
 	comp.writeBack(a, task, refl, content)
 	comp.printRunResult(a, task, refl)
