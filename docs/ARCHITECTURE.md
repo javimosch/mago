@@ -128,6 +128,7 @@ an orphan **`mago-state`** branch so the product history stays clean.
 
 ```
 company-repo/  (main)
+  STATE.md                   the company brain: goals, shipped, in-flight, decisions
   .mago/
     config.json              company config (defaults, budgets)
     projects.json            the N registered project repos
@@ -136,7 +137,8 @@ company-repo/  (main)
       cmo.md
       head-of-product.md
       head-of-org-engineering.md
-    skills/                  shared, improvable memory (see Skills)
+    skills/                  shared, improvable memory (see Skills + docs/MEMORY.md)
+      INDEX.md               one line per skill; always in context
       <skill-name>/SKILL.md
     decisions/               durable decisions agents must respect (ADR-style)
       <id>.md
@@ -198,6 +200,41 @@ they are durable knowledge, so they live on `main` alongside agent definitions �
 per-run `mago-state` exhaust. This is how a mago company gets cheaper and better at its job
 over time without the human curating every lesson.
 
+## Memory & progression
+
+How short, stateless ticks add up to real progress — and how agents avoid repeating
+mistakes, redoing finished work, or overlapping. Full design in [`docs/MEMORY.md`](MEMORY.md).
+The load-bearing rules:
+
+- **The world is truth; the session is scratch.** Every run re-derives "where am I" from
+  the backend (issues/PRs/git or the local backend), never from the goal session.
+- **Five memory types, five homes:** task (the issue/PR thread), world (`STATE.md`),
+  lessons (skills), episodic (journals), working (goal session).
+- **Context assembly** builds a *briefing* before each run (role · `STATE.md` · active task ·
+  `skills/INDEX.md` · recent journals · decisions). The agent reads it before acting.
+- **Claims** = self-assign + `agent:<name>` label + a claim comment. The reconciler won't
+  re-dispatch a claimed, active task. Stale claims auto-release. (This is why no a2a bus.)
+- **Reflection is structural:** every run ends with a schema-forced output
+  (`summary`, `state_delta`, `task_status`, `lessons[]`, `next`, `cadence_signal`) and the
+  *worker* does the bookkeeping from it — journal, STATE.md, skills, claim, HITL, cadence.
+
+## World backend (GitHub / Local) — the seam that enables the POC
+
+"Tasks / discussion / HITL / deliverables / claims / durable state" is an **interface**, not
+GitHub specifically. Two implementations:
+
+| Capability | Production (GitHub) | Local POC |
+|---|---|---|
+| tasks | issues | `tasks/*.md` files |
+| discussion / HITL | issue comments | local inbox file + CLI prompt |
+| deliverables | pull requests | local branches / diffs |
+| claims | assignee + label | a field in the task file |
+| durable state | commits (+ push) | local commits, **no push** |
+
+The core (reconcile loop, context assembly, claims, reflection, skills/STATE.md, tau driver)
+runs identically against either backend. v1 ships the GitHub backend; the **POC ships the
+Local backend** so the whole model is smoke-testable with no GitHub, push, platform, or SaaS.
+
 ## Webhooks & HITL latency (relay model — locked)
 
 Workers have no public IP and that is fine. The platform backend has the public IP and is
@@ -257,9 +294,11 @@ mago project add acme/api             grant + register a project repo
 - **email/password store** on the backend — hashing/storage choice; v2 supersedes with
   GitHub login.
 - **Worker reconcile cadence** — the worker's own heartbeat interval (its cheapness dial).
-- **Skill selection** — how the worker/agent picks which skills are *relevant* to inject
-  into a run (by description match? by project? all of them?).
-- **Decisions mechanism** — whether decisions are `mago:decision` issues, `.mago/decisions/`
-  ADR files, or both, and how agents are made to respect them.
+- **Skill retrieval at scale** — `skills/INDEX.md` + description match is enough for
+  hundreds; ranking/embeddings is a later concern (see `docs/MEMORY.md`).
+- **Decisions mechanism** — `mago:decision` issues vs `.mago/decisions/` ADR files vs both,
+  and how agents are reliably made to respect them.
 - **Exec personas** — the actual persona prose for CTO / CMO / Head of Product / Head of
   Org Engineering seeded by `company create`.
+- **POC backend shape** — the exact local `tasks/*.md` schema and inbox format for the
+  smoke-test build.
