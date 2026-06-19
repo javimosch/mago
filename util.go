@@ -1,0 +1,68 @@
+package main
+
+import (
+	"os"
+	"strings"
+	"time"
+)
+
+// sanitize lowercases and replaces non [a-z0-9-_] runes with '-' (for ids/paths).
+func sanitize(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + 32
+		default:
+			return '-'
+		}
+	}, s)
+}
+
+// nowStamp is a filesystem-safe UTC timestamp.
+func nowStamp() string { return time.Now().UTC().Format("2006-01-02T15-04-05Z") }
+
+func readFileOr(p, def string) string {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return def
+	}
+	if s := strings.TrimSpace(string(b)); s != "" {
+		return s
+	}
+	return def
+}
+
+func orDefault(v, def string) string {
+	if strings.TrimSpace(v) == "" {
+		return def
+	}
+	return v
+}
+
+func oneLine(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(s, "\r", " "), "\n", " "))
+}
+
+func truncate(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+func ensureDir(p string) error { return os.MkdirAll(p, 0o755) }
+
+// stripFences removes a leading ```...``` code fence if the model wrapped its JSON.
+func stripFences(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "```") {
+		if i := strings.Index(s, "\n"); i >= 0 {
+			s = s[i+1:]
+		}
+		s = strings.TrimSuffix(strings.TrimSpace(s), "```")
+	}
+	return strings.TrimSpace(s)
+}
