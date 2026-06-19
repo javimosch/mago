@@ -3,6 +3,13 @@
 This document is the locked-in design for mago v1. Decisions here are committed; open
 questions are called out explicitly at the end.
 
+> **Implementation status:** a working POC validates the core loop end to end (memory,
+> claims, HITL, routing, cadence, multi-project, state-on-GitHub) on real models with no
+> platform/SaaS. See [STATUS.md](STATUS.md) for exactly what's built vs. designed below,
+> including intentional POC divergences (stateless ticks instead of goal sessions;
+> reflection via a fenced-json prompt instead of tau `--schema`; per-project workspace
+> dirs instead of git worktrees).
+
 ## Layers
 
 ```
@@ -97,9 +104,16 @@ manual (mago CLI / UI)               ┘
 ### Driving tau
 
 - **Single-shot `json+stream` subprocess per tick** (locked). Each wake is one invocation:
-  `tau --session <agent> --tools … --schema … "<prompt>"`, read the NDJSON stream, done.
-- Goal sessions carry the agent's memory across runs (`/goal …`, pause/resume/status).
-- The tau driver sits behind a `Driver` interface so ACP can be added later for live runs.
+  `tau --tools bash,read,write,edit --system-prompt … "<briefing>"`, read the NDJSON stream.
+- **Stateless per tick (as built):** the POC does *not* use `--session` — durable memory is
+  the files (STATE/tasks/skills/journals), so each tick re-grounds from reality. (The design
+  originally imagined goal sessions carrying memory; the file-based approach proved simpler,
+  cheaper, and is what made the progression model testable.)
+- **Reflection (as built):** requested as a trailing fenced ```json block and parsed on our
+  side. tau `--schema` is *not* used because the opencode-go provider rejects it.
+- A tick that can't produce a parseable reflection retries once (no-tools) and otherwise
+  self-heals: the work is on disk, the task stays claimed, the next tick finishes it.
+- The tau driver is isolated so ACP can be added later for live/interactive runs.
 
 ### Agent hands = bash → CLIs on PATH
 

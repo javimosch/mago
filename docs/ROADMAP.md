@@ -1,5 +1,11 @@
 # Roadmap
 
+> **POC status:** the v1 **worker runtime** below (git-native tick, triggers, tau driver,
+> GitHub backend, memory/skills, HITL, role routing, adaptive cadence, multi-project,
+> state-on-`mago-state`) is built and verified — see [STATUS.md](STATUS.md). What remains
+> for v1: the **platform backend** (accounts, Stripe, webhook relay), the **two-binary
+> split**, real **project clone→PR**, and git **worktrees**.
+
 ## v1 — a single company, run cheaply
 
 Goal: a client's own agent can onboard, stand up one worker and one company, and that

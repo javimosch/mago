@@ -30,10 +30,25 @@ Platform backend (ours) ── accounts + Stripe + webhook relay
 
 ## Status
 
-Pre-implementation. Design is locked; see [`docs/`](docs/):
+**Working POC.** A single `mago` binary runs the core loop end to end on real models —
+memory/progression, claims, HITL (local + GitHub), role routing, adaptive cadence,
+multi-project, and state pushed to a `mago-state` branch — with no platform, accounts, or
+billing yet. See [docs/STATUS.md](docs/STATUS.md) for exactly what's built.
 
+```sh
+go build -o mago .
+./mago init myco
+./mago task add "Build a /health endpoint with a test" -C myco
+MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash ./mago run cto -C myco
+# GitHub mode: set MAGO_GH_REPO=owner/repo (tasks become issues, HITL via comments)
+```
+
+Docs:
+
+- [STATUS.md](docs/STATUS.md) — what's actually built vs. designed
 - [VISION.md](docs/VISION.md) — what mago is and the bet behind it
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — the layers, binaries, data flow, git-native model
+- [MEMORY.md](docs/MEMORY.md) — how short ticks accumulate into real progress
 - [ROADMAP.md](docs/ROADMAP.md) — v1 scope and what waits for v2
 - [AGENTS.md](AGENTS.md) — coding guidelines for working in this repo
 
