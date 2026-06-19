@@ -21,31 +21,28 @@ func (c *Company) writeBack(a *Agent, t *Task, r *Reflection, raw string) error 
 		}
 		c.appendSkill(l.Skill, l.Note, a.Name, ts)
 	}
-	c.applyTaskStatus(t, a, r, ts)
+	c.applyTaskStatus(t, a, r)
 	return nil
 }
 
-func (c *Company) applyTaskStatus(t *Task, a *Agent, r *Reflection, ts string) {
+func (c *Company) applyTaskStatus(t *Task, a *Agent, r *Reflection) {
 	switch r.TaskStatus {
 	case "done":
-		t.Status = "done"
-		t.Body += progressEntry(ts, a.Name, "DONE: "+r.Summary+" (next: "+r.Next+")")
+		c.tasks.RecordProgress(t, a.Name, "DONE: "+oneLine(r.Summary)+" (next: "+oneLine(r.Next)+")")
+		c.tasks.SetStatus(t, "done")
 	case "needs_human":
-		t.Status = "needs_human"
 		q := r.HitlQuestion
 		if q == "" {
 			q = r.Next
 		}
-		c.writeInbox(t, a, q, ts)
-		t.Body += progressEntry(ts, a.Name, "NEEDS HUMAN: "+q)
+		c.tasks.RaiseHITL(t, a.Name, oneLine(q))
 	case "blocked":
-		t.Status = "blocked"
-		t.Body += progressEntry(ts, a.Name, "BLOCKED: "+r.Summary)
+		c.tasks.RecordProgress(t, a.Name, "BLOCKED: "+oneLine(r.Summary))
+		c.tasks.SetStatus(t, "blocked")
 	default:
-		t.Status = "in_progress"
-		t.Body += progressEntry(ts, a.Name, r.Summary+" (next: "+r.Next+")")
+		c.tasks.RecordProgress(t, a.Name, oneLine(r.Summary)+" (next: "+oneLine(r.Next)+")")
+		c.tasks.SetStatus(t, "in_progress")
 	}
-	c.saveTask(t)
 }
 
 func progressEntry(ts, who, text string) string {
@@ -118,12 +115,6 @@ func (c *Company) appendIndexLine(name, hook string) {
 		f.WriteString("- " + name + " — " + hook + "\n")
 		f.Close()
 	}
-}
-
-func (c *Company) writeInbox(t *Task, a *Agent, q, ts string) {
-	ensureDir(c.inboxDir())
-	body := fmt.Sprintf("from: %s\ntask: #%s %s\nat: %s\n\nQUESTION:\n%s\n", a.Name, t.ID, t.Title, ts, q)
-	os.WriteFile(filepath.Join(c.inboxDir(), "task-"+t.ID+".md"), []byte(body), 0o644)
 }
 
 func (c *Company) printRunResult(a *Agent, t *Task, r *Reflection) {

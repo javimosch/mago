@@ -66,28 +66,12 @@ func cmdTask(args []string) error {
 	if len(rest) < 2 || rest[0] != "add" {
 		return fmt.Errorf("usage: mago task add \"<title>\" [-C dir]")
 	}
-	title := strings.Join(rest[1:], " ")
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
-	tasks, err := comp.listTasks()
+	t, err := comp.tasks.AddTask(strings.Join(rest[1:], " "))
 	if err != nil {
-		return err
-	}
-	maxID := 0
-	for _, t := range tasks {
-		if n := atoiSafe(t.ID); n > maxID {
-			maxID = n
-		}
-	}
-	t := &Task{
-		ID:     fmtID(maxID + 1),
-		Title:  title,
-		Status: "open",
-		Body:   "## Description\n" + title + "\n\n## Progress log\n",
-	}
-	if err := comp.saveTask(t); err != nil {
 		return err
 	}
 	fmt.Printf("created task #%s: %s\n", t.ID, t.Title)
@@ -104,27 +88,21 @@ func cmdStatus(args []string) error {
 	fmt.Println(readFileOr(comp.stateFile(), "(no STATE.md)"))
 
 	fmt.Println("\n## Tasks")
-	tasks, _ := comp.listTasks()
+	tasks, err := comp.tasks.ListTasks()
+	if err != nil {
+		return err
+	}
 	if len(tasks) == 0 {
 		fmt.Println("  (none)")
 	}
 	for _, t := range tasks {
-		as := orDefault(t.Assignee, "-")
-		fmt.Printf("  #%s [%s] %s (assignee: %s)\n", t.ID, t.Status, t.Title, as)
+		fmt.Printf("  #%s [%s] %s (assignee: %s)\n", t.ID, t.Status, t.Title, orDefault(t.Assignee, "-"))
 	}
 
-	entries, _ := os.ReadDir(comp.inboxDir())
-	var pending []os.DirEntry
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".md") {
-			pending = append(pending, e)
-		}
-	}
-	if len(pending) > 0 {
+	if pending, _ := comp.tasks.PendingHITL(); len(pending) > 0 {
 		fmt.Println("\n## Pending human input (HITL)")
-		for _, e := range pending {
-			b, _ := os.ReadFile(filepath.Join(comp.inboxDir(), e.Name()))
-			fmt.Printf("%s\n", string(b))
+		for _, p := range pending {
+			fmt.Println(p)
 		}
 	}
 	return nil
@@ -135,23 +113,14 @@ func cmdAnswer(args []string) error {
 	if len(rest) < 2 {
 		return fmt.Errorf("usage: mago answer <task-id> \"<text>\" [-C dir]")
 	}
-	id := rest[0]
-	text := strings.Join(rest[1:], " ")
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
-	t, err := comp.findTask(id)
-	if err != nil {
+	if err := comp.tasks.AnswerHITL(rest[0], strings.Join(rest[1:], " ")); err != nil {
 		return err
 	}
-	t.Body += progressEntry(nowStamp(), "ceo", "HUMAN ANSWER: "+text)
-	t.Status = "in_progress"
-	if err := comp.saveTask(t); err != nil {
-		return err
-	}
-	os.Remove(filepath.Join(comp.inboxDir(), "task-"+id+".md"))
-	fmt.Printf("answer recorded on task #%s; it resumes on the next `mago run`\n", id)
+	fmt.Printf("answer recorded on task #%s; it resumes on the next `mago run`\n", rest[0])
 	return nil
 }
 

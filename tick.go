@@ -38,14 +38,14 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 		return tickResult{}, err
 	}
 	applyModelOverrides(a)
-	task, err := comp.pickActiveTask(agentName)
+	task, err := comp.tasks.PickActiveTask(agentName)
 	if err != nil {
 		return tickResult{}, err
 	}
 	if task == nil {
 		return tickResult{worked: false, signal: "idle"}, nil
 	}
-	if err := comp.claim(task, agentName); err != nil {
+	if err := comp.tasks.Claim(task, agentName); err != nil {
 		return tickResult{}, err
 	}
 	fmt.Fprintf(os.Stderr, "=== mago tick: %s -> task #%s %q  [%s/%s] ===\n",

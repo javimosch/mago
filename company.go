@@ -10,9 +10,11 @@ import (
 )
 
 // Company is a local mago company rooted at a directory containing .mago/.
+// Task/HITL operations are delegated to a TaskBackend (local files or GitHub).
 type Company struct {
-	Dir  string
-	Name string
+	Dir   string
+	Name  string
+	tasks TaskBackend
 }
 
 func loadCompany(dir string) (*Company, error) {
@@ -23,7 +25,13 @@ func loadCompany(dir string) (*Company, error) {
 	if _, err := os.Stat(filepath.Join(abs, ".mago")); err != nil {
 		return nil, fmt.Errorf("not a mago company (no .mago/) at %s — run `mago init` first", abs)
 	}
-	return &Company{Dir: abs, Name: filepath.Base(abs)}, nil
+	c := &Company{Dir: abs, Name: filepath.Base(abs)}
+	if repo := os.Getenv("MAGO_GH_REPO"); repo != "" {
+		c.tasks = &githubBackend{repo: repo}
+	} else {
+		c.tasks = &localBackend{c: c}
+	}
+	return c, nil
 }
 
 func (c *Company) magoDir() string      { return filepath.Join(c.Dir, ".mago") }
@@ -49,91 +57,6 @@ func (c *Company) loadAgent(name string) (*Agent, error) {
 		Model:    orDefault(fm["model"], "deepseek-chat"),
 		Persona:  strings.TrimSpace(body),
 	}, nil
-}
-
-func (c *Company) listTasks() ([]*Task, error) {
-	entries, err := os.ReadDir(c.tasksDir())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var tasks []*Task
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(c.tasksDir(), e.Name()))
-		if err != nil {
-			continue
-		}
-		fm, body := parseFrontmatter(string(b))
-		tasks = append(tasks, &Task{
-			ID:        orDefault(fm["id"], strings.TrimSuffix(e.Name(), ".md")),
-			Title:     fm["title"],
-			Status:    orDefault(fm["status"], "open"),
-			Assignee:  fm["assignee"],
-			ClaimedAt: fm["claimed_at"],
-			Body:      strings.TrimSpace(body),
-		})
-	}
-	sort.Slice(tasks, func(i, j int) bool { return atoiSafe(tasks[i].ID) < atoiSafe(tasks[j].ID) })
-	return tasks, nil
-}
-
-func (c *Company) taskPath(id string) string {
-	return filepath.Join(c.tasksDir(), "task-"+id+".md")
-}
-
-func (c *Company) saveTask(t *Task) error {
-	fm := map[string]string{
-		"id": t.ID, "title": t.Title, "status": t.Status,
-		"assignee": t.Assignee, "claimed_at": t.ClaimedAt,
-	}
-	order := []string{"id", "title", "status", "assignee", "claimed_at"}
-	return os.WriteFile(c.taskPath(t.ID), []byte(renderFrontmatter(fm, order, t.Body)), 0o644)
-}
-
-func (c *Company) findTask(id string) (*Task, error) {
-	tasks, err := c.listTasks()
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range tasks {
-		if t.ID == id {
-			return t, nil
-		}
-	}
-	return nil, fmt.Errorf("task #%s not found", id)
-}
-
-// pickActiveTask re-derives the active task from disk (reconcile-from-reality):
-// resume an in-progress task this agent owns, else claim the first open task.
-func (c *Company) pickActiveTask(agent string) (*Task, error) {
-	tasks, err := c.listTasks()
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range tasks {
-		if t.Status == "in_progress" && (t.Assignee == agent || t.Assignee == "") {
-			return t, nil
-		}
-	}
-	for _, t := range tasks {
-		if t.Status == "open" {
-			return t, nil
-		}
-	}
-	return nil, nil
-}
-
-// claim marks a task owned and in-progress (the overlap lock).
-func (c *Company) claim(t *Task, agent string) error {
-	t.Status = "in_progress"
-	t.Assignee = agent
-	t.ClaimedAt = nowStamp()
-	return c.saveTask(t)
 }
 
 // reflectionInstruction tells the agent to end with a single fenced json block we parse.
