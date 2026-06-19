@@ -46,6 +46,25 @@ func (c *Company) projectsDir() string  { return filepath.Join(c.Dir, "projects"
 func (c *Company) projectDir(name string) string {
 	return filepath.Join(c.projectsDir(), name)
 }
+func (c *Company) projectsConfigFile() string { return filepath.Join(c.magoDir(), "projects.json") }
+
+// loadProjects returns the project-name -> GitHub repo (owner/repo) mapping.
+func (c *Company) loadProjects() map[string]string {
+	m := map[string]string{}
+	if b, err := os.ReadFile(c.projectsConfigFile()); err == nil {
+		json.Unmarshal(b, &m)
+	}
+	return m
+}
+
+func (c *Company) projectRepo(name string) string { return c.loadProjects()[name] }
+
+func (c *Company) saveProject(name, repo string) error {
+	m := c.loadProjects()
+	m[name] = repo
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return os.WriteFile(c.projectsConfigFile(), b, 0o644)
+}
 
 // workspaceFor resolves where a task's work happens: its project repo's workspace,
 // or the default workspace when the task targets no specific project.
@@ -109,6 +128,31 @@ mago operating contract (read carefully):
 		a.Title, a.Name, a.Persona, reflectionInstruction)
 }
 
+func isReviewerRole(a *Agent) bool {
+	return strings.Contains(strings.ToLower(a.Name+" "+a.Title), "review")
+}
+
+// projectRepoInstructions gives ROLE-APPROPRIATE git/gh steps: implementers open a PR
+// and must not merge it; reviewers review and auto-merge. Both work inside the clone.
+func projectRepoInstructions(a *Agent, repo, taskID string) string {
+	header := fmt.Sprintf("This workspace is a git clone of `%s`. Work ONLY inside this directory — "+
+		"do not touch other repositories or paths on the machine.\n\n", repo)
+	if isReviewerRole(a) {
+		return header + "You are REVIEWING (do not implement, do not invent a PR):\n" +
+			"- List open mago PRs: `gh pr list --head mago/`; inspect with `gh pr diff <n>`.\n" +
+			"- If it meets the bar: `gh pr review <n> --approve` (may fail if you authored it — that's fine), " +
+			"then `gh pr merge <n> --squash --delete-branch`.\n" +
+			"- If not: `gh pr review <n> --request-changes --body \"...\"` and explain.\n" +
+			"- If there is NO open PR, do nothing and say so in your summary."
+	}
+	return header + fmt.Sprintf("You are IMPLEMENTING:\n"+
+		"- Use a branch `mago/task-%s` (create it, or check it out if it exists).\n"+
+		"- Commit your work, then push: `git push -u origin mago/task-%s`.\n"+
+		"- Open a PR if none exists: `gh pr create --fill --head mago/task-%s` (otherwise just push more commits).\n"+
+		"- DO NOT merge your own PR — leave it OPEN for the reviewer. Put the PR URL in your summary.",
+		taskID, taskID, taskID)
+}
+
 // buildBriefing assembles the per-tick context pack the agent reads first.
 func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	var b strings.Builder
@@ -116,6 +160,11 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	b.WriteString("## Your role\n" + a.Title + "\n\n")
 	b.WriteString("## Company state (STATE.md)\n" + readFileOr(c.stateFile(), "(empty)") + "\n\n")
 	b.WriteString(fmt.Sprintf("## Active task #%s: %s\nstatus: %s\n\n%s\n\n", t.ID, t.Title, t.Status, t.Body))
+	if t.Project != "" {
+		if repo := c.projectRepo(t.Project); repo != "" {
+			b.WriteString("## Project repo\n" + projectRepoInstructions(a, repo, t.ID) + "\n\n")
+		}
+	}
 	b.WriteString("## Skills (learnings/caveats/pitfalls from past work)\n" + c.selectSkillsText(a, t) + "\n\n")
 	b.WriteString("## Your recent runs\n" + c.recentJournalSummaries(a.Name, 3) + "\n\n")
 	b.WriteString("## Instruction\nWork on the active task for this tick. First check the progress log and state to " +

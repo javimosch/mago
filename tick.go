@@ -49,7 +49,13 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 		return tickResult{}, err
 	}
 	ws := comp.workspaceFor(task)
-	ensureDir(ws)
+	if repo := comp.projectRepo(task.Project); task.Project != "" && repo != "" {
+		if err := ensureClone(ws, repo); err != nil {
+			return tickResult{}, err
+		}
+	} else {
+		ensureDir(ws)
+	}
 	fmt.Fprintf(os.Stderr, "=== mago tick: %s -> task #%s %q [%s] [%s/%s] ===\n",
 		agentName, task.ID, task.Title, orDefault(task.Project, "default"), a.Provider, a.Model)
 	content, err := runTau(ws, a, buildSystemPrompt(a), comp.buildBriefing(a, task))

@@ -91,17 +91,32 @@ func cmdTask(args []string) error {
 
 func cmdProject(args []string) error {
 	dir, rest := parseCompanyDir(args)
-	if len(rest) < 2 || rest[0] != "add" {
-		return fmt.Errorf("usage: mago project add <name> [-C dir]")
+	repo := ""
+	var pos []string
+	for i := 0; i < len(rest); i++ {
+		if rest[i] == "--repo" && i+1 < len(rest) {
+			repo = rest[i+1]
+			i++
+			continue
+		}
+		pos = append(pos, rest[i])
+	}
+	if len(pos) < 2 || pos[0] != "add" {
+		return fmt.Errorf("usage: mago project add <name> [--repo owner/repo] [-C dir]")
 	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
-	if err := ensureDir(comp.projectDir(rest[1])); err != nil {
+	if err := ensureDir(comp.projectDir(pos[1])); err != nil {
 		return err
 	}
-	fmt.Printf("project %q ready at %s\n", rest[1], comp.projectDir(rest[1]))
+	if repo != "" {
+		if err := comp.saveProject(pos[1], repo); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("project %q ready%s\n", pos[1], ifStr(repo != "", " -> "+repo, ""))
 	return nil
 }
 
