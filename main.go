@@ -22,6 +22,8 @@ func main() {
 		err = cmdRun(os.Args[2:])
 	case "loop":
 		err = cmdLoop(os.Args[2:])
+	case "tick":
+		err = cmdTick(os.Args[2:])
 	case "status":
 		err = cmdStatus(os.Args[2:])
 	case "answer":
@@ -49,6 +51,7 @@ Usage:
   mago task add "<title>" [-C d]  create a task
   mago run <agent> [-C d]         run ONE tick: brief -> tau -> reflect -> write back
   mago loop <agent> [-C d]        run ticks on an adaptive cadence (--base/--max/--max-ticks secs)
+  mago tick [-C d]                route open tasks to best-fit agents, then run each agent
   mago status [-C d]              show STATE.md, tasks, and pending HITL
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
   mago version | help

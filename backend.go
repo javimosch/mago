@@ -15,6 +15,7 @@ type TaskBackend interface {
 	ListTasks() ([]*Task, error)
 	FindTask(id string) (*Task, error)
 	PickActiveTask(agent string) (*Task, error)
+	Assign(t *Task, agent string) error // route an open task to an owner without starting it
 	Claim(t *Task, agent string) error
 	RecordProgress(t *Task, who, note string) error
 	SetStatus(t *Task, status string) error
@@ -98,17 +99,27 @@ func (b *localBackend) PickActiveTask(agent string) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range ts {
+	for _, t := range ts { // resume my in-progress work
 		if t.Status == "in_progress" && (t.Assignee == agent || t.Assignee == "") {
 			return t, nil
 		}
 	}
-	for _, t := range ts {
-		if t.Status == "open" {
+	for _, t := range ts { // a task routed to me
+		if t.Status == "open" && t.Assignee == agent {
+			return t, nil
+		}
+	}
+	for _, t := range ts { // fallback: an unrouted open task
+		if t.Status == "open" && t.Assignee == "" {
 			return t, nil
 		}
 	}
 	return nil, nil
+}
+
+func (b *localBackend) Assign(t *Task, agent string) error {
+	t.Assignee = agent
+	return b.save(t)
 }
 
 func (b *localBackend) Claim(t *Task, agent string) error {

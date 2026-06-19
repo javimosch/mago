@@ -208,13 +208,29 @@ func (b *githubBackend) PickActiveTask(agent string) (*Task, error) {
 			return b.loadIssue(strconv.Itoa(gi.Number))
 		}
 	}
-	// else claim the first plain-open issue (not HITL/in-progress/blocked/done)
+	// an open issue routed to this agent
 	for _, gi := range issues {
-		if gi.status() == "open" {
+		if gi.status() == "open" && gi.assignee() == agent {
+			return b.loadIssue(strconv.Itoa(gi.Number))
+		}
+	}
+	// fallback: the first unrouted open issue
+	for _, gi := range issues {
+		if gi.status() == "open" && gi.assignee() == "" {
 			return b.loadIssue(strconv.Itoa(gi.Number))
 		}
 	}
 	return nil, nil
+}
+
+func (b *githubBackend) Assign(t *Task, agent string) error {
+	b.ensureAgentLabel(agent)
+	if _, err := b.gh("issue", "edit", t.ID, "--add-label", "agent:"+agent); err != nil {
+		return err
+	}
+	t.Assignee = agent
+	_, err := b.gh("issue", "comment", t.ID, "--body", "📋 routed to "+agent)
+	return err
 }
 
 func (b *githubBackend) Claim(t *Task, agent string) error {
