@@ -122,6 +122,10 @@ mago operating contract (read carefully):
 - NEVER redo work the briefing/progress log shows is already done. Build on it.
 - If you are blocked on a decision only the CEO (human) can make, set task_status to
   "needs_human" and put the question in "hitl_question" — do not guess.
+- Stay strictly within your ROLE and the active task — never do another role's job
+  (an implementer never merges or reviews; a reviewer never writes features or opens PRs).
+- Report ONLY what you actually did. Never claim code, PRs, merges, or passing tests you
+  did not really produce; if something failed or you skipped it, say so plainly.
 - When you have made sensible progress for this tick, STOP and write your reflection.
 
 %s`,
@@ -138,18 +142,19 @@ func projectRepoInstructions(a *Agent, repo, taskID string) string {
 	header := fmt.Sprintf("This workspace is a git clone of `%s`. Work ONLY inside this directory — "+
 		"do not touch other repositories or paths on the machine.\n\n", repo)
 	if isReviewerRole(a) {
-		return header + "You are REVIEWING (do not implement, do not invent a PR):\n" +
+		return header + "You are REVIEWING. Do NOT write or modify code, and do NOT open PRs.\n" +
 			"- List open mago PRs: `gh pr list --head mago/`; inspect with `gh pr diff <n>`.\n" +
-			"- If it meets the bar: `gh pr review <n> --approve` (may fail if you authored it — that's fine), " +
-			"then `gh pr merge <n> --squash --delete-branch`.\n" +
-			"- If not: `gh pr review <n> --request-changes --body \"...\"` and explain.\n" +
-			"- If there is NO open PR, do nothing and say so in your summary."
+			"- Post your review as a COMMENT: `gh pr comment <n> --body \"...\"` (do NOT use `gh pr review`).\n" +
+			"- If the code meets the bar, merge it: `gh pr merge <n> --squash --delete-branch`.\n" +
+			"- If it does not, comment what must change and do NOT merge.\n" +
+			"- If there is NO open PR to review, do nothing and say so in your summary."
 	}
-	return header + fmt.Sprintf("You are IMPLEMENTING:\n"+
+	return header + fmt.Sprintf("You are IMPLEMENTING. Do NOT review or merge anything.\n"+
 		"- Use a branch `mago/task-%s` (create it, or check it out if it exists).\n"+
 		"- Commit your work, then push: `git push -u origin mago/task-%s`.\n"+
-		"- Open a PR if none exists: `gh pr create --fill --head mago/task-%s` (otherwise just push more commits).\n"+
-		"- DO NOT merge your own PR — leave it OPEN for the reviewer. Put the PR URL in your summary.",
+		"- Open a PR if none exists: `gh pr create --fill --head mago/task-%s` (otherwise push more commits).\n"+
+		"- STOP after opening the PR. Do NOT merge, approve, or review it — that is the reviewer's job.\n"+
+		"- Put the PR URL in your summary.",
 		taskID, taskID, taskID)
 }
 
