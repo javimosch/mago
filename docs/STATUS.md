@@ -80,9 +80,10 @@ its progress log; lessons = `.mago/skills/<name>/SKILL.md` with an always-in-con
 - **Per-project workspace dirs**, not git worktrees, and **no real project clones/PRs** yet
   — agents work in local dirs; product code is not pushed.
 - **Webhook-driven** via `mago serve` (HMAC-verified `/webhook/github` → wake → reconcile in
-  real time); polling remains a fallback. The multi-tenant relay (platform fan-out to NAT'd
-  workers) is still platform-layer — a single worker needs a public URL or a tunnel to receive
-  webhooks directly.
+  real time); a human comment on an agent-owned issue wakes **only that agent**. Polling
+  remains a fallback. Verified end-to-end through a cloudflared tunnel: a real `issues.opened`
+  event drove a routed task to `done` (issue closed). The multi-tenant relay (platform fan-out
+  to NAT'd workers) is still platform-layer — a lone worker needs a public URL or a tunnel.
 - Starter agents in tests are a generic `cto` / `reviewer`, not the full exec team.
 
 ## Not built yet
