@@ -1,0 +1,24 @@
+{
+  "agent": "cto",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "llm-json-prompting",
+      "note": "LLM must be prompted to return ONLY a JSON object; stripFences utility handles code-fence wrapping"
+    },
+    {
+      "skill": "state-compaction-design",
+      "note": "Compaction must be best-effort (non-blocking) — if LLM synthesis fails, skip and retry next tick rather than crashing the agent loop"
+    },
+    {
+      "skill": "parse-section-order",
+      "note": "Section parser must handle arbitrary heading order, missing sections, and empty activity log gracefully; nil return on malformed state prevents data loss"
+    }
+  ],
+  "next": "Commit the staged changes, push the branch, and open a PR for review by Head of Org Engineering. Then test compaction end-to-end by running enough ticks to exceed the 30-entry threshold.",
+  "state_delta": "Added state_compact.go (compaction logic), state_compact_test.go (tests), and wired compactState() call into writeback.go",
+  "summary": "Implemented STATE.md compaction to prevent unbounded growth. Created state_compact.go with LLM-based synthesis: when the activity log exceeds 30 entries, compactState() calls the model via synthesizeState() to condense the log into structured Shipped/In Flight/Decisions sections, preserving Mission verbatim, then truncates to the 5 most recent entries. Added parseStateSections() for robust section extraction, backup to STATE.md.bak, and best-effort error handling (skips compaction if LLM fails). Wrote state_compact_test.go with 7 tests covering parsing variants, threshold behavior, missing/malformed files, and activity log preservation. Hooked compaction into writeBack() so it runs after every tick.",
+  "task_id": "1",
+  "task_status": "done",
+  "ts": "2026-06-21T14-36-43Z"
+}
