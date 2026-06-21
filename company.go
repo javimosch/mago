@@ -99,14 +99,15 @@ const reflectionInstruction = "End your reply with your reflection as ONE fenced
 	"{\n" +
 	`  "summary": "what you did this tick",` + "\n" +
 	`  "state_delta": "what changed in the world (one line; goes into STATE.md)",` + "\n" +
-	`  "task_status": "in_progress | blocked | done | needs_human",` + "\n" +
+	`  "task_status": "in_progress | blocked | done | needs_human | reassign",` + "\n" +
 	`  "lessons": [{"skill": "short-kebab-name", "note": "a learning, caveat, pitfall or gotcha"}],` + "\n" +
 	`  "next": "what should happen on the next tick",` + "\n" +
 	`  "cadence_signal": "idle | working | blocked",` + "\n" +
 	`  "hitl_question": "the question for the CEO, only when task_status is needs_human"` + "\n" +
 	"}\n" +
 	"```\n" +
-	"Use lessons for anything worth remembering next time. Set task_status to done only when the task is fully complete and verified."
+	"Use lessons for anything worth remembering next time. Set task_status to done only when the task is fully complete and verified. " +
+	"Set task_status to reassign if this task does not fit your role — it will be handed back and routed to someone else."
 
 func buildSystemPrompt(a *Agent) string {
 	return fmt.Sprintf(`You are %s (%s) at a company operated by mago.
@@ -148,7 +149,9 @@ func projectRepoInstructions(a *Agent, repo, taskID string) string {
 			"- Post your review as a COMMENT: `gh pr comment <n> --body \"...\"` (do NOT use `gh pr review`).\n" +
 			"- If the code meets the bar, merge it: `gh pr merge <n> --squash --delete-branch`.\n" +
 			"- If it does not, comment what must change and do NOT merge.\n" +
-			"- If there is NO open PR to review, do nothing and say so in your summary."
+			"- If there is NO open PR to review, do nothing and say so in your summary.\n" +
+			"- If this task is NOT about reviewing/merging a PR (e.g. it asks you to implement or write\n" +
+			"  something), set task_status to \"reassign\" so it goes to the right role — do not attempt it."
 	}
 	return header + fmt.Sprintf("You are IMPLEMENTING. Do NOT review or merge anything.\n"+
 		"- Use a branch `mago/task-%s` (create it, or check it out if it exists).\n"+

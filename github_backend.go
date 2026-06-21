@@ -260,6 +260,17 @@ func (b *githubBackend) Claim(t *Task, agent string) error {
 	return err
 }
 
+func (b *githubBackend) Bounce(t *Task) error {
+	if t.Assignee != "" {
+		b.gh("issue", "edit", t.ID, "--remove-label", "agent:"+t.Assignee)
+	}
+	b.gh("issue", "edit", t.ID, "--remove-label", labInProgress)
+	t.Assignee = ""
+	t.Status = "open"
+	_, err := b.gh("issue", "comment", t.ID, "--body", "↩ Not the right role for this task — bouncing for re-routing.")
+	return err
+}
+
 func (b *githubBackend) RecordProgress(t *Task, who, note string) error {
 	_, err := b.gh("issue", "comment", t.ID, "--body", "**"+who+":** "+note)
 	return err

@@ -16,6 +16,7 @@ type TaskBackend interface {
 	FindTask(id string) (*Task, error)
 	PickActiveTask(agent string) (*Task, error)
 	Assign(t *Task, agent string) error // route an open task to an owner without starting it
+	Bounce(t *Task) error               // hand a mis-assigned task back: unassign + reopen
 	Claim(t *Task, agent string) error
 	RecordProgress(t *Task, who, note string) error
 	SetStatus(t *Task, status string) error
@@ -120,6 +121,12 @@ func (b *localBackend) PickActiveTask(agent string) (*Task, error) {
 
 func (b *localBackend) Assign(t *Task, agent string) error {
 	t.Assignee = agent
+	return b.save(t)
+}
+
+func (b *localBackend) Bounce(t *Task) error {
+	t.Assignee = ""
+	t.Status = "open"
 	return b.save(t)
 }
 
