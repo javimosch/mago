@@ -24,16 +24,34 @@ type server struct {
 }
 
 func main() {
-	loadDotenv("platform/.env")
-	// Operator subcommands (don't start the server). `mago-platform webhook ...` provisions the
-	// GitHub webhook ingress on customer repos/orgs using the operator token.
-	if len(os.Args) > 1 && os.Args[1] == "webhook" {
-		if err := cmdWebhook(os.Args[2:]); err != nil {
-			log.Fatalf("webhook: %v", err)
+	loadEnv()
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "webhook": // provision the GitHub webhook ingress with the operator token
+			fail(cmdWebhook(os.Args[2:]))
+			return
+		case "start": // run the server (hotify/daemon entrypoint): `mago-platform start --port N`
+			fail(cmdStart(os.Args[2:]))
+			return
+		case "stop":
+			fail(cmdStop())
+			return
+		case "status":
+			fail(cmdStatus())
+			return
 		}
-		return
 	}
-	port := env("PORT", "9100")
+	runServer(env("PORT", "9100")) // no-arg: run in foreground (dev convenience)
+}
+
+func fail(err error) {
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+}
+
+// runServer boots the store, wires routes, and serves until killed. Blocks.
+func runServer(port string) {
 	dbPath := expand(env("DB_PATH", "~/.mago-platform/platform.db"))
 	st, err := openStore(dbPath)
 	if err != nil {
@@ -66,7 +84,7 @@ func main() {
 	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)
 	mux.HandleFunc("/webhooks/github/", s.handleGithubWebhook) // GitHub App ingress -> relay
 
-	log.Printf("mago-platform :%s  store=%s  stripe=%v price=%s gh-relay=%v gh-app=%v", port, dbPath, s.stripeKey != "", s.priceID, s.ghWebhookSecret != "", s.ghAppID != "")
+	log.Printf("mago-platform :%s  store=%s  stripe=%v price=%s gh-relay=%v gh-app=%v entitle=%v", port, dbPath, s.stripeKey != "", s.priceID, s.ghWebhookSecret != "", s.ghAppID != "", s.enforceEntitlement)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 
@@ -84,6 +102,20 @@ func expand(p string) string {
 		}
 	}
 	return p
+}
+
+// loadEnv loads .env from (in priority order) $MAGO_PLATFORM_ENV, the repo dev path, the
+// directory of the executable (how it's found in a hotify deploy), and the cwd. Earlier files
+// win since loadDotenv never overrides an already-set var.
+func loadEnv() {
+	if p := os.Getenv("MAGO_PLATFORM_ENV"); p != "" {
+		loadDotenv(expand(p))
+	}
+	loadDotenv("platform/.env") // dev: run from the repo root
+	if exe, err := os.Executable(); err == nil {
+		loadDotenv(filepath.Join(filepath.Dir(exe), ".env")) // deployed: .env beside the binary
+	}
+	loadDotenv(".env")
 }
 
 // loadDotenv sets env vars from a KEY=VALUE file, without overriding existing env.
