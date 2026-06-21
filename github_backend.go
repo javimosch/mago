@@ -311,6 +311,23 @@ func (b *githubBackend) PendingHITL() ([]string, error) {
 	return out, nil
 }
 
+// prShippedForTask reports whether an open or merged PR exists for this task's branch
+// on the project repo — used to verify an implementer actually shipped before "done".
+// Fails open (returns true) if it can't check, so transient errors never block a tick.
+func prShippedForTask(projectRepo, taskID string) bool {
+	out, err := gh("-R", projectRepo, "pr", "list", "--head", "mago/task-"+taskID, "--state", "all", "--json", "number")
+	if err != nil {
+		return true
+	}
+	var prs []struct {
+		Number int `json:"number"`
+	}
+	if json.Unmarshal([]byte(out), &prs) != nil {
+		return true
+	}
+	return len(prs) > 0
+}
+
 func issueNumberFromURL(url string) string {
 	if i := strings.LastIndex(url, "/"); i >= 0 {
 		return url[i+1:]
