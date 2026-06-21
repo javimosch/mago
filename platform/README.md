@@ -32,9 +32,10 @@ now), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MAGO`, `GITHUB_WEBHOOK_SECRET`, `DB
 | `POST /auth/login` | — | `{email,password}` → `{token}` (JWT, HS256, ~30d) |
 | `GET /api/account` | Bearer | `{email, plan, active, license_key}` |
 | `POST /api/checkout` | Bearer | → `{url}` Stripe Checkout link (subscription mode, the €20 price) |
+| `GET/POST /api/installations` | Bearer | list / claim (`mago link`) GitHub App installs → entitled repos |
 | `POST /stripe/webhook` | Stripe sig | `checkout.session.completed` → `plan=mago` + issue license; `customer.subscription.deleted` → `free` |
-| `GET /ws/worker?token&repos` | license | NDJSON stream of relayed GitHub events (`401` unknown, `403` lapsed) |
-| `POST /webhooks/github/<install>` | GitHub sig | verify `X-Hub-Signature-256`, relay to the worker serving that repo |
+| `GET /ws/worker?token&repos` | license | NDJSON stream of relayed GitHub events (`401` unknown, `403` lapsed); claimed repos intersected with the account's entitled repos when `GITHUB_APP_ID` is set |
+| `POST /webhooks/github/<install>` | GitHub sig | `ping`→ack; `installation`/`installation_repositories`→update registry; else relay to the worker serving that repo |
 
 ## Implementation notes
 
@@ -46,6 +47,10 @@ now), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MAGO`, `GITHUB_WEBHOOK_SECRET`, `DB
   the webhook signature is verified by hand (`verifyStripeSig`) — fewer dependencies.
 - **Relay** (`relay.go`) keeps an in-memory `license → connection` hub; persisting `worker_links`
   is a v2 nicety (one worker per account today).
+- **GitHub App** (`relay.go` + `store.go`): signed `installation`/`installation_repositories`
+  webhooks maintain the `installations` table (GitHub-authoritative repo lists); `mago link`
+  binds an installation to an account; worker repo subscriptions are entitlement-checked against
+  it when `GITHUB_APP_ID` is set. See `docs/SAAS.md` §"The GitHub App" for the manual setup.
 
 ## Smoke test
 

@@ -40,6 +40,8 @@ func main() {
 		err = cmdSubscribe(os.Args[2:])
 	case "account":
 		err = cmdAccount(os.Args[2:])
+	case "link":
+		err = cmdLink(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
@@ -64,6 +66,8 @@ Usage:
   mago login [--email <e>] [--password <p>]      log in to an existing account
   mago subscribe                  print the Stripe checkout link (€20/month)
   mago account status             show plan + license key
+  mago link --installation <id>   claim a GitHub App installation (entitles your repos)
+  mago link list                  show linked installations + entitled repos
 
   Company (local/worker):
   mago init [dir]                 scaffold a local company (.mago/, STATE.md, tasks/, workspace/)

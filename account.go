@@ -217,6 +217,65 @@ func cmdSubscribe(args []string) error {
 	return nil
 }
 
+// cmdLink claims a GitHub App installation for the account (so the worker is entitled to
+// receive that installation's repo events), or lists what's already linked.
+func cmdLink(args []string) error {
+	cfg := loadConfig()
+	inst := ""
+	list := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--installation", "-i":
+			if i+1 < len(args) {
+				inst = args[i+1]
+				i++
+			}
+		case "list", "--list":
+			list = true
+		}
+	}
+	var out struct {
+		Installations []struct {
+			ID          int64    `json:"ID"`
+			GithubLogin string   `json:"GithubLogin"`
+			Repos       []string `json:"Repos"`
+		} `json:"installations"`
+		Repos []string `json:"repos"`
+	}
+	method, path := "GET", "/api/installations"
+	var body any
+	if !list && inst != "" {
+		method = "POST"
+		body = map[string]int64{"installation_id": atoiSafe64(inst)}
+	} else if !list && inst == "" {
+		return fmt.Errorf("usage: mago link --installation <id>   (or: mago link list)\n" +
+			"find the id in the GitHub App install URL: .../installations/<id>")
+	}
+	if err := cfg.platformDo(method, path, body, true, &out); err != nil {
+		return err
+	}
+	if len(out.Installations) == 0 {
+		fmt.Println("no installations linked yet — install the GitHub App, then `mago link --installation <id>`")
+		return nil
+	}
+	for _, in := range out.Installations {
+		fmt.Printf("installation %d (%s): %s\n", in.ID, orDefault(in.GithubLogin, "?"), strings.Join(in.Repos, ", "))
+	}
+	fmt.Printf("entitled repos: %s\n", strings.Join(out.Repos, ", "))
+	return nil
+}
+
+func atoiSafe64(s string) int64 {
+	var n int64
+	for _, r := range strings.TrimSpace(s) {
+		if r < '0' || r > '9' {
+			return 0
+		}
+		n = n*10 + int64(r-'0')
+	}
+	return n
+}
+
 func cmdAccount(args []string) error {
 	_, rest := parseCompanyDir(args)
 	if len(rest) == 0 || rest[0] != "status" {

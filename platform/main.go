@@ -17,9 +17,9 @@ import (
 )
 
 type server struct {
-	store                                                                 *Store
-	jwtSecret, stripeKey, webhookSecret, priceID, appURL, ghWebhookSecret string
-	hub                                                                   *relayHub
+	store                                                                          *Store
+	jwtSecret, stripeKey, webhookSecret, priceID, appURL, ghWebhookSecret, ghAppID string
+	hub                                                                            *relayHub
 }
 
 func main() {
@@ -39,6 +39,7 @@ func main() {
 		priceID:         os.Getenv("STRIPE_PRICE_MAGO"),
 		appURL:          env("APP_URL", "http://localhost:"+port),
 		ghWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		ghAppID:         os.Getenv("GITHUB_APP_ID"),
 		hub:             newRelayHub(),
 	}
 
@@ -48,11 +49,12 @@ func main() {
 	mux.HandleFunc("/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/account", s.handleAccount)
 	mux.HandleFunc("/api/checkout", s.handleCheckout)
+	mux.HandleFunc("/api/installations", s.handleInstallations) // `mago link`: claim/list App installs
 	mux.HandleFunc("/stripe/webhook", s.handleWebhook)
 	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)
 	mux.HandleFunc("/webhooks/github/", s.handleGithubWebhook) // GitHub App ingress -> relay
 
-	log.Printf("mago-platform :%s  store=%s  stripe=%v price=%s gh-relay=%v", port, dbPath, s.stripeKey != "", s.priceID, s.ghWebhookSecret != "")
+	log.Printf("mago-platform :%s  store=%s  stripe=%v price=%s gh-relay=%v gh-app=%v", port, dbPath, s.stripeKey != "", s.priceID, s.ghWebhookSecret != "", s.ghAppID != "")
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 

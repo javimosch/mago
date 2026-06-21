@@ -92,10 +92,29 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 500, "streaming unsupported")
 		return
 	}
-	repos := map[string]bool{}
+	claimed := map[string]bool{}
 	for _, rp := range strings.Split(r.URL.Query().Get("repos"), ",") {
 		if rp = strings.TrimSpace(rp); rp != "" {
-			repos[rp] = true
+			claimed[rp] = true
+		}
+	}
+	// Entitlement: when the GitHub App is configured (multi-tenant), a worker may only receive
+	// events for repos its account has claimed via an installation — never repos it merely
+	// names. Without the App (local/single-tenant dev) we trust the claimed set.
+	repos := claimed
+	if s.ghAppID != "" {
+		entitled := s.store.EntitledRepos(u.ID)
+		repos = map[string]bool{}
+		var dropped []string
+		for r := range claimed {
+			if entitled[r] {
+				repos[r] = true
+			} else {
+				dropped = append(dropped, r)
+			}
+		}
+		if len(dropped) > 0 {
+			log.Printf("relay: user %d not entitled to %v — run `mago link`; ignoring", u.ID, dropped)
 		}
 	}
 	conn := &relayConn{license: token, repos: repos, ch: make(chan relayMsg, 16)}
@@ -142,6 +161,19 @@ func (s *server) handleGithubWebhook(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 401, "bad signature")
 		return
 	}
+	event := r.Header.Get("X-GitHub-Event")
+
+	// App lifecycle events maintain the installation registry; they are not relayed to workers.
+	switch event {
+	case "ping":
+		w.WriteHeader(200)
+		return
+	case "installation", "installation_repositories":
+		s.handleInstallationEvent(event, body)
+		w.WriteHeader(200)
+		return
+	}
+
 	var p struct {
 		Repository struct {
 			FullName string `json:"full_name"`
@@ -149,13 +181,91 @@ func (s *server) handleGithubWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	json.Unmarshal(body, &p)
 	if p.Repository.FullName == "" {
-		w.WriteHeader(200) // nothing to route (e.g. ping event)
+		w.WriteHeader(200) // nothing to route
 		return
 	}
-	event := r.Header.Get("X-GitHub-Event")
 	n := s.hub.route(p.Repository.FullName, relayMsg{Event: event, Body: body})
 	log.Printf("relay: github %s on %s -> %d worker(s)", event, p.Repository.FullName, n)
 	w.WriteHeader(200)
+}
+
+// handleInstallationEvent keeps the installations table in sync with GitHub. The payloads are
+// signed (verified above), so the repo lists here are authoritative — a worker can't fake them.
+func (s *server) handleInstallationEvent(event string, body []byte) {
+	var p struct {
+		Action       string `json:"action"`
+		Installation struct {
+			ID      int64 `json:"id"`
+			Account struct {
+				Login string `json:"login"`
+			} `json:"account"`
+		} `json:"installation"`
+		Repositories []struct {
+			FullName string `json:"full_name"`
+		} `json:"repositories"`
+		RepositoriesAdded []struct {
+			FullName string `json:"full_name"`
+		} `json:"repositories_added"`
+		RepositoriesRemoved []struct {
+			FullName string `json:"full_name"`
+		} `json:"repositories_removed"`
+	}
+	json.Unmarshal(body, &p)
+	id, login := p.Installation.ID, p.Installation.Account.Login
+	names := func(rs []struct {
+		FullName string `json:"full_name"`
+	}) []string {
+		out := make([]string, 0, len(rs))
+		for _, r := range rs {
+			if r.FullName != "" {
+				out = append(out, r.FullName)
+			}
+		}
+		return out
+	}
+	switch {
+	case event == "installation" && p.Action == "deleted":
+		s.store.DeleteInstallation(id)
+		log.Printf("relay: installation %d (%s) deleted", id, login)
+	case event == "installation": // created / new_permissions_accepted / suspend / unsuspend
+		s.store.UpsertInstallation(id, login, names(p.Repositories))
+		log.Printf("relay: installation %d (%s) %s -> %d repos", id, login, p.Action, len(p.Repositories))
+	case event == "installation_repositories":
+		s.store.MutateInstallationRepos(id, login, names(p.RepositoriesAdded), names(p.RepositoriesRemoved))
+		log.Printf("relay: installation %d (%s) repos +%d -%d", id, login, len(p.RepositoriesAdded), len(p.RepositoriesRemoved))
+	}
+}
+
+// handleInstallations is the authed account endpoint behind `mago link`:
+//
+//	GET  -> list the account's claimed installations and their repos
+//	POST {installation_id} -> claim an installation for this account
+func (s *server) handleInstallations(w http.ResponseWriter, r *http.Request) {
+	uid, ok := s.authUID(r)
+	if !ok {
+		httpErr(w, 401, "unauthorized")
+		return
+	}
+	if r.Method == "POST" {
+		var in struct {
+			InstallationID int64 `json:"installation_id"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if in.InstallationID <= 0 {
+			httpErr(w, 400, "installation_id required")
+			return
+		}
+		if err := s.store.ClaimInstallation(in.InstallationID, uid); err != nil {
+			httpErr(w, 404, err.Error())
+			return
+		}
+	}
+	writeJSON(w, 200, map[string]any{
+		"installations": s.store.InstallationsForAccount(uid),
+		"repos":         keys(s.store.EntitledRepos(uid)),
+	})
 }
 
 func validGithubSig(secret, sig string, body []byte) bool {

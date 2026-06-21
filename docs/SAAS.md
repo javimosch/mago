@@ -57,9 +57,11 @@ A **live** price (`sk_live_`) is created later for production.
 | `POST /auth/login` | `{email, password}` | `{token}` (JWT, HS256, ~30d) |
 | `GET /api/account` | `Authorization: Bearer <jwt>` | `{email, plan, active, license_key?}` |
 | `POST /api/checkout` | `Bearer <jwt>` | `{url}` — Stripe Checkout link (subscription mode, the €20 price, idempotency key) |
+| `GET /api/installations` | `Bearer <jwt>` | `{installations[], repos[]}` — claimed GitHub App installs + entitled repos |
+| `POST /api/installations` | `Bearer <jwt>` `{installation_id}` | claims an installation for the account (`mago link`) |
 | `POST /stripe/webhook` | Stripe-signed body | 200; `checkout.session.completed` → `plan=mago` + issue `license_key`; `subscription.deleted` → `free` |
-| `GET /ws/worker?token=<license_key>&repos=…` | — | long-lived NDJSON stream of relayed GitHub webhooks; `401` unknown license, `403` if subscription inactive |
-| `POST /webhooks/github/<install>` | GitHub-signed body | 200; verified + relayed to the worker serving that repo |
+| `GET /ws/worker?token=<license_key>&repos=…` | — | long-lived NDJSON stream of relayed GitHub webhooks; `401` unknown license, `403` if subscription inactive. Claimed repos are intersected with the account's **entitled** repos (see GitHub App below) |
+| `POST /webhooks/github/<install>` | GitHub-signed body | 200; `ping`→ack, `installation`/`installation_repositories`→update the install registry, else relayed to the worker serving that repo |
 
 **Relay transport:** newline-delimited JSON over a long-lived HTTP response (the worker `GET`s
 and reads a stream), **not** raw WebSocket — keeps the core stdlib-only. The worker dials out,
@@ -72,6 +74,8 @@ The CLI stores `{platform_url, token, license_key}` in `~/.mago/config.json` (06
 - `mago register --email …` / `mago login` → the platform auth API; token in `~/.mago/config.json`
 - `mago subscribe` → prints the Stripe checkout link; on success the account goes active
 - `mago account status`
+- `mago link --installation <id>` / `mago link list` → claim a GitHub App installation so the
+  account's repos are entitled (the worker then receives those repos' relayed events)
 - the worker connects to the platform with its license key and receives relayed GitHub webhooks
 
 ## Worker ↔ platform: the webhook relay
@@ -97,6 +101,39 @@ plan `free`) is refused (`403`), so an unpaid worker can't (re)connect to receiv
 (`worker_links` is currently the in-memory hub; persisting it is a v2 nicety, not needed for
 one worker per account.)
 
+## The GitHub App (single ingress + repo entitlement)
+
+The relay needs **one** public webhook ingress; a GitHub App provides it. The App is created
+once by the operator and installed by each customer on their repos.
+
+**One-time operator setup (manual — a browser step):**
+1. Create a GitHub App (github.com/settings/apps/new, or a manifest flow). Webhook URL =
+   `https://<platform-host>/webhooks/github/`, webhook secret = `GITHUB_WEBHOOK_SECRET`.
+2. Subscribe to events: **Issues, Issue comment, Pull request** (what `classifyEvent` wakes on),
+   plus **Installation** + **Installation repositories** (to keep the registry in sync).
+   Permissions: Issues + Pull requests (read/write), Contents (read) — read-only is fine for v1
+   since the worker still acts via its own `gh`.
+3. Put the App id in `GITHUB_APP_ID` (its presence turns on repo entitlement, below).
+
+**Per-customer (CLI, in onboarding):**
+- The customer installs the App on their repos (browser, one-time). GitHub then POSTs signed
+  `installation` / `installation_repositories` events; the platform records each
+  `installation_id → {github_login, repos}` (the repo list is **GitHub-authoritative**).
+- `mago link --installation <id>` (the id is in the install URL `.../installations/<id>`) →
+  `POST /api/installations` binds that installation to the mago account.
+
+**Repo entitlement (a real multi-tenant safety property).** Because workers self-declare
+`?repos=…`, without a check worker A could subscribe to `victim/repo` and receive a *different
+tenant's* relayed events. So when `GITHUB_APP_ID` is set, a worker's claimed repos are
+**intersected with its account's entitled repos** (the union of repos across the installations
+that account has claimed); non-entitled repos are dropped at connect and silently receive
+nothing. With no App configured (local/single-tenant dev) the claimed set is trusted.
+
+**Still operator-manual** (can't be done from code): creating the App, each customer installing
+it, and pointing its webhook at the platform's public host. **v2:** GitHub OAuth at signup makes
+the account↔installation binding self-verifying (today `mago link` trusts the authed claim),
+and App installation tokens (RS256 App JWT) can replace the worker's `gh` PAT.
+
 ## Onboarding (agent-driven — mago's twist on AM)
 
 The human's own agent (e.g. Claude Code) drives the `mago` CLI; the human just approves:
@@ -106,10 +143,12 @@ mago register --email you@co.com        # POST /auth/signup -> token in ~/.mago/
 mago subscribe                          # POST /api/checkout -> prints the Stripe link; pay;
                                         #   webhook marks active + issues the license key
 mago account status                     # GET /api/account -> { plan: "mago", active: true }
+# install the GitHub App on your repos (browser, one-time), then:
+mago link --installation <id>           # POST /api/installations -> entitles your repos
 mago worker add <name>                  # registers a worker; pulls the license key
 mago worker doctor                      # checks tau + gh are configured
 mago company create acme                # worker's gh creates the repo, scaffolds .mago/,
-                                        #   cuts mago-state, installs the relay webhook, seeds the exec team
+                                        #   cuts mago-state, seeds the exec team
 # from here: the human is CEO — files issues, answers HITL on GitHub; the exec team runs it
 ```
 
@@ -130,8 +169,15 @@ The whole loop is CLI + GitHub — no web panel. The human is the **CEO**; the s
    dial-out connection (NDJSON, stdlib — no WebSocket dep) — so `mago serve` no longer needs a
    public URL/tunnel. The worker authenticates with the cached `license_key`; unknown/lapsed
    subscriptions are refused. Verified end-to-end (connect, route, isolation, sig + license gates).
-   Remaining for production: stand up the actual GitHub App + ingress webhook.
-5. **v2**: GitHub App + `gh` login; live Stripe price; multiple workers per account.
+5. **GitHub App wiring** ✓ (`platform/relay.go` + `store.go`, core `mago link`): the platform is
+   App-aware — `installation`/`installation_repositories` webhooks maintain a GitHub-authoritative
+   install→repos registry, `mago link` binds an installation to an account, and worker repo
+   subscriptions are **entitlement-checked** against that registry (closes a cross-tenant relay
+   leak). Verified end-to-end (ping ack, registry sync incl. add/remove/delete, link claim + 404,
+   entitlement drop of a spoofed repo). Remaining is operator-manual: create the App, customers
+   install it, point its webhook at the public host.
+6. **v2**: GitHub OAuth login (self-verifying account↔installation binding) + App installation
+   tokens (replace the worker's `gh` PAT); live Stripe price; multiple workers per account.
 
 ## Code organization — core vs platform (decided)
 

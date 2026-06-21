@@ -2,10 +2,12 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo), registered as "sqlite"
@@ -51,6 +53,13 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS stripe_events (
   id      TEXT PRIMARY KEY,
   seen_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS installations (
+  installation_id INTEGER PRIMARY KEY,        -- GitHub App installation id
+  account_id      INTEGER NOT NULL DEFAULT 0, -- mago user id; 0 = unclaimed (set by ` + "`mago link`" + `)
+  github_login    TEXT NOT NULL DEFAULT '',   -- the org/user the app is installed on
+  repos_json      TEXT NOT NULL DEFAULT '[]', -- repos this installation covers (from GitHub webhooks)
+  updated_at      INTEGER NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
@@ -132,4 +141,121 @@ func (s *Store) FirstEvent(id string) bool {
 	}
 	n, _ := res.RowsAffected()
 	return n == 1
+}
+
+// --- GitHub App installations ---
+
+type Installation struct {
+	ID          int64
+	AccountID   int64
+	GithubLogin string
+	Repos       []string
+}
+
+func reposToJSON(repos []string) string {
+	sort.Strings(repos)
+	b, _ := json.Marshal(repos)
+	return string(b)
+}
+
+func (s *Store) installRepos(id int64) []string {
+	var raw string
+	if s.db.QueryRow("SELECT repos_json FROM installations WHERE installation_id = ?", id).Scan(&raw) != nil {
+		return nil
+	}
+	var repos []string
+	json.Unmarshal([]byte(raw), &repos)
+	return repos
+}
+
+// UpsertInstallation records an installation (from an `installation` webhook), replacing its
+// repo set but PRESERVING any account_id a prior `mago link` set.
+func (s *Store) UpsertInstallation(id int64, login string, repos []string) error {
+	_, err := s.db.Exec(`
+INSERT INTO installations (installation_id, github_login, repos_json, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(installation_id) DO UPDATE SET github_login=excluded.github_login, repos_json=excluded.repos_json, updated_at=excluded.updated_at`,
+		id, login, reposToJSON(repos), time.Now().Unix())
+	return err
+}
+
+// MutateInstallationRepos applies add/remove deltas (from `installation_repositories`),
+// creating the row unclaimed if we somehow missed the `installation` created event.
+func (s *Store) MutateInstallationRepos(id int64, login string, add, remove []string) error {
+	set := map[string]bool{}
+	for _, r := range s.installRepos(id) {
+		set[r] = true
+	}
+	for _, r := range add {
+		set[r] = true
+	}
+	for _, r := range remove {
+		delete(set, r)
+	}
+	repos := make([]string, 0, len(set))
+	for r := range set {
+		repos = append(repos, r)
+	}
+	return s.UpsertInstallation(id, login, repos)
+}
+
+func (s *Store) DeleteInstallation(id int64) error {
+	_, err := s.db.Exec("DELETE FROM installations WHERE installation_id = ?", id)
+	return err
+}
+
+// ClaimInstallation binds an installation to a mago account. Errors if the installation is
+// unknown (the App must be installed first, so its webhook has registered it).
+func (s *Store) ClaimInstallation(id, accountID int64) error {
+	res, err := s.db.Exec("UPDATE installations SET account_id=?, updated_at=? WHERE installation_id=?",
+		accountID, time.Now().Unix(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("installation %d not found — install the GitHub App on your repos first", id)
+	}
+	return nil
+}
+
+// EntitledRepos is the set of repos an account may receive relayed events for: the union of
+// repos across every installation it has claimed.
+func (s *Store) EntitledRepos(accountID int64) map[string]bool {
+	out := map[string]bool{}
+	rows, err := s.db.Query("SELECT repos_json FROM installations WHERE account_id = ?", accountID)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw string
+		if rows.Scan(&raw) != nil {
+			continue
+		}
+		var repos []string
+		json.Unmarshal([]byte(raw), &repos)
+		for _, r := range repos {
+			out[r] = true
+		}
+	}
+	return out
+}
+
+func (s *Store) InstallationsForAccount(accountID int64) []Installation {
+	var out []Installation
+	rows, err := s.db.Query("SELECT installation_id, account_id, github_login, repos_json FROM installations WHERE account_id = ? ORDER BY installation_id", accountID)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var in Installation
+		var raw string
+		if rows.Scan(&in.ID, &in.AccountID, &in.GithubLogin, &raw) != nil {
+			continue
+		}
+		json.Unmarshal([]byte(raw), &in.Repos)
+		out = append(out, in)
+	}
+	return out
 }
