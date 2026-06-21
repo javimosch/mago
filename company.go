@@ -99,7 +99,7 @@ const reflectionInstruction = "End your reply with your reflection as ONE fenced
 	"{\n" +
 	`  "summary": "what you did this tick",` + "\n" +
 	`  "state_delta": "what changed in the world (one line; goes into STATE.md)",` + "\n" +
-	`  "task_status": "in_progress | blocked | done | needs_human | reassign",` + "\n" +
+	`  "task_status": "in_progress | blocked | done | needs_human | reassign | already_done",` + "\n" +
 	`  "lessons": [{"skill": "short-kebab-name", "note": "a learning, caveat, pitfall or gotcha"}],` + "\n" +
 	`  "next": "what should happen on the next tick",` + "\n" +
 	`  "cadence_signal": "idle | working | blocked",` + "\n" +
@@ -107,7 +107,8 @@ const reflectionInstruction = "End your reply with your reflection as ONE fenced
 	"}\n" +
 	"```\n" +
 	"Use lessons for anything worth remembering next time. Set task_status to done only when the task is fully complete and verified. " +
-	"Set task_status to reassign if this task does not fit your role — it will be handed back and routed to someone else."
+	"Set task_status to reassign if this task does not fit your role — it will be handed back and routed to someone else. " +
+	"Set task_status to already_done if the deliverable already exists — do NOT redo it or open a duplicate; say what already covers it."
 
 func buildSystemPrompt(a *Agent) string {
 	return fmt.Sprintf(`You are %s (%s) at a company operated by mago.
@@ -154,7 +155,10 @@ func projectRepoInstructions(a *Agent, repo, taskID string) string {
 			"  something), set task_status to \"reassign\" so it goes to the right role — do not attempt it."
 	}
 	return header + fmt.Sprintf("You are IMPLEMENTING. Do NOT review or merge anything.\n"+
-		"- Use a branch `mago/task-%s` (create it, or check it out if it exists).\n"+
+		"- FIRST check whether the deliverable already exists: grep/read the repo and run "+
+		"`gh pr list --state merged`. If it already exists and works, do NOT open a duplicate — "+
+		"set task_status to already_done and say what covers it.\n"+
+		"- Otherwise, use a branch `mago/task-%s` (create it, or check it out if it exists).\n"+
 		"- Commit your work, then push: `git push -u origin mago/task-%s`.\n"+
 		"- Open a PR if none exists: `gh pr create --fill --head mago/task-%s` (otherwise push more commits).\n"+
 		"- STOP after opening the PR. Do NOT merge, approve, or review it — that is the reviewer's job.\n"+

@@ -39,6 +39,9 @@ func (c *Company) applyTaskStatus(t *Task, a *Agent, r *Reflection) {
 			q = r.Next
 		}
 		c.tasks.RaiseHITL(t, a.Name, oneLine(q))
+	case "already_done":
+		c.tasks.RecordProgress(t, a.Name, "ALREADY DONE (no PR needed): "+oneLine(r.Summary))
+		c.tasks.SetStatus(t, "done")
 	case "reassign":
 		c.tasks.RecordProgress(t, a.Name, "REASSIGN (not my role): "+oneLine(r.Summary))
 		c.tasks.Bounce(t)
