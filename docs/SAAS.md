@@ -110,11 +110,15 @@ The whole loop is CLI + GitHub — no web panel. The human is the **CEO**; the s
 ## Build roadmap
 
 1. **Now** — Stripe €20/mo price created ✓ + this plan.
-2. **Platform backend skeleton** (`mago-platform`): accounts (email/pw, SQLite, bcrypt, JWT) +
-   Stripe checkout + webhook + license issuance, mirroring AM's `stripe.go` simplified to one plan.
-3. **Client CLI**: `register`/`login`/`subscribe`/`account status`; the worker is license-gated.
+2. **Platform backend skeleton** ✓ (`mago-platform`): accounts (email/pw, JSON store, JWT) +
+   Stripe checkout + webhook + license issuance, mirroring AM's `stripe.go` simplified to one
+   plan. Stdlib-only skeleton; prod swaps bcrypt + SQLite behind the same method set.
+3. **Client CLI** ✓: `register`/`login`/`subscribe`/`account status` (`account.go`) — a thin,
+   secret-free HTTP client to the platform API; token + license cached in `~/.mago/config.json`.
+   Verified end-to-end against real Stripe test mode. Worker license-gating is phase 4.
 4. **GitHub webhook relay**: the platform receives repo webhooks and relays them to the worker
-   over its dial-out connection — so `mago serve` no longer needs a public URL/tunnel.
+   over its dial-out connection — so `mago serve` no longer needs a public URL/tunnel. The
+   worker authenticates with the cached `license_key`; lapsed subscriptions are refused.
 5. **v2**: GitHub App + `gh` login; live Stripe price; multiple workers per account.
 
 ## Code organization — core vs platform (decided)
