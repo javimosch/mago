@@ -39,7 +39,9 @@ pick task (claim) -> assemble briefing -> drive tau -> parse reflection -> write
   `{summary, state_delta, task_status, lessons[], next, cadence_signal, hitl_question}`.
 - **Write-back** (the worker, not the agent): journal + `STATE.md` append + skills (with
   INDEX) + task status/claim + HITL + cadence.
-- **Push state** (GitHub mode): commit `STATE.md` + `.mago/` to the orphan `mago-state` branch.
+- **Push state** (GitHub mode): agent **definitions** (`.mago/agents` + config + projects) → `main`
+  (via a dedicated worktree); **runtime exhaust** (`STATE.md`, `.mago/runs|skills`) → the
+  `mago-state` branch. Adopts an existing remote `mago-state`, so re-clone is fast-forward-safe.
 
 ## Backends (the world)
 
@@ -82,5 +84,8 @@ its progress log; lessons = `.mago/skills/<name>/SKILL.md` with an always-in-con
 ## Not built yet
 
 Platform backend, accounts (email/password), Stripe, the two-binary split, the webhook
-relay, GitHub App, git worktrees, real project clone→branch→PR, exec-team personas, the
-`decisions/` mechanism, STATE.md compaction.
+relay, GitHub App, the `decisions/` mechanism, agent-side **dedup** of already-shipped work,
+and a recurring **review trigger** for a continuous PR stream (today's review is a one-off task).
+
+Note: several earlier "not built" items are now done — exec-team personas, STATE.md
+compaction, real project clone→branch→PR, and git worktrees (used for the def/runtime split).

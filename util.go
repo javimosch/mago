@@ -2,9 +2,35 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
+
+func copyFile(src, dst string) {
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return
+	}
+	ensureDir(filepath.Dir(dst))
+	os.WriteFile(dst, b, 0o644)
+}
+
+func copyTree(src, dst string) {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return
+	}
+	ensureDir(dst)
+	for _, e := range entries {
+		s, d := filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())
+		if e.IsDir() {
+			copyTree(s, d)
+		} else {
+			copyFile(s, d)
+		}
+	}
+}
 
 // sanitize lowercases and replaces non [a-z0-9-_] runes with '-' (for ids/paths).
 func sanitize(s string) string {
