@@ -19,6 +19,7 @@ not built yet). Commands:
 | `mago loop [<agent>]` | run ticks on an adaptive cadence (no agent = loop the full reconcile) |
 | `mago status` | show STATE.md, tasks, pending HITL |
 | `mago answer <id> "<text>"` | answer a needs-human task so it resumes (local mode) |
+| `mago serve` | event-driven worker: GitHub webhooks wake a reconcile in real time (`--addr`, `--secret`, `--heartbeat`) |
 
 Env knobs (BYOK — keys stay on this machine, used by tau):
 `MAGO_PROVIDER` / `MAGO_MODEL` (override the agent's tau provider/model),
@@ -78,7 +79,10 @@ its progress log; lessons = `.mago/skills/<name>/SKILL.md` with an always-in-con
 - **Reflection via prompt**, not `--schema` (provider limitation).
 - **Per-project workspace dirs**, not git worktrees, and **no real project clones/PRs** yet
   — agents work in local dirs; product code is not pushed.
-- **HITL resume by polling**, not the webhook relay.
+- **Webhook-driven** via `mago serve` (HMAC-verified `/webhook/github` → wake → reconcile in
+  real time); polling remains a fallback. The multi-tenant relay (platform fan-out to NAT'd
+  workers) is still platform-layer — a single worker needs a public URL or a tunnel to receive
+  webhooks directly.
 - Starter agents in tests are a generic `cto` / `reviewer`, not the full exec team.
 
 ## Not built yet

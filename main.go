@@ -26,6 +26,8 @@ func main() {
 		err = cmdLoop(os.Args[2:])
 	case "tick":
 		err = cmdTick(os.Args[2:])
+	case "serve":
+		err = cmdServe(os.Args[2:])
 	case "status":
 		err = cmdStatus(os.Args[2:])
 	case "answer":
@@ -55,6 +57,8 @@ Usage:
   mago run <agent> [-C d]         run ONE tick: brief -> tau -> reflect -> write back
   mago loop <agent> [-C d]        run ticks on an adaptive cadence (--base/--max/--max-ticks secs)
   mago tick [-C d]                route open tasks to best-fit agents, then run each agent
+  mago serve [-C d]               event-driven worker: GitHub webhooks wake a reconcile
+                                  (--addr :8099, --secret <hmac>, --heartbeat <secs>)
   mago status [-C d]              show STATE.md, tasks, and pending HITL
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
   mago version | help
