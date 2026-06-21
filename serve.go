@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,6 +22,7 @@ func cmdServe(args []string) error {
 	addr := ":8099"
 	secret := os.Getenv("MAGO_WEBHOOK_SECRET")
 	heartbeat := 0
+	relay := false
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
 		case "--addr":
@@ -38,6 +40,8 @@ func cmdServe(args []string) error {
 				heartbeat = atoiSafe(rest[i+1])
 				i++
 			}
+		case "--relay":
+			relay = true
 		}
 	}
 	comp, err := loadCompany(dir)
@@ -50,6 +54,10 @@ func cmdServe(args []string) error {
 	w.signal(wakeEvent{reason: "startup"})
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
+	}
+	// --relay: dial out to the platform for GitHub events instead of needing a public tunnel.
+	if relay {
+		go runRelay(context.Background(), w, loadConfig(), comp.repos())
 	}
 
 	mux := http.NewServeMux()
