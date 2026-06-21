@@ -14,9 +14,8 @@ import (
 )
 
 // cmdServe runs the worker as an event-driven daemon: a GitHub webhook (delivered
-// directly, via a tunnel, or relayed by the platform) wakes it to reconcile in real
-// time, instead of polling. An optional --heartbeat keeps a fallback cadence so missed
-// events still get caught.
+// directly, via a tunnel, or relayed by the platform) wakes it in real time instead of
+// polling. An optional --heartbeat keeps a fallback cadence so missed events still land.
 func cmdServe(args []string) error {
 	dir, rest := parseCompanyDir(args)
 	addr := ":8099"
@@ -46,9 +45,9 @@ func cmdServe(args []string) error {
 		return err
 	}
 
-	w := &eventWorker{comp: comp, wake: make(chan string, 1)}
+	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 8)}
 	go w.run()
-	w.signal("startup")
+	w.signal(wakeEvent{reason: "startup"})
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
 	}
@@ -61,24 +60,36 @@ func cmdServe(args []string) error {
 	return http.ListenAndServe(addr, mux)
 }
 
+// wakeEvent carries why we woke and, when known, which single agent to wake (target).
+// An empty target means a full reconcile (routing + all agents).
+type wakeEvent struct{ reason, target string }
+
 type eventWorker struct {
 	comp *Company
-	wake chan string // buffered(1): coalesces bursts so reconciles never overlap
+	wake chan wakeEvent
 }
 
-func (w *eventWorker) signal(reason string) {
+func (w *eventWorker) signal(ev wakeEvent) {
 	select {
-	case w.wake <- reason:
-	default: // a reconcile is already pending/running; coalesce
+	case w.wake <- ev:
+	default: // queue full — heartbeat / next event will catch up
 	}
 }
 
-// run consumes wake signals and reconciles serially (one at a time).
+// run consumes wake events serially: a targeted event runs just that agent; otherwise
+// a full reconcile.
 func (w *eventWorker) run() {
-	for reason := range w.wake {
-		fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", reason)
-		if _, err := reconcileOnce(w.comp); err != nil {
-			fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
+	for ev := range w.wake {
+		if ev.target != "" {
+			fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
+			if _, err := runTick(w.comp, ev.target); err != nil {
+				fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
+			if _, err := reconcileOnce(w.comp); err != nil {
+				fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
+			}
 		}
 	}
 }
@@ -86,7 +97,7 @@ func (w *eventWorker) run() {
 func (w *eventWorker) heartbeatLoop(every time.Duration) {
 	t := time.NewTicker(every)
 	for range t.C {
-		w.signal("heartbeat")
+		w.signal(wakeEvent{reason: "heartbeat"})
 	}
 }
 
@@ -98,11 +109,11 @@ func (w *eventWorker) handleWebhook(secret string) http.HandlerFunc {
 			return
 		}
 		event := r.Header.Get("X-GitHub-Event")
-		reason, wake := classifyEvent(event, body)
+		ev, wake := classifyEvent(event, body)
 		if wake {
-			w.signal(reason)
+			w.signal(ev)
 		}
-		fmt.Fprintf(rw, "ok event=%s wake=%v\n", event, wake)
+		fmt.Fprintf(rw, "ok event=%s wake=%v target=%q\n", event, wake, ev.target)
 	}
 }
 
@@ -116,8 +127,9 @@ func validSignature(secret, sig string, body []byte) bool {
 	return hmac.Equal([]byte(sig), []byte(want))
 }
 
-// classifyEvent decides whether a GitHub webhook should wake the worker, and why.
-func classifyEvent(event string, body []byte) (string, bool) {
+// classifyEvent decides whether a GitHub webhook should wake the worker, and whether it
+// can target a single agent (the issue's agent:<name> owner) instead of a full reconcile.
+func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 	var p struct {
 		Action  string `json:"action"`
 		Comment struct {
@@ -125,28 +137,41 @@ func classifyEvent(event string, body []byte) (string, bool) {
 		} `json:"comment"`
 		Issue struct {
 			Number int `json:"number"`
+			Labels []struct {
+				Name string `json:"name"`
+			} `json:"labels"`
 		} `json:"issue"`
 		PullRequest struct {
 			Number int `json:"number"`
 		} `json:"pull_request"`
 	}
 	json.Unmarshal(body, &p)
+
+	owner := func() string {
+		for _, l := range p.Issue.Labels {
+			if strings.HasPrefix(l.Name, "agent:") {
+				return strings.TrimPrefix(l.Name, "agent:")
+			}
+		}
+		return ""
+	}
+
 	switch event {
 	case "issues":
 		switch p.Action {
 		case "opened", "reopened", "assigned", "labeled":
-			return fmt.Sprintf("issue #%d %s", p.Issue.Number, p.Action), true
+			return wakeEvent{reason: fmt.Sprintf("issue #%d %s", p.Issue.Number, p.Action)}, true
 		}
 	case "issue_comment":
-		// a human reply (HITL answer, new instruction) — mago's own comments are skipped
+		// a human reply (HITL answer, new instruction); mago's own comments are skipped.
 		if p.Action == "created" && !isMagoComment(p.Comment.Body) {
-			return fmt.Sprintf("human comment on #%d", p.Issue.Number), true
+			return wakeEvent{reason: fmt.Sprintf("human comment on #%d", p.Issue.Number), target: owner()}, true
 		}
 	case "pull_request":
 		switch p.Action {
 		case "opened", "reopened", "ready_for_review":
-			return fmt.Sprintf("PR #%d %s", p.PullRequest.Number, p.Action), true
+			return wakeEvent{reason: fmt.Sprintf("PR #%d %s", p.PullRequest.Number, p.Action)}, true
 		}
 	}
-	return "", false
+	return wakeEvent{}, false
 }
