@@ -35,7 +35,9 @@ func ensureClone(dir, repo string) error {
 		return nil
 	}
 	os.RemoveAll(dir)
-	out, err := exec.Command("gh", "repo", "clone", repo, dir).CombinedOutput()
+	// shallow + single-branch keeps large repos (e.g. supercli's thousands of plugins) fast
+	// to clone; branches still push and PRs still open from a shallow base.
+	out, err := exec.Command("gh", "repo", "clone", repo, dir, "--", "--depth", "1", "--single-branch").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("clone %s: %v %s", repo, err, strings.TrimSpace(string(out)))
 	}
