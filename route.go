@@ -86,8 +86,22 @@ func reconcileOnce(comp *Company) (bool, error) {
 
 // routeTask asks the cheap model which agent should own a task, given the roster.
 func routeTask(carrier *Agent, t *Task, agents []*Agent) string {
+	// Structural guard: reviewers are eligible only for review tasks. The LLM router
+	// can't be trusted to honour this, so we restrict the candidate set directly.
+	candidates := agents
+	if !looksLikeReview(t) {
+		var nonRev []*Agent
+		for _, a := range agents {
+			if !a.Reviews {
+				nonRev = append(nonRev, a)
+			}
+		}
+		if len(nonRev) > 0 {
+			candidates = nonRev
+		}
+	}
 	var roster strings.Builder
-	for _, a := range agents {
+	for _, a := range candidates {
 		roster.WriteString("- " + a.Name + ": " + a.Title + "\n")
 	}
 	prompt := fmt.Sprintf(`Assign this task to exactly one team member based on their role.
@@ -105,10 +119,23 @@ Reply with ONLY the name of the single best owner, nothing else.`,
 		return ""
 	}
 	low := strings.ToLower(out)
-	for _, a := range agents {
+	for _, a := range candidates {
 		if strings.Contains(low, strings.ToLower(a.Name)) {
 			return a.Name
 		}
 	}
 	return ""
+}
+
+// looksLikeReview reports whether a task is about reviewing/merging existing PRs —
+// the only kind of work a review-only agent may own. Checks the TITLE only: a GitHub
+// task's Body includes prior comments, which are polluted with review/merge chatter.
+func looksLikeReview(t *Task) bool {
+	s := strings.ToLower(t.Title)
+	for _, kw := range []string{"review", "merge", "pull request", "pr #", "approve"} {
+		if strings.Contains(s, kw) {
+			return true
+		}
+	}
+	return false
 }
