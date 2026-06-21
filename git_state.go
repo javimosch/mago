@@ -53,14 +53,24 @@ func (c *Company) pushState(msg string) {
 		fmt.Fprintf(os.Stderr, "[state] setup: %v\n", err)
 		return
 	}
-	// runtime -> mago-state
-	gitRun(c.Dir, "add", "-A")
-	if out, _ := gitRun(c.Dir, "status", "--porcelain"); strings.TrimSpace(out) != "" {
-		if _, err := gitRun(c.Dir, "commit", "-q", "-m", msg); err == nil {
-			if out, err := gitRun(c.Dir, "push", "-q", "origin", "mago-state"); err != nil {
-				fmt.Fprintf(os.Stderr, "[state] push mago-state: %v %s\n", err, out)
-			} else {
-				fmt.Fprintf(os.Stderr, "[state] runtime -> %s @ mago-state\n", c.ghRepo)
+	// runtime -> mago-state: stage ONLY known runtime exhaust. Never `git add -A` — that
+	// would sweep up stray files (logs, scratch) sitting in the company dir into the
+	// runtime branch, polluting it and causing re-clone conflicts.
+	var paths []string
+	for _, p := range []string{"STATE.md", ".mago/runs", ".mago/skills", ".mago/memory", ".mago/inbox"} {
+		if _, err := os.Stat(filepath.Join(c.Dir, p)); err == nil {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) > 0 {
+		gitRun(c.Dir, append([]string{"add", "--"}, paths...)...)
+		if !gitOK(c.Dir, "diff", "--cached", "--quiet") { // there are staged changes
+			if _, err := gitRun(c.Dir, "commit", "-q", "-m", msg); err == nil {
+				if out, err := gitRun(c.Dir, "push", "-q", "origin", "mago-state"); err != nil {
+					fmt.Fprintf(os.Stderr, "[state] push mago-state: %v %s\n", err, out)
+				} else {
+					fmt.Fprintf(os.Stderr, "[state] runtime -> %s @ mago-state\n", c.ghRepo)
+				}
 			}
 		}
 	}

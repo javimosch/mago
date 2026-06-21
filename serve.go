@@ -170,8 +170,10 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 
 	switch event {
 	case "issues":
+		// not "labeled": mago changes its own labels constantly (agent:, mago:in-progress)
+		// and would wake itself in a loop.
 		switch p.Action {
-		case "opened", "reopened", "assigned", "labeled":
+		case "opened", "reopened", "assigned":
 			return wakeEvent{reason: fmt.Sprintf("issue #%d %s", p.Issue.Number, p.Action)}, true
 		}
 	case "issue_comment":
