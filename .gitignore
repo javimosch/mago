@@ -3,3 +3,4 @@
 *.test
 platform/.env
 .env
+/mago-platform
