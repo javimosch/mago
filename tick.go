@@ -76,6 +76,16 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 		comp.pushState(fmt.Sprintf("tick %s on #%s (incomplete)", agentName, task.ID))
 		return tickResult{worked: true, signal: "working"}, nil
 	}
+	// Guard: an implementer must not claim a project task "done" without an actual PR.
+	// If the deliverable isn't shipped, keep it in-progress so the next tick finishes it.
+	if refl.TaskStatus == "done" && !isReviewerRole(a) {
+		if repo := comp.projectRepo(task.Project); task.Project != "" && repo != "" && !prShippedForTask(repo, task.ID) {
+			fmt.Fprintf(os.Stderr, "[guard] #%s claimed done but no PR on %s for mago/task-%s — keeping in_progress\n", task.ID, repo, task.ID)
+			refl.TaskStatus = "in_progress"
+			refl.Next = "Open the PR: commit branch mago/task-" + task.ID +
+				", `git push -u origin mago/task-" + task.ID + "`, then `gh pr create --fill --head mago/task-" + task.ID + "`."
+		}
+	}
 	comp.writeBack(a, task, refl, content)
 	comp.printRunResult(a, task, refl)
 	comp.pushState(fmt.Sprintf("tick %s on #%s: %s", agentName, task.ID, oneLine(refl.Summary)))
