@@ -58,11 +58,22 @@ func (c *Company) reviewPR(prRepo string, prNum int) {
 	}
 	fmt.Fprintf(os.Stderr, "[review] %s judging PR #%d in %s\n", reviewer.Name, prNum, prRepo)
 
-	prompt := fmt.Sprintf("You are %s reviewing a pull request. Judge ONLY the diff below — you have no "+
-		"other context and need none.\n\n%s\n\nDIFF of PR #%d (%s):\n```diff\n%s\n```\n\n"+
+	rubric := "Apply these EXACT merge criteria — do NOT invent any others:\n" +
+		"APPROVE when ALL of these hold:\n" +
+		"  1. The change does what the PR title/description says.\n" +
+		"  2. It is syntactically/structurally valid (e.g. valid JSON, parseable code).\n" +
+		"  3. It touches only the files it should — no stray or shared-file edits.\n" +
+		"  4. No obvious correctness bug, security issue, destructive change, or committed secret.\n" +
+		"REQUEST_CHANGES ONLY for a concrete BLOCKING defect from that list (a real bug, invalid syntax, " +
+		"out-of-scope/destructive edit, or a leaked secret).\n" +
+		"Do NOT request changes for missing tests, missing docs/README, comments, style, naming, or any " +
+		"\"nice to have\" — those are NOT merge blockers. If the change is correct, scoped, and safe, APPROVE."
+
+	prompt := fmt.Sprintf("You are the code reviewer for pull request #%d on `%s`. Judge ONLY the diff "+
+		"below, strictly against the criteria — nothing else.\n\n%s\n\nDIFF:\n```diff\n%s\n```\n\n"+
 		"Respond with ONE fenced json code block and nothing else:\n"+
-		"```json\n{\"verdict\": \"approve\" | \"request_changes\", \"comment\": \"a 1-4 sentence assessment\"}\n```",
-		reviewer.Title, strings.TrimSpace(reviewer.Persona), prNum, prRepo, diff)
+		"```json\n{\"verdict\": \"approve\" | \"request_changes\", \"comment\": \"1-2 sentences: which criteria it meets, or the specific blocking defect\"}\n```",
+		prNum, prRepo, rubric, diff)
 
 	out, err := tauComplete(reviewer, prompt)
 	if err != nil {
