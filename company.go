@@ -59,6 +59,25 @@ func (c *Company) loadProjects() map[string]string {
 
 func (c *Company) projectRepo(name string) string { return c.loadProjects()[name] }
 
+// repos returns every GitHub repo this company touches (the company repo + project repos),
+// deduped — i.e. the repos a worker should receive relayed webhooks for.
+func (c *Company) repos() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(r string) {
+		if r != "" && !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	add(c.ghRepo)
+	for _, r := range c.loadProjects() {
+		add(r)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (c *Company) saveProject(name, repo string) error {
 	m := c.loadProjects()
 	m[name] = repo
@@ -74,8 +93,8 @@ func (c *Company) workspaceFor(t *Task) string {
 	}
 	return c.workspaceDir()
 }
-func (c *Company) stateFile() string    { return filepath.Join(c.Dir, "STATE.md") }
-func (c *Company) skillsIndex() string  { return filepath.Join(c.skillsDir(), "INDEX.md") }
+func (c *Company) stateFile() string   { return filepath.Join(c.Dir, "STATE.md") }
+func (c *Company) skillsIndex() string { return filepath.Join(c.skillsDir(), "INDEX.md") }
 
 func (c *Company) loadAgent(name string) (*Agent, error) {
 	b, err := os.ReadFile(filepath.Join(c.agentsDir(), name+".md"))

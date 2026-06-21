@@ -58,8 +58,12 @@ A **live** price (`sk_live_`) is created later for production.
 | `GET /api/account` | `Authorization: Bearer <jwt>` | `{email, plan, active, license_key?}` |
 | `POST /api/checkout` | `Bearer <jwt>` | `{url}` — Stripe Checkout link (subscription mode, the €20 price, idempotency key) |
 | `POST /stripe/webhook` | Stripe-signed body | 200; `checkout.session.completed` → `plan=mago` + issue `license_key`; `subscription.deleted` → `free` |
-| `WSS /ws/worker?token=<license_key>` | — | event stream (relayed GitHub webhooks); rejected if subscription inactive |
-| `POST /webhooks/github/<install>` | GitHub-signed body | 200; relayed to the matching worker |
+| `GET /ws/worker?token=<license_key>&repos=…` | — | long-lived NDJSON stream of relayed GitHub webhooks; `401` unknown license, `403` if subscription inactive |
+| `POST /webhooks/github/<install>` | GitHub-signed body | 200; verified + relayed to the worker serving that repo |
+
+**Relay transport:** newline-delimited JSON over a long-lived HTTP response (the worker `GET`s
+and reads a stream), **not** raw WebSocket — keeps the core stdlib-only. The worker dials out,
+so it works behind NAT exactly like a WebSocket would, at the low volume GitHub webhooks need.
 
 The CLI stores `{platform_url, token, license_key}` in `~/.mago/config.json` (0600), rcmd-style.
 
@@ -74,19 +78,24 @@ The CLI stores `{platform_url, token, license_key}` in `~/.mago/config.json` (06
 
 The worker runs on the client's machine (often behind NAT), so it **dials out** to the
 platform and the platform pushes events down — exactly AM's pattern, but carrying GitHub
-webhook events instead of run commands:
+webhook events instead of run commands. **Implemented** (`platform/relay.go`, `relay.go`):
 
-1. Worker connects: `WSS /ws/worker?token=<license_key>` → platform validates the license
-   (active subscription) and records `worker_links(license_key, worker_id, repos…)`.
+1. Worker connects: `mago serve --relay` → `GET /ws/worker?token=<license_key>&repos=…`
+   (repos = the company repo + project repos). The platform validates the license (active
+   subscription) and registers the connection in an in-memory hub keyed by license.
 2. The platform owns **one GitHub App / webhook ingress**. A repo event (`issues`,
-   `issue_comment`, `pull_request`) arrives at `POST /webhooks/github/<install>`.
-3. The platform looks up which worker serves that repo and pushes the event down the socket.
-4. The worker feeds it into the existing `mago serve` event loop (`classifyEvent` → wake →
-   reconcile / targeted agent / reviewPR). **This removes the per-worker tunnel** that the
-   current `mago serve` needs.
+   `issue_comment`, `pull_request`) arrives at `POST /webhooks/github/<install>`; the platform
+   verifies `X-Hub-Signature-256` against `GITHUB_WEBHOOK_SECRET`.
+3. The platform looks up which worker serves `repository.full_name` and streams the event
+   (`{event, body}` as one NDJSON line) down that connection; keepalive `ping`s every 25s.
+4. The worker feeds `body` into the existing event loop via the SAME `classifyEvent` → wake →
+   reconcile / targeted agent / reviewPR path the local listener uses. **This removes the
+   per-worker tunnel** that the current `mago serve` needs. The worker reconnects with backoff.
 
-License-gating: if the subscription lapses (`subscription.deleted` → plan `free`), the
-platform refuses the worker's connection, so an unpaid worker stops receiving events.
+License-gating: an unknown license is refused (`401`); a lapsed one (`subscription.deleted` →
+plan `free`) is refused (`403`), so an unpaid worker can't (re)connect to receive events.
+(`worker_links` is currently the in-memory hub; persisting it is a v2 nicety, not needed for
+one worker per account.)
 
 ## Onboarding (agent-driven — mago's twist on AM)
 
@@ -116,9 +125,12 @@ The whole loop is CLI + GitHub — no web panel. The human is the **CEO**; the s
 3. **Client CLI** ✓: `register`/`login`/`subscribe`/`account status` (`account.go`) — a thin,
    secret-free HTTP client to the platform API; token + license cached in `~/.mago/config.json`.
    Verified end-to-end against real Stripe test mode. Worker license-gating is phase 4.
-4. **GitHub webhook relay**: the platform receives repo webhooks and relays them to the worker
-   over its dial-out connection — so `mago serve` no longer needs a public URL/tunnel. The
-   worker authenticates with the cached `license_key`; lapsed subscriptions are refused.
+4. **GitHub webhook relay** ✓ (`platform/relay.go` + core `relay.go`, `mago serve --relay`):
+   the platform receives repo webhooks (sig-verified) and streams them to the worker over its
+   dial-out connection (NDJSON, stdlib — no WebSocket dep) — so `mago serve` no longer needs a
+   public URL/tunnel. The worker authenticates with the cached `license_key`; unknown/lapsed
+   subscriptions are refused. Verified end-to-end (connect, route, isolation, sig + license gates).
+   Remaining for production: stand up the actual GitHub App + ingress webhook.
 5. **v2**: GitHub App + `gh` login; live Stripe price; multiple workers per account.
 
 ## Code organization — core vs platform (decided)
@@ -139,8 +151,8 @@ platform layer stays private:
   core so the client commands compile without `platform/`.
 
 Still open (not blocking): reuse AM's Stripe account for **production** vs a dedicated mago
-account (test reuse is fine now); the worker↔platform transport (lean toward AM's WebSocket
-dial-out — see below).
+account (test reuse is fine now). The worker↔platform transport is **decided + built**: HTTP
+NDJSON dial-out streaming (stdlib, no WebSocket dep — see below).
 
 ## Data model (platform SQLite, `~/.mago-platform/platform.db`)
 

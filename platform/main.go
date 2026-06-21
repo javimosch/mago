@@ -17,8 +17,9 @@ import (
 )
 
 type server struct {
-	store                                                *Store
-	jwtSecret, stripeKey, webhookSecret, priceID, appURL string
+	store                                                                 *Store
+	jwtSecret, stripeKey, webhookSecret, priceID, appURL, ghWebhookSecret string
+	hub                                                                   *relayHub
 }
 
 func main() {
@@ -30,12 +31,14 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 	s := &server{
-		store:         st,
-		jwtSecret:     env("JWT_SECRET", "dev-insecure-change-me"),
-		stripeKey:     os.Getenv("STRIPE_SECRET_KEY"),
-		webhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		priceID:       os.Getenv("STRIPE_PRICE_MAGO"),
-		appURL:        env("APP_URL", "http://localhost:"+port),
+		store:           st,
+		jwtSecret:       env("JWT_SECRET", "dev-insecure-change-me"),
+		stripeKey:       os.Getenv("STRIPE_SECRET_KEY"),
+		webhookSecret:   os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		priceID:         os.Getenv("STRIPE_PRICE_MAGO"),
+		appURL:          env("APP_URL", "http://localhost:"+port),
+		ghWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		hub:             newRelayHub(),
 	}
 
 	mux := http.NewServeMux()
@@ -45,9 +48,10 @@ func main() {
 	mux.HandleFunc("/api/account", s.handleAccount)
 	mux.HandleFunc("/api/checkout", s.handleCheckout)
 	mux.HandleFunc("/stripe/webhook", s.handleWebhook)
-	// TODO(phase 4): WSS /ws/worker (license-gated) + POST /webhooks/github/<install> relay.
+	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)
+	mux.HandleFunc("/webhooks/github/", s.handleGithubWebhook) // GitHub App ingress -> relay
 
-	log.Printf("mago-platform :%s  store=%s  stripe=%v price=%s", port, dbPath, s.stripeKey != "", s.priceID)
+	log.Printf("mago-platform :%s  store=%s  stripe=%v price=%s gh-relay=%v", port, dbPath, s.stripeKey != "", s.priceID, s.ghWebhookSecret != "")
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 
