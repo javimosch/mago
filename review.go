@@ -48,13 +48,15 @@ func (c *Company) reviewPR(prRepo string, prNum int) {
 	}
 	fmt.Fprintf(os.Stderr, "[review] %s reviewing PR #%d in %s\n", reviewer.Name, prNum, prRepo)
 
-	prompt := fmt.Sprintf("# REVIEW TASK\n\nReview pull request #%d on this repo (a clone of `%s`). "+
-		"You are the reviewer — do NOT write or modify code.\n"+
-		"- Inspect it: `gh pr diff %d` and read the changed files.\n"+
+	prompt := fmt.Sprintf("# REVIEW TASK\n\nReview pull request #%d on the repo `%s`. You are the reviewer — "+
+		"do NOT write or modify code, and do NOT browse the repository.\n"+
+		"**Do NOT `ls`, `find`, `grep`, or read repo files — the repo may have thousands of files and "+
+		"will stall you. `gh pr diff %d` shows you EXACTLY what changed, which is all you need to review.**\n"+
+		"- Inspect the change with `gh pr diff %d` (just that one command).\n"+
 		"- Post your assessment as a COMMENT: `gh pr comment %d --body \"...\"` (do NOT use `gh pr review`).\n"+
 		"- If it meets the bar, merge it: `gh pr merge %d --squash --delete-branch`.\n"+
 		"- If it does not, comment what must change and do NOT merge.\n\n%s",
-		prNum, prRepo, prNum, prNum, prNum, reflectionInstruction)
+		prNum, prRepo, prNum, prNum, prNum, prNum, reflectionInstruction)
 
 	content, err := runTau(ws, reviewer, buildSystemPrompt(reviewer), prompt)
 	if err != nil {
