@@ -160,7 +160,12 @@ func (b *githubBackend) loadIssue(number string) (*Task, error) {
 // mago's comments start with a known marker; a human typing on GitHub does not.
 func isMagoComment(body string) bool {
 	t := strings.TrimSpace(body)
-	return strings.HasPrefix(t, "🔧") || strings.HasPrefix(t, "🙋") || strings.HasPrefix(t, "**")
+	for _, m := range []string{"🔧", "🙋", "📋", "↩", "**"} {
+		if strings.HasPrefix(t, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // resumeAnsweredHITL polls mago:hitl issues and, when the last comment is a human
