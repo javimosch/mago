@@ -57,9 +57,11 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 	}
 	ws := comp.workspaceFor(task)
 	if repo := comp.projectRepo(task.Project); task.Project != "" && repo != "" {
-		if err := ensureClone(ws, repo); err != nil {
+		w, err := comp.prepProjectWorkspace(task, repo) // fetch + branch from latest origin/<default>
+		if err != nil {
 			return tickResult{}, err
 		}
+		ws = w
 	} else {
 		ensureDir(ws)
 	}

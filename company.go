@@ -139,6 +139,28 @@ func isReviewerRole(a *Agent) bool {
 	return a.Reviews || strings.Contains(strings.ToLower(a.Name+" "+a.Title), "review")
 }
 
+// openPRsText lists the project repo's open PRs so a run is aware of in-flight work
+// (and can mark already_done instead of duplicating it).
+func (c *Company) openPRsText(repo string) string {
+	out, err := gh("-R", repo, "pr", "list", "--state", "open", "--json", "number,title,headRefName", "--limit", "30")
+	if err != nil {
+		return "(could not list)"
+	}
+	var prs []struct {
+		Number      int    `json:"number"`
+		Title       string `json:"title"`
+		HeadRefName string `json:"headRefName"`
+	}
+	if json.Unmarshal([]byte(out), &prs) != nil || len(prs) == 0 {
+		return "(none open)"
+	}
+	var sb strings.Builder
+	for _, p := range prs {
+		sb.WriteString(fmt.Sprintf("- #%d [%s] %s\n", p.Number, p.HeadRefName, p.Title))
+	}
+	return sb.String()
+}
+
 // projectRepoInstructions gives ROLE-APPROPRIATE git/gh steps: implementers open a PR
 // and must not merge it; reviewers review and auto-merge. Both work inside the clone.
 func projectRepoInstructions(a *Agent, repo, taskID string) string {
@@ -155,11 +177,10 @@ func projectRepoInstructions(a *Agent, repo, taskID string) string {
 			"  something), set task_status to \"reassign\" so it goes to the right role — do not attempt it."
 	}
 	return header + fmt.Sprintf("You are IMPLEMENTING. Do NOT review or merge anything.\n"+
-		"- FIRST check whether the deliverable already exists: grep/read the repo and run "+
-		"`gh pr list --state merged`. If it already exists and works, do NOT open a duplicate — "+
-		"set task_status to already_done and say what covers it.\n"+
-		"- Otherwise, use a branch `mago/task-%s` (create it, or check it out if it exists).\n"+
-		"- Commit your work, then push: `git push -u origin mago/task-%s`.\n"+
+		"- You are ALREADY on branch `mago/task-%s`, freshly based on the repo's latest default branch. Work here.\n"+
+		"- FIRST: if the Open PRs list above already covers this task, or the specific deliverable already exists, "+
+		"do NOT duplicate it — set task_status to already_done and say what covers it.\n"+
+		"- Make your change, commit, then push: `git push -u origin mago/task-%s`.\n"+
 		"- Open a PR if none exists: `gh pr create --fill --head mago/task-%s` (otherwise push more commits).\n"+
 		"- STOP after opening the PR. Do NOT merge, approve, or review it — that is the reviewer's job.\n"+
 		"- Put the PR URL in your summary.",
@@ -175,6 +196,7 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	b.WriteString(fmt.Sprintf("## Active task #%s: %s\nstatus: %s\n\n%s\n\n", t.ID, t.Title, t.Status, t.Body))
 	if t.Project != "" {
 		if repo := c.projectRepo(t.Project); repo != "" {
+			b.WriteString("## Open PRs in " + repo + " (do not duplicate in-flight work)\n" + c.openPRsText(repo) + "\n\n")
 			b.WriteString("## Project repo\n" + projectRepoInstructions(a, repo, t.ID) + "\n\n")
 		}
 	}
