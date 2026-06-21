@@ -32,6 +32,14 @@ func main() {
 		err = cmdStatus(os.Args[2:])
 	case "answer":
 		err = cmdAnswer(os.Args[2:])
+	case "register":
+		err = cmdRegister(os.Args[2:])
+	case "login":
+		err = cmdLogin(os.Args[2:])
+	case "subscribe":
+		err = cmdSubscribe(os.Args[2:])
+	case "account":
+		err = cmdAccount(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
@@ -51,6 +59,13 @@ func usage() {
 	fmt.Print(`mago ` + version + ` — local POC: autonomy-level-3 agents over a local company
 
 Usage:
+  Account (platform):
+  mago register [--email <e>] [--password <p>]   create an account (token -> ~/.mago/config.json)
+  mago login [--email <e>] [--password <p>]      log in to an existing account
+  mago subscribe                  print the Stripe checkout link (€20/month)
+  mago account status             show plan + license key
+
+  Company (local/worker):
   mago init [dir]                 scaffold a local company (.mago/, STATE.md, tasks/, workspace/)
   mago task add "<title>" [--project <p>] [-C d]  create a task (optionally for a project)
   mago project add <name> [-C d]  register a project repo/workspace
@@ -68,6 +83,8 @@ Flags:
 
 Env overrides (smoke test):
   MAGO_PROVIDER, MAGO_MODEL    override the agent's tau provider/model
+  MAGO_PLATFORM_URL            platform API base (default http://localhost:9100)
+  MAGO_PASSWORD                non-interactive password for register/login
 
 The worker drives tau (stateless per tick) in <company>/workspace. Memory lives in
 files: STATE.md (world), tasks/ (task), .mago/skills/ (lessons), .mago/runs/ (journals).
