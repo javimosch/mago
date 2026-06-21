@@ -44,6 +44,39 @@ func ensureClone(dir, repo string) error {
 	return nil
 }
 
+// defaultBranch returns the repo's default branch (main/master), via gh.
+func defaultBranch(repo string) string {
+	if out, err := gh("repo", "view", repo, "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"); err == nil {
+		if b := strings.TrimSpace(out); b != "" {
+			return b
+		}
+	}
+	return "main"
+}
+
+// prepProjectWorkspace makes the project clone current and checks out the task's branch
+// before the agent runs, so work never starts from a stale repo state:
+//   - resume the agent's existing remote branch if it already pushed one, OR
+//   - create the branch fresh from the LATEST origin/<default>.
+// The agent then just edits, commits, pushes, and opens/updates the PR.
+func (c *Company) prepProjectWorkspace(t *Task, repo string) (string, error) {
+	ws := c.projectDir(t.Project)
+	if err := ensureClone(ws, repo); err != nil {
+		return "", err
+	}
+	branch := "mago/task-" + t.ID
+	if _, err := gitRun(ws, "fetch", "-q", "--depth", "1", "origin", branch); err == nil {
+		gitRun(ws, "checkout", "-q", "-B", branch, "FETCH_HEAD") // resume existing PR branch
+	} else {
+		def := defaultBranch(repo)
+		if _, err := gitRun(ws, "fetch", "-q", "--depth", "1", "origin", def); err != nil {
+			return "", fmt.Errorf("fetch %s/%s: %v", repo, def, err)
+		}
+		gitRun(ws, "checkout", "-q", "-B", branch, "FETCH_HEAD") // fresh from latest default
+	}
+	return ws, nil
+}
+
 // pushState publishes the company's state in GitHub mode: runtime exhaust (STATE.md +
 // .mago/runs|skills|memory|inbox) to the mago-state branch, and agent DEFINITIONS
 // (.mago/agents + config + projects) to main. No-op outside GitHub mode.
