@@ -134,6 +134,28 @@ it, and pointing its webhook at the platform's public host. **v2:** GitHub OAuth
 the account↔installation binding self-verifying (today `mago link` trusts the authed claim),
 and App installation tokens (RS256 App JWT) can replace the worker's `gh` PAT.
 
+### No-App path: provision the webhook directly (operator token, zero clicks)
+
+A GitHub App can't be created via API — creation always needs the web UI or the manifest flow
+(one browser click). For operator-run / self-hosted deployments there's a fully-automatable
+alternative: an **operator token** (classic PAT with `admin:repo_hook`, or `admin:org_hook` for
+an org-wide hook) provisions the same ingress webhook directly. `mago-platform` does this:
+
+```sh
+mago-platform webhook add  --repo owner/repo --url https://<public-host> --account user@co.com
+mago-platform webhook add  --org  acme       --url https://<public-host>   # one hook for the org
+mago-platform webhook list --repo owner/repo
+mago-platform webhook rm   --repo owner/repo --id <hookID>
+```
+
+It creates/updates a `web` hook for `issues, issue_comment, pull_request` pointing at
+`…/webhooks/github/`, signed with `GITHUB_WEBHOOK_SECRET`. `--account` records a `repo_grants`
+entitlement so that, with `GITHUB_ENFORCE_ENTITLEMENT=1`, only that account's worker receives
+the repo's events (same multi-tenant safety as the App path, different source of truth). The
+token is **operator-only** (read from `$GITHUB_TOKEN` or `~/.github/token`) and never reaches a
+worker. Trade-off vs the App: no per-customer self-serve install UX, and the hook acts under the
+operator's identity — fine for operator-run, whereas the App is the path for open self-serve.
+
 ## Onboarding (agent-driven — mago's twist on AM)
 
 The human's own agent (e.g. Claude Code) drives the `mago` CLI; the human just approves:

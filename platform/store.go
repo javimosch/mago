@@ -60,6 +60,11 @@ CREATE TABLE IF NOT EXISTS installations (
   github_login    TEXT NOT NULL DEFAULT '',   -- the org/user the app is installed on
   repos_json      TEXT NOT NULL DEFAULT '[]', -- repos this installation covers (from GitHub webhooks)
   updated_at      INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS repo_grants (
+  account_id INTEGER NOT NULL,                -- mago user id entitled to the repo
+  repo       TEXT NOT NULL,                   -- owner/repo
+  PRIMARY KEY (account_id, repo)
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
@@ -219,26 +224,44 @@ func (s *Store) ClaimInstallation(id, accountID int64) error {
 }
 
 // EntitledRepos is the set of repos an account may receive relayed events for: the union of
-// repos across every installation it has claimed.
+// repos across every installation it has claimed (GitHub App path) plus its direct repo_grants
+// (operator-provisioned webhook path).
 func (s *Store) EntitledRepos(accountID int64) map[string]bool {
 	out := map[string]bool{}
-	rows, err := s.db.Query("SELECT repos_json FROM installations WHERE account_id = ?", accountID)
-	if err != nil {
-		return out
+	if rows, err := s.db.Query("SELECT repos_json FROM installations WHERE account_id = ?", accountID); err == nil {
+		for rows.Next() {
+			var raw string
+			if rows.Scan(&raw) == nil {
+				var repos []string
+				json.Unmarshal([]byte(raw), &repos)
+				for _, r := range repos {
+					out[r] = true
+				}
+			}
+		}
+		rows.Close()
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var raw string
-		if rows.Scan(&raw) != nil {
-			continue
+	if rows, err := s.db.Query("SELECT repo FROM repo_grants WHERE account_id = ?", accountID); err == nil {
+		for rows.Next() {
+			var repo string
+			if rows.Scan(&repo) == nil {
+				out[repo] = true
+			}
 		}
-		var repos []string
-		json.Unmarshal([]byte(raw), &repos)
-		for _, r := range repos {
-			out[r] = true
-		}
+		rows.Close()
 	}
 	return out
+}
+
+// GrantRepo entitles an account to a repo (operator-provisioned webhook path).
+func (s *Store) GrantRepo(accountID int64, repo string) error {
+	_, err := s.db.Exec("INSERT OR IGNORE INTO repo_grants (account_id, repo) VALUES (?, ?)", accountID, repo)
+	return err
+}
+
+func (s *Store) RevokeRepo(accountID int64, repo string) error {
+	_, err := s.db.Exec("DELETE FROM repo_grants WHERE account_id = ? AND repo = ?", accountID, repo)
+	return err
 }
 
 func (s *Store) InstallationsForAccount(accountID int64) []Installation {

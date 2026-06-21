@@ -102,7 +102,7 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 	// events for repos its account has claimed via an installation — never repos it merely
 	// names. Without the App (local/single-tenant dev) we trust the claimed set.
 	repos := claimed
-	if s.ghAppID != "" {
+	if s.enforceEntitlement {
 		entitled := s.store.EntitledRepos(u.ID)
 		repos = map[string]bool{}
 		var dropped []string

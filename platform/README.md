@@ -51,6 +51,16 @@ now), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MAGO`, `GITHUB_WEBHOOK_SECRET`, `DB
   webhooks maintain the `installations` table (GitHub-authoritative repo lists); `mago link`
   binds an installation to an account; worker repo subscriptions are entitlement-checked against
   it when `GITHUB_APP_ID` is set. See `docs/SAAS.md` §"The GitHub App" for the manual setup.
+- **No-App path** (`github.go`): the operator token can provision the ingress webhook directly —
+  no GitHub App, no browser click. Entitlement (when `GITHUB_ENFORCE_ENTITLEMENT=1`) comes from
+  `repo_grants`:
+  ```sh
+  mago-platform webhook add  --repo owner/repo --url https://<public-host> --account user@co.com
+  mago-platform webhook list --repo owner/repo
+  mago-platform webhook rm   --repo owner/repo --id <hookID>
+  ```
+  Needs a token with `admin:repo_hook` (or `admin:org_hook` for `--org`) and a public host where
+  GitHub can reach `…/webhooks/github/`.
 
 ## Smoke test
 

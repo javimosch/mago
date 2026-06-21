@@ -19,11 +19,20 @@ import (
 type server struct {
 	store                                                                          *Store
 	jwtSecret, stripeKey, webhookSecret, priceID, appURL, ghWebhookSecret, ghAppID string
+	enforceEntitlement                                                             bool
 	hub                                                                            *relayHub
 }
 
 func main() {
 	loadDotenv("platform/.env")
+	// Operator subcommands (don't start the server). `mago-platform webhook ...` provisions the
+	// GitHub webhook ingress on customer repos/orgs using the operator token.
+	if len(os.Args) > 1 && os.Args[1] == "webhook" {
+		if err := cmdWebhook(os.Args[2:]); err != nil {
+			log.Fatalf("webhook: %v", err)
+		}
+		return
+	}
 	port := env("PORT", "9100")
 	dbPath := expand(env("DB_PATH", "~/.mago-platform/platform.db"))
 	st, err := openStore(dbPath)
@@ -42,6 +51,9 @@ func main() {
 		ghAppID:         os.Getenv("GITHUB_APP_ID"),
 		hub:             newRelayHub(),
 	}
+	// Enforce repo entitlement whenever we're multi-tenant: a GitHub App is configured, or the
+	// operator opts in (webhook-provisioned path). Off by default for local/single-tenant dev.
+	s.enforceEntitlement = s.ghAppID != "" || os.Getenv("GITHUB_ENFORCE_ENTITLEMENT") == "1"
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") })
