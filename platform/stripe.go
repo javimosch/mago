@@ -39,11 +39,7 @@ func (s *server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cus = c
-		s.store.Update(func() {
-			if x := s.store.findByID(uid); x != nil {
-				x.StripeCustomer = cus
-			}
-		})
+		s.store.Update(uid, func(u *User) { u.StripeCustomer = cus })
 	}
 	link, err := stripeCheckout(s.stripeKey, cus, s.priceID, s.appURL, fmt.Sprint(uid))
 	if err != nil {
@@ -132,12 +128,10 @@ func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		json.Unmarshal(ev.Data.Object, &o)
 		if uid := atoi(o.Metadata["user_id"]); uid > 0 {
-			s.store.Update(func() {
-				if u := s.store.findByID(uid); u != nil {
-					u.Plan, u.StripeCustomer, u.StripeSub = "mago", o.Customer, o.Subscription
-					if u.LicenseKey == "" {
-						u.LicenseKey = genLicense()
-					}
+			s.store.Update(uid, func(u *User) {
+				u.Plan, u.StripeCustomer, u.StripeSub = "mago", o.Customer, o.Subscription
+				if u.LicenseKey == "" {
+					u.LicenseKey = genLicense()
 				}
 			})
 			log.Printf("stripe: user %d activated (mago)", uid)
@@ -148,11 +142,7 @@ func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		json.Unmarshal(ev.Data.Object, &o)
 		if uid := atoi(o.Metadata["user_id"]); uid > 0 {
-			s.store.Update(func() {
-				if u := s.store.findByID(uid); u != nil {
-					u.Plan = "free"
-				}
-			})
+			s.store.Update(uid, func(u *User) { u.Plan = "free" })
 			log.Printf("stripe: user %d downgraded (free)", uid)
 		}
 	}

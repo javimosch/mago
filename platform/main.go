@@ -25,11 +25,12 @@ type server struct {
 func main() {
 	loadDotenv("platform/.env")
 	port := env("PORT", "9100")
-	dbPath := expand(env("DB_PATH", "~/.mago-platform/store.json"))
+	dbPath := expand(env("DB_PATH", "~/.mago-platform/platform.db"))
 	st, err := openStore(dbPath)
 	if err != nil {
 		log.Fatalf("store: %v", err)
 	}
+	defer st.Close()
 	s := &server{
 		store:           st,
 		jwtSecret:       env("JWT_SECRET", "dev-insecure-change-me"),

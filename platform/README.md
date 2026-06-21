@@ -1,22 +1,27 @@
 # mago-platform (operator-private)
 
-The control plane behind mago: **accounts, Stripe billing, license issuance** (and, later, the
-GitHub webhook relay). A separate binary from the `mago` core — the core never imports this
-package, so the core stays open-sourceable while billing/secret logic lives only here.
+The control plane behind mago: **accounts, Stripe billing, license issuance, GitHub webhook
+relay**. A separate binary **and a separate Go module** from the `mago` core — the core never
+imports this and stays zero-dependency (stdlib-only, `go 1.22`), while this module carries the
+billing/secret logic and its deps (bcrypt, SQLite). That makes the core safe to open-source
+and this directory a drop-in private overlay.
 
 See [`../docs/SAAS.md`](../docs/SAAS.md) for the full design (the single €20/mo plan, BYOK +
 workers, CLI-only onboarding, the webhook relay).
 
 ## Run
 
+This is its own module, so build from inside `platform/`:
+
 ```sh
-cp platform/.env.example platform/.env   # fill in secrets (gitignored — never commit)
-go build -o mago-platform ./platform
-./mago-platform                          # reads platform/.env, listens on $PORT (default 9100)
+cp platform/.env.example platform/.env       # fill in secrets (gitignored — never commit)
+cd platform && go build -o ../mago-platform . # nested module — build here, not from the root
+cd .. && ./mago-platform                      # reads platform/.env, listens on $PORT (default 9100)
 ```
 
 `.env` keys: `APP_URL`, `PORT`, `JWT_SECRET`, `STRIPE_SECRET_KEY` (sk_test_… reused from AM for
-now), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MAGO`, `DB_PATH`.
+now), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MAGO`, `GITHUB_WEBHOOK_SECRET`, `DB_PATH`
+(default `~/.mago-platform/platform.db`).
 
 ## Endpoints
 
@@ -28,17 +33,19 @@ now), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MAGO`, `DB_PATH`.
 | `GET /api/account` | Bearer | `{email, plan, active, license_key}` |
 | `POST /api/checkout` | Bearer | → `{url}` Stripe Checkout link (subscription mode, the €20 price) |
 | `POST /stripe/webhook` | Stripe sig | `checkout.session.completed` → `plan=mago` + issue license; `customer.subscription.deleted` → `free` |
+| `GET /ws/worker?token&repos` | license | NDJSON stream of relayed GitHub events (`401` unknown, `403` lapsed) |
+| `POST /webhooks/github/<install>` | GitHub sig | verify `X-Hub-Signature-256`, relay to the worker serving that repo |
 
-`TODO(phase 4)`: `WSS /ws/worker` (license-gated) + `POST /webhooks/github/<install>` relay.
+## Implementation notes
 
-## Skeleton notes (intentional, see docs/SAAS.md §roadmap)
-
-- **Store** is a JSON file (`store.go`) behind locked methods. Production swaps it for SQLite
-  (schema in `docs/SAAS.md`) behind the same method set — handlers don't change.
-- **Passwords** use a placeholder stdlib salted-iterated-SHA-256 KDF so the skeleton stays
-  stdlib-only. Production must switch to bcrypt/argon2 (`golang.org/x/crypto`).
+- **Store** is SQLite (`store.go`, pure-Go `modernc.org/sqlite` driver — no cgo). `Update(id,
+  fn)` loads a user row, applies `fn`, and writes it back in a transaction; `FirstEvent` dedups
+  webhooks with `INSERT OR IGNORE`.
+- **Passwords** use **bcrypt** (cost 12, `golang.org/x/crypto/bcrypt`).
 - **Stripe** is called over raw `net/http` (`SetBasicAuth(key,"")`) instead of `stripe-go`, and
-  the webhook signature is verified by hand (`verifyStripeSig`) — keeps the skeleton dependency-free.
+  the webhook signature is verified by hand (`verifyStripeSig`) — fewer dependencies.
+- **Relay** (`relay.go`) keeps an in-memory `license → connection` hub; persisting `worker_links`
+  is a v2 nicety (one worker per account today).
 
 ## Smoke test
 
@@ -48,5 +55,6 @@ curl -sX POST localhost:9100/auth/signup -d '{"email":"a@b.c","password":"hunter
 # (sign a checkout.session.completed body with STRIPE_WEBHOOK_SECRET, POST to /stripe/webhook)
 ```
 
-Verified locally: `free → checkout → activate (mago + license) → downgrade (free)`, plus event
-dedup and bad-signature rejection.
+Verified locally on SQLite + bcrypt: `free → checkout → activate (mago + license) → downgrade
+(free)`, plus event dedup, bad-signature rejection, and the relay (connect → routed webhook →
+worker, with unknown/lapsed licenses refused).

@@ -10,36 +10,22 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
-// --- passwords ---
-// NOTE: placeholder salted iterated-SHA-256 KDF so the skeleton stays stdlib-only.
-// Production should use bcrypt or argon2 (golang.org/x/crypto).
+// --- passwords (bcrypt, cost 12) ---
 
 func hashPassword(pw string) string {
-	salt := randBytes(16)
-	return "s1$" + hex.EncodeToString(salt) + "$" + hex.EncodeToString(kdf(pw, salt))
+	b, err := bcrypt.GenerateFromPassword([]byte(pw), 12)
+	if err != nil {
+		return "" // empty hash can never match a login (CompareHashAndPassword fails)
+	}
+	return string(b)
 }
 
 func checkPassword(pw, stored string) bool {
-	p := strings.Split(stored, "$")
-	if len(p) != 3 {
-		return false
-	}
-	salt, _ := hex.DecodeString(p[1])
-	want, _ := hex.DecodeString(p[2])
-	return hmac.Equal(kdf(pw, salt), want)
-}
-
-func kdf(pw string, salt []byte) []byte {
-	cur := append([]byte{}, salt...)
-	pwb := []byte(pw)
-	for i := 0; i < 100000; i++ {
-		msg := append(append(append([]byte{}, salt...), cur...), pwb...)
-		h := sha256.Sum256(msg)
-		cur = h[:]
-	}
-	return cur
+	return bcrypt.CompareHashAndPassword([]byte(stored), []byte(pw)) == nil
 }
 
 func randBytes(n int) []byte {

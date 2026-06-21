@@ -119,9 +119,9 @@ The whole loop is CLI + GitHub — no web panel. The human is the **CEO**; the s
 ## Build roadmap
 
 1. **Now** — Stripe €20/mo price created ✓ + this plan.
-2. **Platform backend skeleton** ✓ (`mago-platform`): accounts (email/pw, JSON store, JWT) +
-   Stripe checkout + webhook + license issuance, mirroring AM's `stripe.go` simplified to one
-   plan. Stdlib-only skeleton; prod swaps bcrypt + SQLite behind the same method set.
+2. **Platform backend** ✓ (`mago-platform`): accounts (email/pw, **bcrypt** cost 12, JWT) +
+   **SQLite** store (pure-Go `modernc.org/sqlite`, no cgo) + Stripe checkout + webhook +
+   license issuance, mirroring AM's `stripe.go` simplified to one plan.
 3. **Client CLI** ✓: `register`/`login`/`subscribe`/`account status` (`account.go`) — a thin,
    secret-free HTTP client to the platform API; token + license cached in `~/.mago/config.json`.
    Verified end-to-end against real Stripe test mode. Worker license-gating is phase 4.
@@ -145,10 +145,15 @@ platform layer stays private:
 - **`platform/` package — operator-private.** The `mago-platform` binary: accounts, Stripe,
   license issuance, the GitHub webhook relay. **All** billing/secret logic lives here and
   nowhere else. The core never imports `platform/`.
-- **Build:** `go build -o mago .` (core) and `go build -o mago-platform ./platform` (private).
-- **To open-source:** publish the root and keep `platform/` in a private overlay/submodule.
-  A small `platformclient/` package (HTTP client to the platform API, no secrets) can stay in
-  core so the client commands compile without `platform/`.
+- **Separate modules.** The core (root) is its own `go 1.22` module with **zero external
+  deps** (stdlib-only). `platform/` is a **nested module** (`platform/go.mod`) carrying the
+  billing deps (bcrypt, SQLite). The core never imports it, so removing `platform/` leaves a
+  clean open-source module.
+- **Build:** `go build -o mago .` (core, from root) and, because platform is its own module,
+  `cd platform && go build -o ../mago-platform .` (private).
+- **To open-source:** publish the root and keep `platform/` as a private overlay/submodule.
+  The client commands (`register`/`login`/…) live in the core as a plain HTTP client (`account.go`,
+  no secrets), so they compile without `platform/`.
 
 Still open (not blocking): reuse AM's Stripe account for **production** vs a dedicated mago
 account (test reuse is fine now). The worker↔platform transport is **decided + built**: HTTP
@@ -158,17 +163,18 @@ NDJSON dial-out streaming (stdlib, no WebSocket dep — see below).
 
 ```sql
 users (
-  id            INTEGER PRIMARY KEY,
-  email         TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,              -- bcrypt cost 12
-  plan          TEXT NOT NULL DEFAULT 'free',  -- 'free' | 'mago' (the €20 plan)
-  stripe_customer TEXT,
-  stripe_sub      TEXT,
-  license_key   TEXT UNIQUE,               -- mago_<48hex>, issued on first payment
-  created_at    INTEGER NOT NULL
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  email           TEXT UNIQUE NOT NULL,
+  password_hash   TEXT NOT NULL,                  -- bcrypt cost 12
+  plan            TEXT NOT NULL DEFAULT 'free',   -- 'free' | 'mago' (the €20 plan)
+  stripe_customer TEXT NOT NULL DEFAULT '',
+  stripe_sub      TEXT NOT NULL DEFAULT '',
+  license_key     TEXT NOT NULL DEFAULT '',       -- mago_<48hex>, issued on first payment
+  created_at      INTEGER NOT NULL
 )
-stripe_events ( id TEXT PRIMARY KEY, type TEXT, seen_at INTEGER )  -- webhook dedup
-worker_links ( license_key TEXT, worker_id TEXT, repo TEXT, connected_at INTEGER )  -- which worker relays for which repo
+stripe_events ( id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL )  -- webhook dedup
+-- worker_links (which worker relays for which repo) is the in-memory relay hub today;
+-- persisting it is a v2 nicety, not needed for one worker per account.
 ```
 
 No repos/runs/workers-pool tables (the client's GitHub repo is the company; the worker
