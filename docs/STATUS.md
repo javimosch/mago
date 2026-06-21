@@ -80,7 +80,9 @@ its progress log; lessons = `.mago/skills/<name>/SKILL.md` with an always-in-con
 - **Per-project workspace dirs**, not git worktrees, and **no real project clones/PRs** yet
   — agents work in local dirs; product code is not pushed.
 - **Webhook-driven** via `mago serve` (HMAC-verified `/webhook/github` → wake → reconcile in
-  real time); a human comment on an agent-owned issue wakes **only that agent**. Polling
+  real time); a human comment on an agent-owned issue wakes **only that agent**, and a
+  `pull_request.opened` event runs the reviewer on that PR directly (review + squash-merge,
+  no standing review task — needs a webhook on the project repos). Polling
   remains a fallback. Verified end-to-end through a cloudflared tunnel: a real `issues.opened`
   event drove a routed task to `done` (issue closed). The multi-tenant relay (platform fan-out
   to NAT'd workers) is still platform-layer — a lone worker needs a public URL or a tunnel.

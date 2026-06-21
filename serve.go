@@ -60,9 +60,14 @@ func cmdServe(args []string) error {
 	return http.ListenAndServe(addr, mux)
 }
 
-// wakeEvent carries why we woke and, when known, which single agent to wake (target).
-// An empty target means a full reconcile (routing + all agents).
-type wakeEvent struct{ reason, target string }
+// wakeEvent carries why we woke and how to act: a single agent to wake (target), a PR to
+// review (prRepo/prNum), or — when all are empty — a full reconcile (routing + all agents).
+type wakeEvent struct {
+	reason string
+	target string
+	prRepo string
+	prNum  int
+}
 
 type eventWorker struct {
 	comp *Company
@@ -80,12 +85,16 @@ func (w *eventWorker) signal(ev wakeEvent) {
 // a full reconcile.
 func (w *eventWorker) run() {
 	for ev := range w.wake {
-		if ev.target != "" {
+		switch {
+		case ev.prRepo != "":
+			fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
+			w.comp.reviewPR(ev.prRepo, ev.prNum)
+		case ev.target != "":
 			fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
 			if _, err := runTick(w.comp, ev.target); err != nil {
 				fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
 			}
-		} else {
+		default:
 			fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
 			if _, err := reconcileOnce(w.comp); err != nil {
 				fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
@@ -144,6 +153,9 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 		PullRequest struct {
 			Number int `json:"number"`
 		} `json:"pull_request"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
 	}
 	json.Unmarshal(body, &p)
 
@@ -170,7 +182,11 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 	case "pull_request":
 		switch p.Action {
 		case "opened", "reopened", "ready_for_review":
-			return wakeEvent{reason: fmt.Sprintf("PR #%d %s", p.PullRequest.Number, p.Action)}, true
+			return wakeEvent{
+				reason: fmt.Sprintf("PR #%d %s", p.PullRequest.Number, p.Action),
+				prRepo: p.Repository.FullName,
+				prNum:  p.PullRequest.Number,
+			}, true
 		}
 	}
 	return wakeEvent{}, false
