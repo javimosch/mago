@@ -22,6 +22,9 @@ func (c *Company) writeBack(a *Agent, t *Task, r *Reflection, raw string) error 
 		c.appendSkill(l.Skill, l.Note, a.Name, ts)
 	}
 	c.applyTaskStatus(t, a, r)
+	// After each write, check whether STATE.md needs compaction.
+	// This is a no-op until the activity log exceeds the threshold.
+	c.compactState()
 	return nil
 }
 
