@@ -106,14 +106,23 @@ one worker per account.)
 The relay needs **one** public webhook ingress; a GitHub App provides it. The App is created
 once by the operator and installed by each customer on their repos.
 
-**One-time operator setup (manual — a browser step):**
-1. Create a GitHub App (github.com/settings/apps/new, or a manifest flow). Webhook URL =
-   `https://<platform-host>/webhooks/github/`, webhook secret = `GITHUB_WEBHOOK_SECRET`.
-2. Subscribe to events: **Issues, Issue comment, Pull request** (what `classifyEvent` wakes on),
-   plus **Installation** + **Installation repositories** (to keep the registry in sync).
-   Permissions: Issues + Pull requests (read/write), Contents (read) — read-only is fine for v1
-   since the worker still acts via its own `gh`.
-3. Put the App id in `GITHUB_APP_ID` (its presence turns on repo entitlement, below).
+**One-time operator setup — one browser click** via the manifest flow (`platform/setupgithub.go`):
+
+```sh
+mago-platform setup-github --url https://mago.intrane.fr [--org <org>]
+# opens a local page that POSTs a prefilled manifest to GitHub; click "Create GitHub App".
+# GitHub redirects back with a code; the command exchanges it and writes:
+#   ~/.mago-platform/github-app.env  (GITHUB_APP_ID, GITHUB_WEBHOOK_SECRET, GITHUB_APP_SLUG, …)
+#   ~/.mago-platform/github-app.pem  (the App private key)
+```
+
+The manifest prefills everything: webhook `https://<host>/webhooks/github/`, events **Issues,
+Issue comment, Pull request** (what `classifyEvent` wakes on; Installation events are always
+delivered), permissions Issues+PRs write / Contents+Metadata read (read-only is fine for v1 —
+the worker still acts via its own `gh`). Merge the generated vars into the platform `.env`
+(`GITHUB_APP_ID` turns on entitlement; `GITHUB_WEBHOOK_SECRET` becomes the App's secret), deploy,
+restart. GitHub Apps can't be created by a plain token — the manifest flow's single click is the
+minimum.
 
 **Per-customer (CLI, in onboarding):**
 - The customer installs the App on their repos (browser, one-time). GitHub then POSTs signed
@@ -129,10 +138,11 @@ tenant's* relayed events. So when `GITHUB_APP_ID` is set, a worker's claimed rep
 that account has claimed); non-entitled repos are dropped at connect and silently receive
 nothing. With no App configured (local/single-tenant dev) the claimed set is trusted.
 
-**Still operator-manual** (can't be done from code): creating the App, each customer installing
-it, and pointing its webhook at the platform's public host. **v2:** GitHub OAuth at signup makes
-the account↔installation binding self-verifying (today `mago link` trusts the authed claim),
-and App installation tokens (RS256 App JWT) can replace the worker's `gh` PAT.
+**Still requires a human step** (can't be fully scripted): the operator's single click in
+`setup-github`, and each customer installing the App on their repos. **v2:** GitHub OAuth at
+signup makes the account↔installation binding self-verifying (today `mago link` trusts the authed
+claim), and App installation tokens (RS256 App JWT, key from `setup-github`) can replace the
+worker's `gh` PAT.
 
 ### No-App path: provision the webhook directly (operator token, zero clicks)
 

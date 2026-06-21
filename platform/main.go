@@ -39,6 +39,9 @@ func main() {
 		case "status":
 			fail(cmdStatus())
 			return
+		case "setup-github": // create the GitHub App via the manifest flow (one browser click)
+			fail(cmdSetupGithub(os.Args[2:]))
+			return
 		}
 	}
 	runServer(env("PORT", "9100")) // no-arg: run in foreground (dev convenience)
