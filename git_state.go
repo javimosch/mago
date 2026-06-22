@@ -134,6 +134,9 @@ func (c *Company) ensureStateRepo() error {
 		// definitions (.mago/agents, projects.json) that checkout would refuse to clobber (and
 		// that ticks need). Point branch + index at the remote, then restore ONLY the runtime
 		// exhaust into the working tree so it keeps ACCUMULATING; leave definitions untouched.
+		// A CEO mission set locally must survive adopting the remote STATE.md (which may be a stale
+		// placeholder from a prior session on this repo). Capture it before the checkout overwrites it.
+		localMission := c.missionText()
 		gitRun(c.Dir, "branch", "-f", "mago-state", "origin/mago-state")
 		if out, err := gitRun(c.Dir, "symbolic-ref", "HEAD", "refs/heads/mago-state"); err != nil {
 			return fmt.Errorf("adopt mago-state: %v %s", err, out)
@@ -141,6 +144,9 @@ func (c *Company) ensureStateRepo() error {
 		gitRun(c.Dir, "reset", "-q") // index <- remote tree; working tree kept (defs safe)
 		for _, p := range stateRuntimePaths {
 			gitRun(c.Dir, "checkout", "-q", "--", p) // restore accumulated exhaust (no-op if absent)
+		}
+		if localMission != "" { // local (freshly-set) mission wins over a stale remote one
+			c.setMission(localMission)
 		}
 		// Definitions belong on main; drop any a historical run leaked onto mago-state so it
 		// converges to runtime-only and stops colliding with the company dir's live defs.

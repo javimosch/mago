@@ -50,7 +50,7 @@ func cmdServe(args []string) error {
 	}
 	warnIfNoProviderKey()
 
-	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 8)}
+	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 64)}
 	go w.run()
 	w.signal(wakeEvent{reason: "startup"})
 	if heartbeat > 0 {
@@ -103,9 +103,17 @@ type eventWorker struct {
 }
 
 func (w *eventWorker) signal(ev wakeEvent) {
+	// Recurring wakes (heartbeat reconcile, proactive cadence) are idempotent — another fires soon.
+	// While a long tick blocks the loop they can flood the queue and starve one-shot events (PR
+	// review, comms, a targeted tick), so drop them once the queue is half full; one-shot events
+	// keep trying (and the larger buffer absorbs the burst).
+	coalescable := ev.proactive || ev.reason == "heartbeat"
+	if coalescable && len(w.wake) > cap(w.wake)/2 {
+		return
+	}
 	select {
 	case w.wake <- ev:
-	default: // queue full — heartbeat / next event will catch up
+	default: // queue genuinely full — a future event/heartbeat will catch up
 	}
 }
 

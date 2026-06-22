@@ -1,6 +1,32 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestSetMission(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir, Name: "co"}
+	os.WriteFile(c.stateFile(), []byte("# co — company state\n\n## Mission\n(Set by the CEO. Edit me.)\n\n## Shipped\n- thing one\n\n## In flight\n(nothing yet)\n\n## Decisions\n(none yet)\n\n## Activity log\n- entry\n"), 0o644)
+
+	c.setMission("Ship a delightful CLI.")
+	got, _ := os.ReadFile(c.stateFile())
+	s := string(got)
+	if c.missionText() != "Ship a delightful CLI." {
+		t.Errorf("mission not set, got %q", c.missionText())
+	}
+	if !strings.Contains(s, "## Shipped\n- thing one") {
+		t.Errorf("Shipped section disturbed:\n%s", s)
+	}
+	if !strings.Contains(s, "## Activity log\n- entry") {
+		t.Errorf("Activity log disturbed:\n%s", s)
+	}
+	if strings.Contains(s, "Set by the CEO") {
+		t.Errorf("old placeholder mission not removed:\n%s", s)
+	}
+}
 
 func TestCleanTaskTitle(t *testing.T) {
 	cases := []struct{ in, want string }{
