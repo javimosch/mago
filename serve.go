@@ -63,8 +63,13 @@ func cmdServe(args []string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(rw http.ResponseWriter, _ *http.Request) { fmt.Fprintln(rw, "ok") })
 	mux.HandleFunc("/webhook/github", w.handleWebhook(secret))
-	fmt.Fprintf(os.Stderr, "mago serve: company %q (gh repo %q) listening on %s; webhook at /webhook/github\n",
-		comp.Name, comp.ghRepo, addr)
+	repos := comp.repos()
+	reposStr := "none — add with `mago project add <name> --repo owner/repo`"
+	if len(repos) > 0 {
+		reposStr = strings.Join(repos, ", ")
+	}
+	fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s) listening on %s; webhook at /webhook/github%s\n",
+		comp.Name, reposStr, addr, ifStr(relay, "; relay -> platform", ""))
 	return http.ListenAndServe(addr, mux)
 }
 
