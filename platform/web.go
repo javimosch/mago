@@ -5,7 +5,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 )
+
+// supportedPlatforms is the set of client builds published at /dl/mago (os-arch).
+var supportedPlatforms = map[string]bool{
+	"linux-amd64": true, "linux-arm64": true,
+	"darwin-amd64": true, "darwin-arm64": true,
+}
 
 // web.go is the public front door served by the platform: a single-page landing, the CLI
 // install script + binary, and the agent-first operator guide. mago is CLI-only — there is no
@@ -26,16 +33,36 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, installScript, s.appURL)
 }
 
-// handleDownload serves the prebuilt mago client binary (path in MAGO_CLI_BINARY).
+// handleDownload serves the prebuilt mago client binary for the requested os/arch
+// (?os=darwin&arch=arm64; defaults to linux/amd64). Binaries live in MAGO_CLI_DIR as
+// mago-<os>-<arch>; MAGO_CLI_BINARY is the legacy single-file fallback for linux/amd64.
 func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
-	bin := os.Getenv("MAGO_CLI_BINARY")
+	osName := r.URL.Query().Get("os")
+	if osName == "" {
+		osName = "linux"
+	}
+	arch := r.URL.Query().Get("arch")
+	if arch == "" {
+		arch = "amd64"
+	}
+	plat := osName + "-" + arch
+	if !supportedPlatforms[plat] {
+		httpErr(w, 404, "unsupported platform "+plat+" (have: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64)")
+		return
+	}
+	bin := ""
+	if dir := os.Getenv("MAGO_CLI_DIR"); dir != "" {
+		bin = filepath.Join(dir, "mago-"+plat) // plat is allowlisted above — no traversal
+	} else if plat == "linux-amd64" {
+		bin = os.Getenv("MAGO_CLI_BINARY") // legacy single-binary fallback
+	}
 	if bin == "" {
-		httpErr(w, 503, "cli binary not published")
+		httpErr(w, 503, "cli binary not published for "+plat)
 		return
 	}
 	f, err := os.Open(bin)
 	if err != nil {
-		httpErr(w, 404, "cli binary unavailable")
+		httpErr(w, 404, "cli binary unavailable for "+plat)
 		return
 	}
 	defer f.Close()
@@ -100,9 +127,13 @@ const installScript = `#!/bin/sh
 set -e
 BASE="%s"
 DEST="${MAGO_BIN_DIR:-$HOME/.local/bin}"
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case "$ARCH" in x86_64|amd64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; esac
+case "$OS" in linux|darwin) ;; *) echo "unsupported OS: $OS (have linux, darwin)"; exit 1;; esac
 mkdir -p "$DEST"
-echo "Downloading mago from $BASE/dl/mago ..."
-curl -fsSL "$BASE/dl/mago" -o "$DEST/mago"
+echo "Downloading mago ($OS/$ARCH) from $BASE/dl/mago ..."
+curl -fsSL "$BASE/dl/mago?os=$OS&arch=$ARCH" -o "$DEST/mago"
 chmod +x "$DEST/mago"
 echo "Installed: $DEST/mago"
 case ":$PATH:" in *":$DEST:"*) ;; *) echo "NOTE: add $DEST to your PATH";; esac
