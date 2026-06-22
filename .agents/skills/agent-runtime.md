@@ -53,11 +53,22 @@ The reflection is a single fenced ```json block the agent ends with:
 `mago serve` is the worker loop: a GitHub webhook (direct, tunneled, or **relayed** by the
 platform) wakes it. `classifyEvent` decides whether to wake and how: `issues opened/reopened`
 → reconcile; `issue_comment` by a human → wake the owning agent; `pull_request opened` →
-`reviewPR`. `--relay` makes the worker dial out to the platform instead of needing a public
-tunnel (see saas-platform.md). `--heartbeat <secs>` adds a fallback cadence.
+`reviewPR`; a **merged `mago/task-*` PR** → the CMO drafts a release note (the "beyond code" loop,
+opt-in `MAGO_COMMS=1`; `comms.go`). `--relay` makes the worker dial out to the platform instead of
+needing a public tunnel (see saas-platform.md). `--heartbeat <secs>` adds a fallback cadence.
+
+## Beyond code (non-engineering loops)
+
+A company **event**, not a human issue, can trigger non-code work. First example: with
+`MAGO_COMMS=1`, when a `mago/task-*` PR merges the **CMO** (marketing role — `!implements && !plans
+&& !reviews`) writes a short user-facing release note and comments it on the PR. It's terminal (a
+mago comment, recognized by `isMagoComment`, so no self-wake) and only fires for `mago/task-*`
+branches, so it can't loop. This is the v1.5 "task-executor → company-operator" direction (see
+`docs/ROADMAP.md`).
 
 ## Provider
 
-Agents run via **tau**. The personas say `provider: deepseek` but the live/working provider is
-**`opencode-go` / `deepseek-v4-flash`** — override per run with
-`MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash` (applied in tick.go `applyModelOverrides`).
+Agents run via **tau**. The starter personas default to **`opencode-go` / `deepseek-v4-flash`**
+(matches the documented BYOK key + tau's opencode-go default). Override per run/harness with
+`MAGO_PROVIDER` / `MAGO_MODEL` (tick.go `applyModelOverrides`) or per-agent frontmatter. Role flags:
+implementer (CTO) `implements: true`, planner `plans: true`, reviewer `reviews: true`.
