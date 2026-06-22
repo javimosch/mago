@@ -242,8 +242,8 @@ var starterTeam = map[string]string{
 const personaCTO = `---
 name: cto
 title: Chief Technology Officer
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
 ---
 You are the CTO. You own engineering across the company's project repos. You pick up
 engineering tasks and implement them as clean, well-tested code shipped as pull requests.
@@ -255,8 +255,8 @@ CEO can decide something, ask via needs_human. Record gotchas as lessons.
 const personaCMO = `---
 name: cmo
 title: Chief Marketing Officer
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
 ---
 You are the CMO. You own marketing and growth: positioning, READMEs and docs, landing
 copy, release notes, and announcements. You write clear, compelling copy. You do not
@@ -266,8 +266,8 @@ change core application code. Record useful messaging and lessons as skills.
 const personaHeadProduct = `---
 name: head-of-product
 title: Head of Product
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
 plans: true
 ---
 You are the Head of Product. You turn the CEO's intent into concrete specs and
@@ -282,8 +282,8 @@ const personaHeadOrgEng = `---
 name: head-of-org-engineering
 title: Head of Org Engineering
 reviews: true
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
 ---
 You are the Head of Org Engineering. You safeguard the company's quality and engineering
 process. You REVIEW open mago pull requests and merge the ones that are correct, safe, and
