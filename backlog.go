@@ -14,8 +14,17 @@ import (
 
 const (
 	proactiveBacklogCap = 3 // skip if this many tasks are already active (not done)
-	proactivePerCycle   = 2 // max new issues filed per planning cycle
+	proactivePerCycle   = 2 // max new issues filed per planning cycle (override: MAGO_PROACTIVE_MAX)
 )
+
+// proactiveMaxPerCycle is the per-cycle proposal cap, overridable via MAGO_PROACTIVE_MAX (e.g. 1 for
+// a small smoke test).
+func proactiveMaxPerCycle() int {
+	if n := atoiSafe(os.Getenv("MAGO_PROACTIVE_MAX")); n > 0 {
+		return n
+	}
+	return proactivePerCycle
+}
 
 // proposeBacklog asks the planner to file up to a few mission-advancing tasks, if the backlog is
 // low. Returns the number of issues filed (0 = no work done — doesn't count against the budget).
@@ -39,8 +48,8 @@ func (c *Company) proposeBacklog() int {
 		}
 	}
 	want := proactiveBacklogCap - active
-	if want > proactivePerCycle {
-		want = proactivePerCycle
+	if m := proactiveMaxPerCycle(); want > m {
+		want = m
 	}
 	if want <= 0 {
 		fmt.Fprintf(os.Stderr, "[backlog] %d active task(s) >= cap %d — not proposing\n", active, proactiveBacklogCap)
@@ -123,6 +132,28 @@ func (c *Company) missionText() string {
 		return ""
 	}
 	return m
+}
+
+// setMission rewrites the `## Mission` section body of STATE.md, preserving everything else. Used
+// to keep a CEO's locally-set mission from being clobbered when the worker adopts a stale remote
+// STATE.md off the mago-state branch.
+func (c *Company) setMission(mission string) {
+	b, err := os.ReadFile(c.stateFile())
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(b), "\n")
+	var out []string
+	for i := 0; i < len(lines); i++ {
+		out = append(out, lines[i])
+		if strings.TrimSpace(lines[i]) == "## Mission" {
+			out = append(out, mission, "")
+			for i++; i < len(lines) && !strings.HasPrefix(lines[i], "## "); i++ { // drop old body
+			}
+			i-- // re-process the next "## " header on the outer loop
+		}
+	}
+	os.WriteFile(c.stateFile(), []byte(strings.Join(out, "\n")), 0o644)
 }
 
 func (c *Company) shippedText() string {

@@ -24,21 +24,25 @@ func claudeModel(a *Agent) string {
 	return "sonnet"
 }
 
-// claudeResult extracts the final assistant text from `claude --output-format json` output.
+// claudeResult extracts the final assistant text from `claude --output-format json` output. claude
+// prints this object even on a non-zero exit, so callers feed it the raw stdout regardless of exit
+// code. Not-logged-in gets an actionable hint (the #1 dogfood gotcha: a custom HOME hides the auth).
 func claudeResult(out []byte) (string, error) {
 	var r struct {
 		Result  string `json:"result"`
 		IsError bool   `json:"is_error"`
 		Subtype string `json:"subtype"`
 	}
-	if err := json.Unmarshal(bytes.TrimSpace(out), &r); err != nil {
-		return "", fmt.Errorf("claude: unparseable output: %w", err)
+	if json.Unmarshal(bytes.TrimSpace(out), &r) != nil {
+		return "", fmt.Errorf("claude: no/garbled output — is `claude` installed and logged in? " +
+			"(if mago runs under a custom HOME, set CLAUDE_CONFIG_DIR=~/.claude)")
 	}
-	if r.IsError {
+	if r.IsError || strings.TrimSpace(r.Result) == "" {
+		if strings.Contains(r.Result, "Not logged in") || strings.Contains(r.Result, "/login") {
+			return "", fmt.Errorf("claude not authenticated — run `claude /login`, or set " +
+				"CLAUDE_CONFIG_DIR to your real ~/.claude if mago runs under a custom HOME")
+		}
 		return "", fmt.Errorf("claude error (%s): %s", r.Subtype, oneLine(truncate(r.Result, 200)))
-	}
-	if strings.TrimSpace(r.Result) == "" {
-		return "", fmt.Errorf("claude: empty result")
 	}
 	return r.Result, nil
 }
@@ -56,10 +60,7 @@ func runClaude(workspace string, a *Agent, systemPrompt, userPrompt string) (str
 		"--append-system-prompt", systemPrompt)
 	cmd.Dir = workspace
 	cmd.Env = os.Environ()
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("claude failed: %w", err)
-	}
+	out, _ := cmd.Output() // claude prints the result JSON even on non-zero exit; claudeResult judges it
 	return claudeResult(out)
 }
 
@@ -75,17 +76,13 @@ func claudeComplete(a *Agent, prompt string) (string, error) {
 		cmd := exec.CommandContext(ctx, "claude", "-p", prompt,
 			"--model", claudeModel(a), "--output-format", "json")
 		cmd.Env = os.Environ()
-		out, err := cmd.Output()
+		out, _ := cmd.Output() // result JSON is printed even on non-zero exit
 		cancel()
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if r, perr := claudeResult(out); perr == nil {
+		r, perr := claudeResult(out)
+		if perr == nil {
 			return r, nil
-		} else {
-			lastErr = perr
 		}
+		lastErr = perr
 	}
 	return "", lastErr
 }
