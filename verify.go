@@ -73,6 +73,17 @@ func runShell(dir, command string, timeout time.Duration) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "bash", "-lc", command)
 	cmd.Dir = dir
+	// A worker can run under a stripped PATH (e.g. a minimal run.sh), which would make verification
+	// fail with "command not found" even for a fine PR. Ensure the standard Go toolchain locations
+	// are on PATH so auto-detected `go build/test` works; other tools should be on the worker's PATH.
+	newPath := "/usr/local/go/bin:" + filepath.Join(os.Getenv("HOME"), "go", "bin") + ":" + os.Getenv("PATH")
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "PATH=") {
+			env = append(env, e)
+		}
+	}
+	cmd.Env = append(env, "PATH="+newPath)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
