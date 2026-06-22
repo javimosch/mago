@@ -103,23 +103,40 @@ func cmdProject(args []string) error {
 		}
 		pos = append(pos, rest[i])
 	}
-	if len(pos) < 2 || pos[0] != "add" {
-		return fmt.Errorf("usage: mago project add <name> [--repo owner/repo] [-C dir]")
-	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
-	if err := ensureDir(comp.projectDir(pos[1])); err != nil {
-		return err
-	}
-	if repo != "" {
-		if err := comp.saveProject(pos[1], repo); err != nil {
+	switch {
+	case len(pos) >= 1 && pos[0] == "list":
+		projects := comp.loadProjects()
+		if len(projects) == 0 {
+			fmt.Println("(no projects — add one with `mago project add <name> --repo owner/repo`)")
+			return nil
+		}
+		for name, r := range projects {
+			fmt.Printf("  %s -> %s\n", name, orDefault(r, "(no repo)"))
+		}
+		return nil
+	case len(pos) >= 2 && pos[0] == "add":
+		name := pos[1]
+		// Accept `mago project add owner/repo` as shorthand: infer repo + project name.
+		if repo == "" && strings.Contains(name, "/") {
+			repo = name
+			name = name[strings.LastIndex(name, "/")+1:]
+		}
+		if err := ensureDir(comp.projectDir(name)); err != nil {
 			return err
 		}
+		if repo != "" {
+			if err := comp.saveProject(name, repo); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("project %q ready%s\n", name, ifStr(repo != "", " -> "+repo, " (no repo set — pass --repo owner/repo)"))
+		return nil
 	}
-	fmt.Printf("project %q ready%s\n", pos[1], ifStr(repo != "", " -> "+repo, ""))
-	return nil
+	return fmt.Errorf("usage:\n  mago project add <name> --repo owner/repo [-C dir]\n  mago project add owner/repo [-C dir]\n  mago project list [-C dir]")
 }
 
 func ifStr(cond bool, a, b string) string {
@@ -137,6 +154,13 @@ func cmdStatus(args []string) error {
 	}
 	fmt.Printf("# company: %s\n\n", comp.Name)
 	fmt.Println(readFileOr(comp.stateFile(), "(no STATE.md)"))
+
+	if projects := comp.loadProjects(); len(projects) > 0 {
+		fmt.Println("\n## Projects")
+		for name, r := range projects {
+			fmt.Printf("  %s -> %s\n", name, orDefault(r, "(no repo)"))
+		}
+	}
 
 	fmt.Println("\n## Tasks")
 	tasks, err := comp.tasks.ListTasks()

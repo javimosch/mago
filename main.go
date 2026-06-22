@@ -72,7 +72,8 @@ Usage:
   Company (local/worker):
   mago init [dir]                 scaffold a local company (.mago/, STATE.md, tasks/, workspace/)
   mago task add "<title>" [--project <p>] [-C d]  create a task (optionally for a project)
-  mago project add <name> [-C d]  register a project repo/workspace
+  mago project add <name> --repo owner/repo [-C d]   register a project repo (or: add owner/repo)
+  mago project list [-C d]        list registered projects + repos
   mago run <agent> [-C d]         run ONE tick: brief -> tau -> reflect -> write back
   mago loop <agent> [-C d]        run ticks on an adaptive cadence (--base/--max/--max-ticks secs)
   mago tick [-C d]                route open tasks to best-fit agents, then run each agent
