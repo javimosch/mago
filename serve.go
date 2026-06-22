@@ -56,21 +56,28 @@ func cmdServe(args []string) error {
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
 	}
-	// --relay: dial out to the platform for GitHub events instead of needing a public tunnel.
-	if relay {
-		go runRelay(context.Background(), w, loadConfig(), comp.repos())
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(rw http.ResponseWriter, _ *http.Request) { fmt.Fprintln(rw, "ok") })
-	mux.HandleFunc("/webhook/github", w.handleWebhook(secret))
 	repos := comp.repos()
 	reposStr := "none — add with `mago project add <name> --repo owner/repo`"
 	if len(repos) > 0 {
 		reposStr = strings.Join(repos, ", ")
 	}
-	fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s) listening on %s; webhook at /webhook/github%s\n",
-		comp.Name, reposStr, addr, ifStr(relay, "; relay -> platform", ""))
+
+	// --relay: dial out to the platform for GitHub events. The relay connection is outbound and
+	// long-lived, so there's NO inbound webhook — we don't bind a local port (avoids a needless
+	// listener and lets several relay workers share a box). runRelay blocks, reconnecting until killed.
+	if relay {
+		fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s); relay -> platform (no inbound port)\n",
+			comp.Name, reposStr)
+		runRelay(context.Background(), w, loadConfig(), repos)
+		return nil
+	}
+
+	// Tunnel/direct mode: bind the local webhook listener.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(rw http.ResponseWriter, _ *http.Request) { fmt.Fprintln(rw, "ok") })
+	mux.HandleFunc("/webhook/github", w.handleWebhook(secret))
+	fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s) listening on %s; webhook at /webhook/github\n",
+		comp.Name, reposStr, addr)
 	return http.ListenAndServe(addr, mux)
 }
 
