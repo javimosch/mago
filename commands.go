@@ -94,11 +94,16 @@ func cmdTask(args []string) error {
 func cmdProject(args []string) error {
 	dir, rest := parseCompanyDir(args)
 	repo := ""
+	mirror := false
 	var pos []string
 	for i := 0; i < len(rest); i++ {
 		if rest[i] == "--repo" && i+1 < len(rest) {
 			repo = rest[i+1]
 			i++
+			continue
+		}
+		if rest[i] == "--mirror" {
+			mirror = true
 			continue
 		}
 		pos = append(pos, rest[i])
@@ -109,13 +114,13 @@ func cmdProject(args []string) error {
 	}
 	switch {
 	case len(pos) >= 1 && pos[0] == "list":
-		projects := comp.loadProjects()
-		if len(projects) == 0 {
+		confs := comp.loadProjectConfs()
+		if len(confs) == 0 {
 			fmt.Println("(no projects — add one with `mago project add <name> --repo owner/repo`)")
 			return nil
 		}
-		for name, r := range projects {
-			fmt.Printf("  %s -> %s\n", name, orDefault(r, "(no repo)"))
+		for name, pc := range confs {
+			fmt.Printf("  %s -> %s%s\n", name, orDefault(pc.Repo, "(no repo)"), ifStr(pc.MirrorIssue, "  [mirror-issue]", ""))
 		}
 		return nil
 	case len(pos) >= 2 && pos[0] == "add":
@@ -129,14 +134,14 @@ func cmdProject(args []string) error {
 			return err
 		}
 		if repo != "" {
-			if err := comp.saveProject(name, repo); err != nil {
+			if err := comp.saveProject(name, repo, mirror); err != nil {
 				return err
 			}
 		}
-		fmt.Printf("project %q ready%s\n", name, ifStr(repo != "", " -> "+repo, " (no repo set — pass --repo owner/repo)"))
+		fmt.Printf("project %q ready%s%s\n", name, ifStr(repo != "", " -> "+repo, " (no repo set — pass --repo owner/repo)"), ifStr(mirror, " [mirror-issue on]", ""))
 		return nil
 	}
-	return fmt.Errorf("usage:\n  mago project add <name> --repo owner/repo [-C dir]\n  mago project add owner/repo [-C dir]\n  mago project list [-C dir]")
+	return fmt.Errorf("usage:\n  mago project add <name> --repo owner/repo [--mirror] [-C dir]\n  mago project add owner/repo [-C dir]\n  mago project list [-C dir]")
 }
 
 func ifStr(cond bool, a, b string) string {

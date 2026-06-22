@@ -19,7 +19,7 @@ Company / worker:
 ```
 mago init [dir]                                # scaffold .mago/, STATE.md, tasks/, workspace/, exec team
 mago task add "<title>" [--project <p>] [-C d] # add a task (GitHub issue when MAGO_GH_REPO set)
-mago project add <name> --repo owner/repo [-C d]  # register a project repo (or: add owner/repo)
+mago project add <name> --repo owner/repo [--mirror] [-C d]  # register a project (--mirror = open+close a tracking issue on the project repo per task)
 mago project list [-C d]
 mago serve [-C d] [--relay] [--heartbeat <s>] [--addr :8099] [--secret <hmac>]   # the worker
 mago run <agent> [-C d]                        # one tick   ·   mago tick [-C d] = reconcile once
@@ -27,6 +27,11 @@ mago loop <agent> [-C d]                       # adaptive-cadence ticks
 mago status [-C d]                             # STATE.md, projects, tasks, pending HITL
 mago answer <task-id> "<text>" [-C d]          # answer a needs_human task
 ```
+
+Backlog scoping (opt-in): set `MAGO_TASK_LABEL=mago` so the worker only reconciles issues
+carrying that label — lets `MAGO_GH_REPO` point at a real project repo without touching its other
+issues; adding the label to an existing issue triggers pickup (the `issues.labeled` wake fires
+only for this human-applied label, never mago's own labels).
 
 Env: `MAGO_COMPANY` (default `-C`), `MAGO_GH_REPO` (GitHub-backed company), `MAGO_PLATFORM_URL`
 (default `http://localhost:9100`), `MAGO_PASSWORD`, `MAGO_PROVIDER`/`MAGO_MODEL` (override the

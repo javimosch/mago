@@ -28,7 +28,7 @@ func loadCompany(dir string) (*Company, error) {
 	}
 	c := &Company{Dir: abs, Name: filepath.Base(abs), ghRepo: os.Getenv("MAGO_GH_REPO")}
 	if c.ghRepo != "" {
-		c.tasks = &githubBackend{repo: c.ghRepo}
+		c.tasks = &githubBackend{repo: c.ghRepo, taskLabel: os.Getenv("MAGO_TASK_LABEL")}
 	} else {
 		c.tasks = &localBackend{c: c}
 	}
@@ -48,16 +48,46 @@ func (c *Company) projectDir(name string) string {
 }
 func (c *Company) projectsConfigFile() string { return filepath.Join(c.magoDir(), "projects.json") }
 
-// loadProjects returns the project-name -> GitHub repo (owner/repo) mapping.
+// projConf is a project entry. projects.json accepts either the simple string form
+// (`"name": "owner/repo"`) or the object form (`"name": {"repo": "owner/repo",
+// "mirror_issue": true}`) — mirror_issue (opt-in) makes mago open a tracking issue on the
+// project repo that the PR closes.
+type projConf struct {
+	Repo        string `json:"repo"`
+	MirrorIssue bool   `json:"mirror_issue"`
+}
+
+func (c *Company) loadProjectConfs() map[string]projConf {
+	out := map[string]projConf{}
+	raw := map[string]json.RawMessage{}
+	if b, err := os.ReadFile(c.projectsConfigFile()); err == nil {
+		json.Unmarshal(b, &raw)
+	}
+	for name, rm := range raw {
+		var s string
+		if json.Unmarshal(rm, &s) == nil {
+			out[name] = projConf{Repo: s}
+			continue
+		}
+		var pc projConf
+		if json.Unmarshal(rm, &pc) == nil {
+			out[name] = pc
+		}
+	}
+	return out
+}
+
+// loadProjects returns name -> repo (back-compat for callers that only need the repo).
 func (c *Company) loadProjects() map[string]string {
 	m := map[string]string{}
-	if b, err := os.ReadFile(c.projectsConfigFile()); err == nil {
-		json.Unmarshal(b, &m)
+	for n, pc := range c.loadProjectConfs() {
+		m[n] = pc.Repo
 	}
 	return m
 }
 
-func (c *Company) projectRepo(name string) string { return c.loadProjects()[name] }
+func (c *Company) projectRepo(name string) string { return c.loadProjectConfs()[name].Repo }
+func (c *Company) projectMirror(name string) bool { return c.loadProjectConfs()[name].MirrorIssue }
 
 // repos returns every GitHub repo this company touches (the company repo + project repos),
 // deduped — i.e. the repos a worker should receive relayed webhooks for.
@@ -78,11 +108,54 @@ func (c *Company) repos() []string {
 	return out
 }
 
-func (c *Company) saveProject(name, repo string) error {
-	m := c.loadProjects()
-	m[name] = repo
-	b, _ := json.MarshalIndent(m, "", "  ")
+func (c *Company) saveProject(name, repo string, mirror bool) error {
+	confs := c.loadProjectConfs()
+	confs[name] = projConf{Repo: repo, MirrorIssue: mirror}
+	// Write the simple string form unless mirror is on (then the object form).
+	out := map[string]any{}
+	for n, pc := range confs {
+		if pc.MirrorIssue {
+			out[n] = pc
+		} else {
+			out[n] = pc.Repo
+		}
+	}
+	b, _ := json.MarshalIndent(out, "", "  ")
 	return os.WriteFile(c.projectsConfigFile(), b, 0o644)
+}
+
+func (c *Company) mirrorsFile() string { return filepath.Join(c.magoDir(), "mirrors.json") }
+
+func (c *Company) loadMirrors() map[string]int {
+	m := map[string]int{}
+	if b, err := os.ReadFile(c.mirrorsFile()); err == nil {
+		json.Unmarshal(b, &m)
+	}
+	return m
+}
+
+// ensureMirrorIssue opens (once) a tracking issue on the project repo for task t and returns its
+// number, persisting the task->issue mapping so resumes don't duplicate it. Returns 0 on failure.
+func (c *Company) ensureMirrorIssue(t *Task, projectRepo string) int {
+	m := c.loadMirrors()
+	if n := m[t.ID]; n > 0 {
+		return n
+	}
+	body := fmt.Sprintf("Tracking issue opened by mago for task **%s**.\n\n%s\n\n_A pull request will close this issue._",
+		t.Title, truncate(oneLine(t.Body), 600))
+	out, err := gh("-R", projectRepo, "issue", "create", "--title", truncate(oneLine(t.Title), 200), "--body", body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[mirror] create issue on %s: %v\n", projectRepo, err)
+		return 0
+	}
+	n := atoiSafe(issueNumberFromURL(strings.TrimSpace(out)))
+	if n > 0 {
+		m[t.ID] = n
+		if b, err := json.MarshalIndent(m, "", "  "); err == nil {
+			os.WriteFile(c.mirrorsFile(), b, 0o644)
+		}
+	}
+	return n
 }
 
 // workspaceFor resolves where a task's work happens: its project repo's workspace,
@@ -182,7 +255,7 @@ func (c *Company) openPRsText(repo string) string {
 
 // projectRepoInstructions gives ROLE-APPROPRIATE git/gh steps: implementers open a PR
 // and must not merge it; reviewers review and auto-merge. Both work inside the clone.
-func projectRepoInstructions(a *Agent, repo, taskID string) string {
+func projectRepoInstructions(a *Agent, repo, taskID string, mirror int) string {
 	header := fmt.Sprintf("This workspace is a git clone of `%s`. Work ONLY inside this directory — "+
 		"do not touch other repositories or paths on the machine.\n\n", repo)
 	if isReviewerRole(a) {
@@ -195,6 +268,10 @@ func projectRepoInstructions(a *Agent, repo, taskID string) string {
 			"- If this task is NOT about reviewing/merging a PR (e.g. it asks you to implement or write\n" +
 			"  something), set task_status to \"reassign\" so it goes to the right role — do not attempt it."
 	}
+	ref := "mago task #" + taskID
+	if mirror > 0 {
+		ref = fmt.Sprintf("Closes #%d  _(mago task #%s)_", mirror, taskID)
+	}
 	return header + fmt.Sprintf("You are IMPLEMENTING. Do NOT review or merge anything.\n"+
 		"- You are ALREADY on branch `mago/task-%s`, freshly based on the repo's latest default branch. Work here.\n"+
 		"- FIRST: if the Open PRs list above already covers this task, or the specific deliverable already exists, "+
@@ -203,11 +280,11 @@ func projectRepoInstructions(a *Agent, repo, taskID string) string {
 		"- Open a PR if none exists, with a clear title AND a real description body — never an empty one. "+
 		"Write the body to a file and pass it, so it can be multi-line markdown:\n"+
 		"  `gh pr create --head mago/task-%s --title \"<concise summary>\" --body-file /tmp/pr_body.md` (write the body OUTSIDE the repo so it isn't committed)\n"+
-		"  The body must cover: what changed, why, and how it was verified; end with a line `mago task #%s`. "+
+		"  The body must cover: what changed, why, and how it was verified; end with a line: `%s`. "+
 		"Do NOT use `--fill` (it leaves the body empty when the commit has no body). If a PR already exists, just push more commits.\n"+
 		"- STOP after opening the PR. Do NOT merge, approve, or review it — that is the reviewer's job.\n"+
 		"- Put the PR URL in your summary.",
-		taskID, taskID, taskID, taskID)
+		taskID, taskID, taskID, ref)
 }
 
 // buildBriefing assembles the per-tick context pack the agent reads first.
@@ -219,8 +296,14 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	b.WriteString(fmt.Sprintf("## Active task #%s: %s\nstatus: %s\n\n%s\n\n", t.ID, t.Title, t.Status, t.Body))
 	if t.Project != "" {
 		if repo := c.projectRepo(t.Project); repo != "" {
+			// Opt-in: open a tracking issue on the project repo (only the implementer, once) so
+			// the PR can `Closes` it — giving the project repo native issue↔PR linkage.
+			mirror := 0
+			if !isReviewerRole(a) && c.projectMirror(t.Project) {
+				mirror = c.ensureMirrorIssue(t, repo)
+			}
 			b.WriteString("## Open PRs in " + repo + " (do not duplicate in-flight work)\n" + c.openPRsText(repo) + "\n\n")
-			b.WriteString("## Project repo\n" + projectRepoInstructions(a, repo, t.ID) + "\n\n")
+			b.WriteString("## Project repo\n" + projectRepoInstructions(a, repo, t.ID, mirror) + "\n\n")
 		}
 	}
 	b.WriteString("## Skills (learnings/caveats/pitfalls from past work)\n" + c.selectSkillsText(a, t) + "\n\n")

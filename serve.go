@@ -167,6 +167,9 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 		PullRequest struct {
 			Number int `json:"number"`
 		} `json:"pull_request"`
+		Label struct {
+			Name string `json:"name"`
+		} `json:"label"`
 		Repository struct {
 			FullName string `json:"full_name"`
 		} `json:"repository"`
@@ -184,11 +187,16 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 
 	switch event {
 	case "issues":
-		// not "labeled": mago changes its own labels constantly (agent:, mago:in-progress)
-		// and would wake itself in a loop.
 		switch p.Action {
 		case "opened", "reopened", "assigned":
 			return wakeEvent{reason: fmt.Sprintf("issue #%d %s", p.Issue.Number, p.Action)}, true
+		case "labeled":
+			// Wake only when the HUMAN-applied task label (MAGO_TASK_LABEL) is added — that's how
+			// an existing issue opts into the scoped backlog. mago never applies that label itself
+			// (it toggles agent:/mago:* labels), so this can't self-wake in a loop.
+			if tl := os.Getenv("MAGO_TASK_LABEL"); tl != "" && p.Label.Name == tl {
+				return wakeEvent{reason: fmt.Sprintf("issue #%d labeled %s", p.Issue.Number, tl)}, true
+			}
 		}
 	case "issue_comment":
 		// a human reply (HITL answer, new instruction); mago's own comments are skipped.
