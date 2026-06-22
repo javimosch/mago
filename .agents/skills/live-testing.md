@@ -4,14 +4,16 @@ How to exercise mago for real. Prereqs: `tau` + `gh` on PATH and authenticated; 
 use `MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash` (the personas' `deepseek` provider
 needs an API key and otherwise fails with tau code 110).
 
-> **Set your provider key or you'll get throttled.** tau picks its key as `--api-key` → provider
-> env var → **builtin**. mago's `runTau` passes no `--api-key`, so without an env key tau uses its
-> **builtin shared opencode-go key** (free, rate-limited) — under a batch run it exhausts and every
-> heavy tick then fails with `tau code 110`. Export your subscription key so tau uses it:
-> `export OPENCODE_API_KEY=<your opencode-go key>` (for the `opencode-go` provider;
-> `DEEPSEEK_API_KEY`/`OPENAI_API_KEY` for those). `mago serve` warns at startup if it's unset.
-> Single 1-shot calls slip through the builtin throttle; heavy multi-iteration (code-reading)
-> ticks are what reliably trip it — so a `110` that only hits big ticks means "no provider key".
+> **Configure your provider key or you'll get throttled.** mago's `runTau` passes no `--api-key`,
+> so tau resolves the key itself (after tau#30, precedence is: `--api-key` → config
+> `keys[provider]` → provider env var → config `api_key` → `TAU_API_KEY` → keyless/builtin). If
+> none is set, tau hits a **rate-limited keyless/builtin path**; under a batch run it exhausts and
+> heavy multi-iteration ticks fail with `tau code 110` (cheap 1-shot calls still slip through, so
+> it looks intermittent — a `110` that only hits big ticks means "no key for this provider").
+> **Recommended:** put your subscription key in `~/.config/tau/config.json` (chmod 600):
+> `{"keys": {"opencode-go": "sk-..."}}` — then it's used automatically, no env needed. Or export
+> `OPENCODE_API_KEY` (`DEEPSEEK_API_KEY`/`OPENAI_API_KEY` for those). `mago serve` warns at startup
+> if neither env nor config provides a key for the resolved provider.
 
 > Network + long-running/background processes: the Bash sandbox blocks outbound network and
 > process control (you'll see exit 144). Run live steps with the sandbox disabled. Long-lived

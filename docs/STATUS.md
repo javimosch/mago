@@ -28,9 +28,9 @@ own module). `mago` commands:
 
 Env knobs (BYOK — keys stay on this machine, used by tau):
 `MAGO_PROVIDER` / `MAGO_MODEL` (override the agent's tau provider/model),
-`OPENCODE_API_KEY` (the tau provider key for `opencode-go` — **required to use your subscription**;
-without it tau falls back to a rate-limited builtin key and heavy ticks fail with `code 110`;
-`mago serve` warns when unset), `MAGO_GH_REPO=owner/repo` (switch the task backend to GitHub),
+the tau provider key for `opencode-go` — set it in `~/.config/tau/config.json` (`keys`, tau#30)
+or export `OPENCODE_API_KEY`; without either, tau uses a rate-limited keyless path and heavy ticks
+fail with `code 110` (`mago serve` warns), `MAGO_GH_REPO=owner/repo` (switch the task backend to GitHub),
 `-C <dir>` / `$MAGO_COMPANY` (company directory). Requires `tau` and `gh` on `PATH`.
 
 ## The tick (as built)
