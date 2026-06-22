@@ -4,6 +4,15 @@ How to exercise mago for real. Prereqs: `tau` + `gh` on PATH and authenticated; 
 use `MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash` (the personas' `deepseek` provider
 needs an API key and otherwise fails with tau code 110).
 
+> **Set your provider key or you'll get throttled.** tau picks its key as `--api-key` → provider
+> env var → **builtin**. mago's `runTau` passes no `--api-key`, so without an env key tau uses its
+> **builtin shared opencode-go key** (free, rate-limited) — under a batch run it exhausts and every
+> heavy tick then fails with `tau code 110`. Export your subscription key so tau uses it:
+> `export OPENCODE_API_KEY=<your opencode-go key>` (for the `opencode-go` provider;
+> `DEEPSEEK_API_KEY`/`OPENAI_API_KEY` for those). `mago serve` warns at startup if it's unset.
+> Single 1-shot calls slip through the builtin throttle; heavy multi-iteration (code-reading)
+> ticks are what reliably trip it — so a `110` that only hits big ticks means "no provider key".
+
 > Network + long-running/background processes: the Bash sandbox blocks outbound network and
 > process control (you'll see exit 144). Run live steps with the sandbox disabled. Long-lived
 > processes (the platform, the worker) must BE the background command (they don't exit), not a

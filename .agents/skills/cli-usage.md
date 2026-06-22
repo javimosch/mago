@@ -31,6 +31,8 @@ mago answer <task-id> "<text>" [-C d]          # answer a needs_human task
 Env: `MAGO_COMPANY` (default `-C`), `MAGO_GH_REPO` (GitHub-backed company), `MAGO_PLATFORM_URL`
 (default `http://localhost:9100`), `MAGO_PASSWORD`, `MAGO_PROVIDER`/`MAGO_MODEL` (override the
 agents' tau provider/model — use `opencode-go`/`deepseek-v4-flash` for the working provider).
+**BYOK provider key:** `OPENCODE_API_KEY` (for `opencode-go`; or `DEEPSEEK_API_KEY`/`OPENAI_API_KEY`)
+— tau reads it for the LLM API; without it tau uses a rate-limited builtin key (`mago serve` warns).
 
 ## `mago-platform` (operator)
 
