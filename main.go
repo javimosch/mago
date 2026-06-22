@@ -38,6 +38,8 @@ func main() {
 		err = cmdLogin(os.Args[2:])
 	case "subscribe":
 		err = cmdSubscribe(os.Args[2:])
+	case "billing":
+		err = cmdBilling(os.Args[2:])
 	case "account":
 		err = cmdAccount(os.Args[2:])
 	case "link":
@@ -65,6 +67,7 @@ Usage:
   mago register [--email <e>] [--password <p>]   create an account (token -> ~/.mago/config.json)
   mago login [--email <e>] [--password <p>]      log in to an existing account
   mago subscribe                  print the Stripe checkout link (€20/month)
+  mago billing                    print the Stripe customer-portal link (manage/cancel)
   mago account status             show plan + license key
   mago link --installation <id>   claim a GitHub App installation (entitles your repos)
   mago link list                  show linked installations + entitled repos

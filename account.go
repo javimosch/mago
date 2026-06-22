@@ -217,6 +217,22 @@ func cmdSubscribe(args []string) error {
 	return nil
 }
 
+// cmdBilling prints the Stripe customer-portal link so the human/CEO can manage the
+// subscription (update card, download invoices, cancel). Requires a prior `mago subscribe`.
+func cmdBilling(args []string) error {
+	cfg := loadConfig()
+	var out struct {
+		URL string `json:"url"`
+	}
+	if err := cfg.platformDo("POST", "/api/portal", nil, true, &out); err != nil {
+		return err
+	}
+	fmt.Println("Open this link to manage billing (card, invoices, cancel):")
+	fmt.Println()
+	fmt.Println("  " + out.URL)
+	return nil
+}
+
 // cmdLink claims a GitHub App installation for the account (so the worker is entitled to
 // receive that installation's repo events), or lists what's already linked.
 func cmdLink(args []string) error {
