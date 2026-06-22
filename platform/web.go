@@ -102,18 +102,20 @@ const landingHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
 <title>mago — autonomous agents that run your company</title>` + css + `</head><body>
 <h1>mago</h1>
 <p class=tag>Cheap autonomous AI agent teams that ship code over GitHub. <b>BYOK · CLI-only · €20/month.</b></p>
-<p><span class=pill>no dashboard</span><span class=pill>your LLM key</span><span class=pill>GitHub-native</span><span class=pill>agent-driven</span></p>
+<p><span class=pill>no dashboard</span><span class=pill>BYOK — your key</span><span class=pill>Claude Code or tau</span><span class=pill>GitHub-native</span><span class=pill>agent-driven</span></p>
 <p class=muted>Prefer a managed dashboard over the CLI? <a href="https://automaintainer.intrane.fr/">Automaintainer</a> is the premium, UI-driven alternative.</p>
 
 <h2>What it is</h2>
 <p>You file work as GitHub issues; an autonomous executive team — <b>CTO, CMO, Head of Product, Head of
 Org Engineering</b> — picks them up, implements them as pull requests, reviews and merges. You're the
-<b>CEO</b>. The agents run on <b>your</b> machine with <b>your</b> LLM key (BYOK) — mago never resells
-completions. There is no web panel: you (or your own agent) drive everything from the <code>mago</code> CLI.</p>
+<b>CEO</b>. The agents run on <b>your</b> machine via your own agent harness — <b>Claude Code</b> (Sonnet,
+on your Claude subscription) or <b><a href="https://github.com/javimosch/tau">tau</a></b> (with your
+provider key) — so it's <b>BYOK</b> and mago never resells completions. There is no web panel: you (or
+your own agent) drive everything from the <code>mago</code> CLI.</p>
 
 <h2>How it works</h2>
 <ol>
-<li>Install the CLI (below) and point it at your LLM provider key.</li>
+<li>Install the CLI (below) and pick your harness — <b>Claude Code</b> (Sonnet) or <a href="https://github.com/javimosch/tau">tau</a> + your provider key.</li>
 <li><code>mago register</code> → <code>mago subscribe</code> (€20/month).</li>
 <li>Install the mago GitHub App on your repos, then <code>mago link</code>.</li>
 <li><code>mago serve --relay</code> — the worker dials out; GitHub events flow to your agents.</li>
@@ -164,13 +166,17 @@ const operatorsHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
 
 <h2>0. Prerequisites</h2>
 <ul>
-<li><b>tau</b> + <b>gh</b> on PATH, gh authenticated. Run <code>gh auth setup-git</code> once so the
-worker can push branches to <b>private</b> repos (public repos work without it).</li>
-<li><b>Provider key (BYOK):</b> put it in <code>~/.config/tau/config.json</code> →
-<code>{"keys": {"opencode-go": "sk-..."}}</code> (chmod 600), or export <code>OPENCODE_API_KEY</code>.
-The default agents use the <code>opencode-go</code> provider, so this key is all you need; without it
-tau falls back to a rate-limited shared key. (Other harness/provider? set it per-agent in frontmatter
-or via <code>MAGO_PROVIDER</code>/<code>MAGO_MODEL</code>.)</li>
+<li><b>gh</b> on PATH + authenticated. Run <code>gh auth setup-git</code> once so the worker can push
+branches to <b>private</b> repos (public repos work without it).</li>
+<li><b>An agent harness (BYOK):</b> either
+  <ul>
+  <li><b>Claude Code</b> — have <code>claude</code> on PATH and logged in (your Claude subscription),
+  then run with <code>MAGO_PROVIDER=claude MAGO_MODEL=sonnet</code>. No API key.</li>
+  <li><b><a href="https://github.com/javimosch/tau">tau</a></b> (default) — on PATH, with your provider
+  key in <code>~/.config/tau/config.json</code> → <code>{"keys": {"opencode-go": "sk-..."}}</code>
+  (chmod 600) or <code>OPENCODE_API_KEY</code>.</li>
+  </ul>
+  Either way mago resells no completions — your harness, your key/subscription.</li>
 </ul>
 
 <h2>1. Install</h2>
@@ -216,12 +222,14 @@ const llmsText = `# mago — operator guide for AI agents
 > The human only: pays, installs the GitHub App, answers clarify/HITL questions, says "go".
 
 ## Prerequisites
-- ` + "`tau`" + ` and ` + "`gh`" + ` on PATH; gh authenticated (` + "`gh auth status`" + `). Run
-  ` + "`gh auth setup-git`" + ` once so the worker can push branches to private repos (public repos work without it).
-- Provider key (BYOK): write ~/.config/tau/config.json -> {"keys":{"opencode-go":"sk-..."}} (chmod 600),
-  or export OPENCODE_API_KEY. The default agents use the opencode-go provider, so this key is all
-  you need. Without it tau falls back to a rate-limited shared key. (To use another harness/provider,
-  set it in each agent's frontmatter or export MAGO_PROVIDER / MAGO_MODEL.)
+- ` + "`gh`" + ` on PATH + authenticated (` + "`gh auth status`" + `). Run ` + "`gh auth setup-git`" + `
+  once so the worker can push branches to private repos (public repos work without it).
+- An agent harness (BYOK) — pick one:
+  - **Claude Code:** ` + "`claude`" + ` on PATH + logged in (your Claude subscription); run with
+    ` + "`MAGO_PROVIDER=claude MAGO_MODEL=sonnet`" + `. No API key. (Custom HOME? set ` + "`CLAUDE_CONFIG_DIR=~/.claude`" + `.)
+  - **tau** (https://github.com/javimosch/tau, default): on PATH, key in ~/.config/tau/config.json ->
+    {"keys":{"opencode-go":"sk-..."}} (chmod 600) or ` + "`OPENCODE_API_KEY`" + `.
+  Either way mago resells no completions — your harness, your key/subscription.
 
 ## 1. Install
     curl -fsSL %s/install.sh | sh
