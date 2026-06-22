@@ -132,3 +132,25 @@ func applyModelOverrides(a *Agent) {
 		a.Model = m
 	}
 }
+
+// providerKeyEnv maps a tau provider to the env var tau reads for its API key.
+var providerKeyEnv = map[string]string{
+	"opencode-go": "OPENCODE_API_KEY",
+	"deepseek":    "DEEPSEEK_API_KEY",
+	"openai":      "OPENAI_API_KEY",
+}
+
+// warnIfNoProviderKey alerts (BYOK) when the resolved tau provider has no API key in the env.
+// Without it, tau silently falls back to its rate-limited BUILTIN key instead of the operator's
+// subscription — which is exactly what caused the throttling during batch runs.
+func warnIfNoProviderKey() {
+	prov := os.Getenv("MAGO_PROVIDER") // the override operators actually use (e.g. opencode-go)
+	keyEnv, ok := providerKeyEnv[prov]
+	if !ok {
+		return
+	}
+	if os.Getenv(keyEnv) == "" {
+		fmt.Fprintf(os.Stderr, "[warn] %s is not set — tau will use its built-in (rate-limited) %s key; "+
+			"export your subscription key (e.g. `export %s=...`) to avoid throttling.\n", keyEnv, prov, keyEnv)
+	}
+}

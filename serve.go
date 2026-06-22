@@ -48,6 +48,7 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	warnIfNoProviderKey()
 
 	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 8)}
 	go w.run()
