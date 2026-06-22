@@ -46,6 +46,8 @@ func main() {
 		err = cmdAccount(os.Args[2:])
 	case "link":
 		err = cmdLink(os.Args[2:])
+	case "worker":
+		err = cmdWorker(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
@@ -88,6 +90,7 @@ Usage:
   mago status [-C d]              show STATE.md, tasks, and pending HITL
   mago digest [-C d]              "what your company did": backlog, PRs, HITL, autonomy budget
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
+  mago worker doctor               validate tau, gh, and OPENCODE_API_KEY (exits 101 on failure)
   mago version | help
 
 Flags:
