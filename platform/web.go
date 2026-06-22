@@ -103,6 +103,7 @@ const landingHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
 <h1>mago</h1>
 <p class=tag>Cheap autonomous AI agent teams that ship code over GitHub. <b>BYOK · CLI-only · €20/month.</b></p>
 <p><span class=pill>no dashboard</span><span class=pill>your LLM key</span><span class=pill>GitHub-native</span><span class=pill>agent-driven</span></p>
+<p class=muted>Prefer a managed dashboard over the CLI? <a href="https://automaintainer.intrane.fr/">Automaintainer</a> is the premium, UI-driven alternative.</p>
 
 <h2>What it is</h2>
 <p>You file work as GitHub issues; an autonomous executive team — <b>CTO, CMO, Head of Product, Head of
@@ -129,6 +130,7 @@ completions. There is no web panel: you (or your own agent) drive everything fro
 
 <p class=muted style="margin-top:3rem">mago · operated at <a href="%s">mago.intrane.fr</a> · onboarding is agent-driven, CLI-only.</p>
 <p class=muted>🤖 AI agents: start at <a href="/llms.txt">/llms.txt</a> · humans: the <a href="/operators">operator guide</a>.</p>
+<p class=muted>By <a href="https://automaintainer.intrane.fr/">Automaintainer</a> · Part of the <a href="https://intrane.fr">Intrane ecosystem</a>.</p>
 </body></html>`
 
 const installScript = `#!/bin/sh
