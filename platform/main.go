@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -53,6 +54,19 @@ func fail(err error) {
 	}
 }
 
+// handleSubscribed is the Stripe checkout success/cancel landing page. Onboarding is CLI-driven,
+// so it just tells the human to return to the terminal.
+func handleSubscribed(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	msg := "✓ Subscription active. Return to your terminal and run <code>mago account status</code>."
+	if r.URL.Query().Get("cancelled") != "" {
+		msg = "Checkout cancelled. Run <code>mago subscribe</code> to try again."
+	}
+	fmt.Fprintf(w, `<!doctype html><meta charset=utf-8><title>mago</title>`+
+		`<body style="font-family:system-ui,sans-serif;max-width:34rem;margin:5rem auto;text-align:center;color:#222">`+
+		`<h2>mago</h2><p style="font-size:1.1rem">%s</p></body>`, msg)
+}
+
 // runServer boots the store, wires routes, and serves until killed. Blocks.
 func runServer(port string) {
 	dbPath := expand(env("DB_PATH", "~/.mago-platform/platform.db"))
@@ -78,6 +92,7 @@ func runServer(port string) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") })
+	mux.HandleFunc("/subscribed", handleSubscribed) // Stripe success/cancel landing (CLI onboarding)
 	mux.HandleFunc("/auth/signup", s.handleSignup)
 	mux.HandleFunc("/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/account", s.handleAccount)

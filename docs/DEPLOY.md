@@ -53,9 +53,10 @@ Stripe webhook endpoint (test mode): `we_1TkslJ…` → `https://mago.intrane.fr
 ## Deploy / redeploy
 
 ```sh
-cd platform && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../mago-platform .
+cd platform && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../mago-platform . && cd ..
+ssh dk1 'cd ~/mago-platform && ./mago-platform stop'          # stop BEFORE scp (else "text file busy")
 scp mago-platform dk1:/home/dk1/mago-platform/mago-platform
-ssh dk1 'cd ~/mago-platform && ./mago-platform stop; ./mago-platform start --daemon --port=9100 && curl -fsS localhost:9100/healthz'
+ssh dk1 'cd ~/mago-platform && ./mago-platform start --daemon --port=9100 && sleep 1 && curl -fsS localhost:9100/healthz'
 ```
 
 ## hotify (DNS + Traefik)
