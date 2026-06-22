@@ -84,10 +84,12 @@ func cmdServe(args []string) error {
 // wakeEvent carries why we woke and how to act: a single agent to wake (target), a PR to
 // review (prRepo/prNum), or — when all are empty — a full reconcile (routing + all agents).
 type wakeEvent struct {
-	reason string
-	target string
-	prRepo string
-	prNum  int
+	reason  string
+	target  string
+	prRepo  string
+	prNum   int
+	comms   bool   // a merged PR -> CMO drafts a release note (non-code loop)
+	prTitle string // merged PR title, for the comms note
 }
 
 type eventWorker struct {
@@ -107,6 +109,9 @@ func (w *eventWorker) signal(ev wakeEvent) {
 func (w *eventWorker) run() {
 	for ev := range w.wake {
 		switch {
+		case ev.comms:
+			fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
+			w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle)
 		case ev.prRepo != "":
 			fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
 			w.comp.reviewPR(ev.prRepo, ev.prNum)
@@ -172,7 +177,12 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 			} `json:"labels"`
 		} `json:"issue"`
 		PullRequest struct {
-			Number int `json:"number"`
+			Number int    `json:"number"`
+			Title  string `json:"title"`
+			Merged bool   `json:"merged"`
+			Head   struct {
+				Ref string `json:"ref"`
+			} `json:"head"`
 		} `json:"pull_request"`
 		Label struct {
 			Name string `json:"name"`
@@ -219,6 +229,19 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 				prRepo: p.Repository.FullName,
 				prNum:  p.PullRequest.Number,
 			}, true
+		case "closed":
+			// Beyond-code loop (opt-in MAGO_COMMS=1): a merged implementer PR (mago/task-*) wakes the
+			// CMO to draft a release note. Exclude mago/news-* (the comms' own branch) so it can't loop.
+			if p.PullRequest.Merged && os.Getenv("MAGO_COMMS") == "1" &&
+				strings.HasPrefix(p.PullRequest.Head.Ref, "mago/task-") {
+				return wakeEvent{
+					reason:  fmt.Sprintf("PR #%d merged", p.PullRequest.Number),
+					prRepo:  p.Repository.FullName,
+					prNum:   p.PullRequest.Number,
+					prTitle: p.PullRequest.Title,
+					comms:   true,
+				}, true
+			}
 		}
 	}
 	return wakeEvent{}, false

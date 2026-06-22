@@ -174,7 +174,7 @@ func (b *githubBackend) loadIssue(number string) (*Task, error) {
 // mago's comments start with a known marker; a human typing on GitHub does not.
 func isMagoComment(body string) bool {
 	t := strings.TrimSpace(body)
-	for _, m := range []string{"🔧", "🙋", "📋", "↩", "**"} {
+	for _, m := range []string{"🔧", "🙋", "📋", "↩", "📣", "**"} {
 		if strings.HasPrefix(t, m) {
 			return true
 		}
