@@ -9,12 +9,13 @@ import (
 )
 
 // githubBackend maps mago's task/HITL model onto GitHub issues:
-//   task        = issue            status open      = open issue (no special label)
-//   in_progress = label mago:in-progress + agent:<name>
-//   blocked     = label mago:blocked
-//   needs_human = label mago:hitl   (the question is a comment)
-//   done        = closed issue
-//   progress / HITL question / answer = issue comments
+//
+//	task        = issue            status open      = open issue (no special label)
+//	in_progress = label mago:in-progress + agent:<name>
+//	blocked     = label mago:blocked
+//	needs_human = label mago:hitl   (the question is a comment)
+//	done        = closed issue
+//	progress / HITL question / answer = issue comments
 type githubBackend struct{ repo string }
 
 const (
@@ -51,11 +52,13 @@ func (b *githubBackend) ensureAgentLabel(agent string) {
 }
 
 type ghIssue struct {
-	Number   int    `json:"number"`
-	Title    string `json:"title"`
-	State    string `json:"state"`
-	Body     string `json:"body"`
-	Labels   []struct{ Name string `json:"name"` } `json:"labels"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	Body   string `json:"body"`
+	Labels []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
 	Comments []struct {
 		Author struct {
 			Login string `json:"login"`
@@ -277,7 +280,9 @@ func (b *githubBackend) Bounce(t *Task) error {
 }
 
 func (b *githubBackend) RecordProgress(t *Task, who, note string) error {
-	_, err := b.gh("issue", "comment", t.ID, "--body", "**"+who+":** "+note)
+	// Header line identifies the agent (and marks it a mago comment for isMagoComment); the note
+	// is structured markdown on its own lines (see progressNote) so the comment renders cleanly.
+	_, err := b.gh("issue", "comment", t.ID, "--body", "**"+who+"** _(mago agent)_\n\n"+note)
 	return err
 }
 

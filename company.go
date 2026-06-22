@@ -199,11 +199,15 @@ func projectRepoInstructions(a *Agent, repo, taskID string) string {
 		"- You are ALREADY on branch `mago/task-%s`, freshly based on the repo's latest default branch. Work here.\n"+
 		"- FIRST: if the Open PRs list above already covers this task, or the specific deliverable already exists, "+
 		"do NOT duplicate it — set task_status to already_done and say what covers it.\n"+
-		"- Make your change, commit, then push: `git push -u origin mago/task-%s`.\n"+
-		"- Open a PR if none exists: `gh pr create --fill --head mago/task-%s` (otherwise push more commits).\n"+
+		"- Make your change with a descriptive commit message, then push: `git push -u origin mago/task-%s`.\n"+
+		"- Open a PR if none exists, with a clear title AND a real description body — never an empty one. "+
+		"Write the body to a file and pass it, so it can be multi-line markdown:\n"+
+		"  `gh pr create --head mago/task-%s --title \"<concise summary>\" --body-file /tmp/pr_body.md` (write the body OUTSIDE the repo so it isn't committed)\n"+
+		"  The body must cover: what changed, why, and how it was verified; end with a line `mago task #%s`. "+
+		"Do NOT use `--fill` (it leaves the body empty when the commit has no body). If a PR already exists, just push more commits.\n"+
 		"- STOP after opening the PR. Do NOT merge, approve, or review it — that is the reviewer's job.\n"+
 		"- Put the PR URL in your summary.",
-		taskID, taskID, taskID)
+		taskID, taskID, taskID, taskID)
 }
 
 // buildBriefing assembles the per-tick context pack the agent reads first.

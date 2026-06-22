@@ -28,10 +28,21 @@ func (c *Company) writeBack(a *Agent, t *Task, r *Reflection, raw string) error 
 	return nil
 }
 
+// progressNote formats a status update as readable markdown for an issue comment: a bold status
+// line, the summary as its own paragraph (structure preserved), and an optional Next line — so
+// comments read cleanly instead of a single run-on bold line.
+func progressNote(status, summary, next string) string {
+	s := "**" + status + "**\n\n" + strings.TrimSpace(summary)
+	if n := strings.TrimSpace(next); n != "" {
+		s += "\n\n_Next:_ " + oneLine(n)
+	}
+	return s
+}
+
 func (c *Company) applyTaskStatus(t *Task, a *Agent, r *Reflection) {
 	switch r.TaskStatus {
 	case "done":
-		c.tasks.RecordProgress(t, a.Name, "DONE: "+oneLine(r.Summary)+" (next: "+oneLine(r.Next)+")")
+		c.tasks.RecordProgress(t, a.Name, progressNote("✅ done", r.Summary, r.Next))
 		c.tasks.SetStatus(t, "done")
 	case "needs_human":
 		q := r.HitlQuestion
@@ -40,16 +51,16 @@ func (c *Company) applyTaskStatus(t *Task, a *Agent, r *Reflection) {
 		}
 		c.tasks.RaiseHITL(t, a.Name, oneLine(q))
 	case "already_done":
-		c.tasks.RecordProgress(t, a.Name, "ALREADY DONE (no PR needed): "+oneLine(r.Summary))
+		c.tasks.RecordProgress(t, a.Name, progressNote("✅ already done (no PR needed)", r.Summary, ""))
 		c.tasks.SetStatus(t, "done")
 	case "reassign":
-		c.tasks.RecordProgress(t, a.Name, "REASSIGN (not my role): "+oneLine(r.Summary))
+		c.tasks.RecordProgress(t, a.Name, progressNote("↩ reassign (not my role)", r.Summary, ""))
 		c.tasks.Bounce(t)
 	case "blocked":
-		c.tasks.RecordProgress(t, a.Name, "BLOCKED: "+oneLine(r.Summary))
+		c.tasks.RecordProgress(t, a.Name, progressNote("⛔ blocked", r.Summary, r.Next))
 		c.tasks.SetStatus(t, "blocked")
 	default:
-		c.tasks.RecordProgress(t, a.Name, oneLine(r.Summary)+" (next: "+oneLine(r.Next)+")")
+		c.tasks.RecordProgress(t, a.Name, progressNote("… in progress", r.Summary, r.Next))
 		c.tasks.SetStatus(t, "in_progress")
 	}
 }
