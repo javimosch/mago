@@ -27,6 +27,23 @@ func loadCompany(dir string) (*Company, error) {
 		return nil, fmt.Errorf("not a mago company (no .mago/) at %s — run `mago init` first", abs)
 	}
 	c := &Company{Dir: abs, Name: filepath.Base(abs), ghRepo: os.Getenv("MAGO_GH_REPO")}
+	// No explicit backlog repo? Adopt a single configured project repo as the task source, so
+	// `mago project add <owner/repo>` + `mago serve` enumerates that repo's issues without also
+	// requiring MAGO_GH_REPO. Ambiguous (multiple distinct project repos) -> stay local; the
+	// operator sets MAGO_GH_REPO to pick the backlog repo.
+	if c.ghRepo == "" {
+		seen := map[string]bool{}
+		var repos []string
+		for _, r := range c.loadProjects() {
+			if r != "" && !seen[r] {
+				seen[r] = true
+				repos = append(repos, r)
+			}
+		}
+		if len(repos) == 1 {
+			c.ghRepo = repos[0]
+		}
+	}
 	if c.ghRepo != "" {
 		c.tasks = &githubBackend{repo: c.ghRepo, taskLabel: os.Getenv("MAGO_TASK_LABEL")}
 	} else {

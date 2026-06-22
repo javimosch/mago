@@ -167,7 +167,9 @@ const operatorsHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
 <li><b>tau</b> + <b>gh</b> on PATH, gh authenticated.</li>
 <li><b>Provider key (BYOK):</b> put it in <code>~/.config/tau/config.json</code> →
 <code>{"keys": {"opencode-go": "sk-..."}}</code> (chmod 600), or export <code>OPENCODE_API_KEY</code>.
-Without it, tau falls back to a rate-limited shared key.</li>
+The default agents use the <code>opencode-go</code> provider, so this key is all you need; without it
+tau falls back to a rate-limited shared key. (Other harness/provider? set it per-agent in frontmatter
+or via <code>MAGO_PROVIDER</code>/<code>MAGO_MODEL</code>.)</li>
 </ul>
 
 <h2>1. Install</h2>
@@ -187,8 +189,9 @@ mago link list                    # confirm entitled repos</pre>
 
 <h2>4. Run the company</h2>
 <pre>mago init ./company
-mago project add &lt;name&gt; --repo owner/repo      # repo your agents work on
-mago serve --relay -C ./company                # worker dials out to the platform; agents wake on GitHub events</pre>
+mago project add &lt;name&gt; --repo owner/repo      # the repo your agents work on AND watch for issues
+MAGO_TASK_LABEL=mago mago serve --relay -C ./company   # only act on issues labeled "mago"</pre>
+<p class=muted>A single project repo becomes your backlog automatically. Multiple repos? set <code>MAGO_GH_REPO</code> to pick the backlog repo.</p>
 
 <h2>5. Operate via GitHub</h2>
 <ul>
@@ -214,7 +217,9 @@ const llmsText = `# mago — operator guide for AI agents
 ## Prerequisites
 - ` + "`tau`" + ` and ` + "`gh`" + ` on PATH; gh authenticated (` + "`gh auth status`" + `).
 - Provider key (BYOK): write ~/.config/tau/config.json -> {"keys":{"opencode-go":"sk-..."}} (chmod 600),
-  or export OPENCODE_API_KEY. Without it tau falls back to a rate-limited shared key.
+  or export OPENCODE_API_KEY. The default agents use the opencode-go provider, so this key is all
+  you need. Without it tau falls back to a rate-limited shared key. (To use another harness/provider,
+  set it in each agent's frontmatter or export MAGO_PROVIDER / MAGO_MODEL.)
 
 ## 1. Install
     curl -fsSL %s/install.sh | sh
@@ -234,8 +239,10 @@ const llmsText = `# mago — operator guide for AI agents
 
 ## 4. Run the company
     mago init ./company
-    mago project add <name> --repo owner/repo   # repo your agents work on
-    mago serve --relay -C ./company             # worker dials out; agents wake on GitHub events
+    mago project add <name> --repo owner/repo   # the repo your agents work on AND watch for issues
+    # Point at a real repo safely: only act on issues labeled "mago".
+    MAGO_TASK_LABEL=mago mago serve --relay -C ./company   # worker dials out; agents wake on GitHub events
+  (Single project repo = your backlog automatically. Multiple repos? set MAGO_GH_REPO to pick one.)
 
 ## 5. Operate via GitHub
 - File work as issues. With MAGO_TASK_LABEL=mago the worker only takes issues labeled "mago"
