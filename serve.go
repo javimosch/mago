@@ -56,6 +56,10 @@ func cmdServe(args []string) error {
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
 	}
+	// MAGO_PROACTIVE=<secs>: the planner proposes new backlog from the mission on this cadence.
+	if iv := atoiSafe(os.Getenv("MAGO_PROACTIVE")); iv > 0 {
+		go w.proactiveLoop(time.Duration(iv) * time.Second)
+	}
 	repos := comp.repos()
 	reposStr := "none — add with `mago project add <name> --repo owner/repo`"
 	if len(repos) > 0 {
@@ -84,12 +88,13 @@ func cmdServe(args []string) error {
 // wakeEvent carries why we woke and how to act: a single agent to wake (target), a PR to
 // review (prRepo/prNum), or — when all are empty — a full reconcile (routing + all agents).
 type wakeEvent struct {
-	reason  string
-	target  string
-	prRepo  string
-	prNum   int
-	comms   bool   // a merged PR -> CMO drafts a release note (non-code loop)
-	prTitle string // merged PR title, for the comms note
+	reason    string
+	target    string
+	prRepo    string
+	prNum     int
+	comms     bool   // a merged PR -> CMO drafts a release note (non-code loop)
+	prTitle   string // merged PR title, for the comms note
+	proactive bool   // cadence tick -> planner proposes new backlog from the mission
 }
 
 type eventWorker struct {
@@ -109,6 +114,9 @@ func (w *eventWorker) signal(ev wakeEvent) {
 func (w *eventWorker) run() {
 	for ev := range w.wake {
 		switch {
+		case ev.proactive:
+			fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
+			w.comp.proposeBacklog()
 		case ev.comms:
 			fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
 			w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle)
@@ -133,6 +141,14 @@ func (w *eventWorker) heartbeatLoop(every time.Duration) {
 	t := time.NewTicker(every)
 	for range t.C {
 		w.signal(wakeEvent{reason: "heartbeat"})
+	}
+}
+
+// proactiveLoop ticks the planner on a cadence to propose new backlog from the mission.
+func (w *eventWorker) proactiveLoop(every time.Duration) {
+	t := time.NewTicker(every)
+	for range t.C {
+		w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
 	}
 }
 
