@@ -89,6 +89,16 @@ func (c *Company) loadProjects() map[string]string {
 func (c *Company) projectRepo(name string) string { return c.loadProjectConfs()[name].Repo }
 func (c *Company) projectMirror(name string) bool { return c.loadProjectConfs()[name].MirrorIssue }
 
+// taskRepo is the GitHub repo a task's work targets: its project repo, or — when the task has no
+// project — the company repo itself. The latter is the label-scoped mode (MAGO_TASK_LABEL): the
+// issue lives on MAGO_GH_REPO and the agent works that same repo, so the PR closes it directly.
+func (c *Company) taskRepo(t *Task) string {
+	if t.Project != "" {
+		return c.projectRepo(t.Project)
+	}
+	return c.ghRepo
+}
+
 // repos returns every GitHub repo this company touches (the company repo + project repos),
 // deduped — i.e. the repos a worker should receive relayed webhooks for.
 func (c *Company) repos() []string {
@@ -294,17 +304,21 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	b.WriteString("## Your role\n" + a.Title + "\n\n")
 	b.WriteString("## Company state (STATE.md)\n" + readFileOr(c.stateFile(), "(empty)") + "\n\n")
 	b.WriteString(fmt.Sprintf("## Active task #%s: %s\nstatus: %s\n\n%s\n\n", t.ID, t.Title, t.Status, t.Body))
-	if t.Project != "" {
-		if repo := c.projectRepo(t.Project); repo != "" {
-			// Opt-in: open a tracking issue on the project repo (only the implementer, once) so
-			// the PR can `Closes` it — giving the project repo native issue↔PR linkage.
-			mirror := 0
-			if !isReviewerRole(a) && c.projectMirror(t.Project) {
+	if repo := c.taskRepo(t); repo != "" {
+		// Which issue the PR should close (0 = none):
+		//   - project + mirror_issue (B): a tracking issue opened on the project repo, once.
+		//   - working the company repo directly (C, label-scoped): the task's own issue.
+		mirror := 0
+		if !isReviewerRole(a) {
+			switch {
+			case t.Project != "" && c.projectMirror(t.Project):
 				mirror = c.ensureMirrorIssue(t, repo)
+			case repo == c.ghRepo:
+				mirror = atoiSafe(t.ID)
 			}
-			b.WriteString("## Open PRs in " + repo + " (do not duplicate in-flight work)\n" + c.openPRsText(repo) + "\n\n")
-			b.WriteString("## Project repo\n" + projectRepoInstructions(a, repo, t.ID, mirror) + "\n\n")
 		}
+		b.WriteString("## Open PRs in " + repo + " (do not duplicate in-flight work)\n" + c.openPRsText(repo) + "\n\n")
+		b.WriteString("## Project repo\n" + projectRepoInstructions(a, repo, t.ID, mirror) + "\n\n")
 	}
 	b.WriteString("## Skills (learnings/caveats/pitfalls from past work)\n" + c.selectSkillsText(a, t) + "\n\n")
 	b.WriteString("## Your recent runs\n" + c.recentJournalSummaries(a.Name, 3) + "\n\n")

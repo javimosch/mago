@@ -59,7 +59,7 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 		return tickResult{}, err
 	}
 	ws := comp.workspaceFor(task)
-	if repo := comp.projectRepo(task.Project); task.Project != "" && repo != "" {
+	if repo := comp.taskRepo(task); repo != "" {
 		w, err := comp.prepProjectWorkspace(task, repo) // fetch + branch from latest origin/<default>
 		if err != nil {
 			return tickResult{}, err
