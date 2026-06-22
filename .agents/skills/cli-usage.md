@@ -35,6 +35,11 @@ PR merges; `MAGO_DAILY_BUDGET=<n>` caps autonomous work cycles per UTC day (a re
 release-note/planning round each = 1; 0 = unlimited) and the worker pauses + says so when hit.
 `mago digest` shows the day's activity + budget usage; cron it or run it to check in.
 
+**Verified autonomy:** `MAGO_VERIFY=1` (or `MAGO_VERIFY_CMD="<cmd>"`) makes the reviewer check out
+the PR + run build/tests (auto-detects Go) before approving; auto-merge then needs an approve **and**
+a green check. Run with `MAGO_VERIFY=1` and `MAGO_NO_MERGE` off to let only verified-green PRs land
+(`MAGO_MERGE_UNVERIFIED=1` to also merge when a repo has no detectable check).
+
 **Multiple workers per account:** run a worker on as many machines as you like under the same
 account/license — each with its own company + repos. They coexist on the relay (keyed by
 `MAGO_WORKER_ID`, default the hostname), and the platform routes each repo's events to exactly one

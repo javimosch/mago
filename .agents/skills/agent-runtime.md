@@ -85,6 +85,17 @@ planning) and skips + logs `[budget] … pausing` once the cap is hit, resuming 
 persists in `.mago/usage.json` (resets daily). `mago digest` surfaces it. This makes a company safe
 to leave running for days. Still coarse (1 cycle ≈ a few tau calls); token/cost budgets are a TODO.
 
+## Verification-gated autonomy (earned auto-merge)
+
+By default the reviewer judges the *diff* (LLM verdict → comment → merge on approve unless
+`MAGO_NO_MERGE=1`). With **`MAGO_VERIFY=1`** (or `MAGO_VERIFY_CMD="<cmd>"`) the worker also **checks
+out the PR branch and runs the project's build/tests** (`verify.go`; auto-detects Go →
+`go build ./... && go test ./...`, else use `MAGO_VERIFY_CMD`). Policy: a failing check → changes
+requested (overrides an LLM approve); **auto-merge requires approve AND green** (or
+`MAGO_MERGE_UNVERIFIED=1` to merge when no check exists). So the safe way to run unattended is
+`MAGO_VERIFY=1` with `MAGO_NO_MERGE` **off** — only verified-green PRs land. `mago digest` shows
+"shipped by mago" (merged `mago/*` PRs in 24h) as the autonomy metric.
+
 ## Provider
 
 Agents run via a **harness**. Default is **tau** (`opencode-go` / `deepseek-v4-flash` — matches the

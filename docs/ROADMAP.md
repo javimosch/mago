@@ -63,10 +63,12 @@ event- or cadence-driven and lands as GitHub artifacts (issues/PRs/comments), ke
   **Head of Product**, given the mission in `STATE.md`, proposes and files issues itself on a
   cadence — capped (≤2/cycle, stops at 3 active) and deduped — instead of waiting for the CEO to
   file every task. The biggest step from "executes tasks" to "runs the company." (`backlog.go`)
-- **Autonomy & trust guardrails** *(shipped: budget + digest)*. `MAGO_DAILY_BUDGET=<n>` caps
-  autonomous work cycles per UTC day (worker pauses when hit; `budget.go`); `mago digest` shows the
-  day's backlog/PRs/HITL + budget usage (`digest.go`). Still open: cost/token-based budgets,
-  push delivery of the digest (Telegram — javimosch/mago#10), and auto-escalation on repeated fail.
+- **Autonomy & trust guardrails** *(shipped: budget + digest + verification)*. `MAGO_DAILY_BUDGET=<n>`
+  caps autonomous work cycles per UTC day (`budget.go`); `mago digest` shows backlog/PRs/HITL/budget +
+  the "shipped by mago" autonomy metric (`digest.go`); **verification-gated autonomy** (`MAGO_VERIFY=1`
+  / `verify.go`) — the reviewer runs build/tests and auto-merges only verified-green PRs, so you can
+  drop `MAGO_NO_MERGE` safely. Still open: cost/token budgets, push digest (Telegram — javimosch/mago#10),
+  auto-escalation on repeated fail.
 - **Dogfood — mago runs mago** *(set up, review-only)*. A real mago company (`~/ai/mago-company`,
   internal account) operates `javimosch/mago`: planner proposes → CTO PRs → reviewer comments →
   CMO announces; scoped to a docs/DX/tests mission, label-scoped, budget-capped, `MAGO_NO_MERGE` so
