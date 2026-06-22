@@ -31,14 +31,23 @@ Self-contained at `~/ai/mago-company` (the CLI config, the company def, and git 
 export HOME=~/ai/mago-company                 # isolates config from your real ~/.mago
 export MAGO_PLATFORM_URL=https://mago.intrane.fr
 export GH_TOKEN=$(cat ~/.github/token)        # gh + private-repo git push (or: gh auth setup-git)
-export OPENCODE_API_KEY=...                    # BYOK (or ~/.config/tau/config.json)
+export CLAUDE_CONFIG_DIR=~/.claude            # REQUIRED on Claude harness under a custom HOME (else "Not logged in")
 export MAGO_TASK_LABEL=mago MAGO_GH_REPO=javimosch/mago
-export MAGO_PROACTIVE=3600 MAGO_COMMS=1 MAGO_NO_MERGE=1 MAGO_DAILY_BUDGET=6
+export MAGO_PROVIDER=claude MAGO_MODEL=sonnet  # run agents on Sonnet (local sub, no API key, no throttle)
+export MAGO_PROACTIVE=3600 MAGO_PROACTIVE_MAX=1 MAGO_COMMS=1 MAGO_NO_MERGE=1 MAGO_DAILY_BUDGET=6
 mago serve --relay -C ~/ai/mago-company
 ```
 
-`MAGO_PROACTIVE=3600` = the planner proposes hourly (use a smaller value to test). Check in with
-`HOME=~/ai/mago-company mago digest -C ~/ai/mago-company`.
+Notes:
+- **Sonnet harness:** `MAGO_PROVIDER=claude MAGO_MODEL=sonnet` runs agents on your Claude Code
+  subscription (no API key, no opencode-go rate limits). Because the worker uses a custom `HOME`,
+  `CLAUDE_CONFIG_DIR=~/.claude` is required so claude finds its auth — otherwise every call is
+  "Not logged in". (To use tau instead, set `OPENCODE_API_KEY` and drop the two MAGO_PROVIDER lines.)
+- **Mission persistence:** set the mission in `~/ai/mago-company/STATE.md` `## Mission`. The worker
+  preserves a locally-set mission when it syncs the `mago-state` branch (it no longer gets clobbered
+  by a stale remote STATE).
+- `MAGO_PROACTIVE=3600` = propose hourly (smaller to test); `MAGO_PROACTIVE_MAX=1` = one proposal
+  per cycle. Check in with `HOME=~/ai/mago-company mago digest -C ~/ai/mago-company`.
 
 ## The loop
 
