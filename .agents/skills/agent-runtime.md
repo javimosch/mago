@@ -98,3 +98,11 @@ documented BYOK key + tau's default). Override per run/harness with `MAGO_PROVID
 persona appended via `--append-system-prompt`, and `.result` is parsed as the reflection. **Auth is
 the local Claude Code subscription — no API key**, and it sidesteps opencode-go rate limits.
 `runTau`/`tauComplete` dispatch to `runClaude`/`claudeComplete` when the provider is `claude`.
+**Gotcha:** if the worker runs under a custom `HOME` (e.g. an isolated company dir), set
+`CLAUDE_CONFIG_DIR=~/.claude` so claude finds its auth — otherwise every call is "Not logged in"
+(the harness now returns that as an actionable error).
+
+**Event delivery:** the worker's wake channel is buffered (64) and `signal()` drops *coalescable*
+recurring wakes (heartbeat/proactive) once it's half full, so a long blocking tick (e.g. a multi-
+minute `runClaude` with no streaming) can't let cadence wakes starve one-shot events like a
+`pull_request opened` → review. One-shot events (PR review, comms, targeted ticks) are never dropped.
