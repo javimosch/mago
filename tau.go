@@ -20,6 +20,9 @@ func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string
 		// a reflection, to exercise the recovery/self-heal path deterministically.
 		return "<｜｜DSML｜｜tool_calls> name=bash command=ls (no reflection json here)", nil
 	}
+	if a.Provider == "claude" { // Claude Code harness (local subscription; no API key)
+		return runClaude(workspace, a, systemPrompt, userPrompt)
+	}
 	args := []string{
 		"-p",
 		"--provider", a.Provider,
@@ -67,6 +70,9 @@ func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string
 // (routing, planning, review verdicts, release notes). It retries a few times with backoff so a
 // transient provider blip (HTTPRequestFailed) doesn't abandon a whole autonomous cycle.
 func tauComplete(a *Agent, prompt string) (string, error) {
+	if a.Provider == "claude" { // Claude Code harness
+		return claudeComplete(a, prompt)
+	}
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
