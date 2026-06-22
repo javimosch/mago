@@ -96,11 +96,13 @@ func runServer(port string) {
 	mux.HandleFunc("/install.sh", s.handleInstall)
 	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
 	mux.HandleFunc("/operators", s.handleOperators)
+	mux.HandleFunc("/llms.txt", s.handleLLMs) // agent-readable onboarding (the operator "skill")
 	mux.HandleFunc("/subscribed", handleSubscribed) // Stripe success/cancel landing (CLI onboarding)
 	mux.HandleFunc("/auth/signup", s.handleSignup)
 	mux.HandleFunc("/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/account", s.handleAccount)
 	mux.HandleFunc("/api/checkout", s.handleCheckout)
+	mux.HandleFunc("/api/portal", s.handlePortal) // `mago billing`: Stripe customer portal link
 	mux.HandleFunc("/api/installations", s.handleInstallations) // `mago link`: claim/list App installs
 	mux.HandleFunc("/stripe/webhook", s.handleWebhook)
 	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)

@@ -76,6 +76,14 @@ func (s *server) handleOperators(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, operatorsHTML, s.appURL, s.appURL)
 }
 
+// handleLLMs serves /llms.txt — the canonical agent-readable onboarding doc. mago is operated
+// by an AI agent, so this is the "skill" an operator fetches on arrival: the exact CLI flow in
+// plain markdown, no scraping required.
+func (s *server) handleLLMs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, llmsText, s.appURL, s.appURL, s.appURL)
+}
+
 const css = `<style>
   :root{--fg:#1a1a2e;--mut:#555;--acc:#5319e7;--bg:#fafafe;--code:#f0f0f7}
   *{box-sizing:border-box} body{font-family:system-ui,-apple-system,sans-serif;color:var(--fg);
@@ -120,6 +128,7 @@ completions. There is no web panel: you (or your own agent) drive everything fro
 <p class=muted>One flat plan. BYOK (your LLM key, your compute) — no per-token charges from us, no tiers.</p>
 
 <p class=muted style="margin-top:3rem">mago · operated at <a href="%s">mago.intrane.fr</a> · onboarding is agent-driven, CLI-only.</p>
+<p class=muted>🤖 AI agents: start at <a href="/llms.txt">/llms.txt</a> · humans: the <a href="/operators">operator guide</a>.</p>
 </body></html>`
 
 const installScript = `#!/bin/sh
@@ -184,5 +193,58 @@ mago serve --relay -C ./company                # worker dials out to the platfor
 <li>Implementers open PRs; the reviewer (Head of Org Engineering) merges. HITL questions appear as issue comments — the human answers and work resumes.</li>
 </ul>
 
-<p class=muted style="margin-top:3rem"><a href="%s">← mago.intrane.fr</a></p>
+<p class=muted style="margin-top:3rem"><a href="%s">← mago.intrane.fr</a> · machine-readable version: <a href="/llms.txt">/llms.txt</a></p>
 </body></html>`
+
+// llmsText is the agent-facing operator skill (served at /llms.txt). Plain markdown so an
+// operator agent can curl + follow it directly. %s = appURL ×3.
+const llmsText = `# mago — operator guide for AI agents
+
+> mago runs an autonomous executive team (CTO, CMO, Head of Product, Head of Org Engineering)
+> that picks up GitHub issues and ships them as reviewed pull requests. You are the AI agent
+> OPERATING mago on behalf of a human (the CEO). Drive everything via the ` + "`mago`" + ` and
+> ` + "`gh`" + ` CLIs. BYOK (the human's LLM key stays on this machine) · CLI-only · €20/month.
+> The human only: pays, installs the GitHub App, answers clarify/HITL questions, says "go".
+
+## Prerequisites
+- ` + "`tau`" + ` and ` + "`gh`" + ` on PATH; gh authenticated (` + "`gh auth status`" + `).
+- Provider key (BYOK): write ~/.config/tau/config.json -> {"keys":{"opencode-go":"sk-..."}} (chmod 600),
+  or export OPENCODE_API_KEY. Without it tau falls back to a rate-limited shared key.
+
+## 1. Install
+    curl -fsSL %s/install.sh | sh
+  Installs the host-matched binary (linux/darwin x amd64/arm64) to ~/.local/bin/mago.
+
+## 2. Account + subscription (the human pays)
+    mago register --email you@co.com --password <pw>   # token -> ~/.mago/config.json (0600)
+    mago subscribe                                      # prints the Stripe checkout link; HUMAN pays
+    mago account status                                 # -> plan: mago, active: true, license_key
+    mago billing                                        # prints the Stripe portal link (manage/cancel)
+
+## 3. Connect GitHub
+  The human installs the mago GitHub App on their repos (one browser click). Then:
+    mago link --installation <id>    # entitle your repos (id is in the install URL)
+    mago link list                   # confirm entitled repos
+
+## 4. Run the company
+    mago init ./company
+    mago project add <name> --repo owner/repo   # repo your agents work on
+    mago serve --relay -C ./company             # worker dials out; agents wake on GitHub events
+
+## 5. Operate via GitHub
+- File work as issues. With MAGO_TASK_LABEL=mago the worker only takes issues labeled "mago"
+  (safe on a real repo; labeling an existing issue picks it up).
+- Clarify-first (optional): label "mago:clarify" -> the planner posts a plan + open questions;
+  answer in comments (N rounds); add "mago:go" to implement.
+- Status labels: mago:in-progress, mago:blocked, mago:hitl (needs the CEO), agent:<name>, project:<name>.
+- Implementers open PRs; the reviewer (Head of Org Engineering) merges. HITL questions appear as
+  issue comments — the human answers and work resumes.
+
+## Billing (human/CEO)
+    mago subscribe   # start the €20/mo plan (Stripe checkout)
+    mago billing     # open the Stripe customer portal: update card, invoices, cancel
+
+## More
+- Human-readable guide: %s/operators
+- Site: %s
+`

@@ -50,6 +50,50 @@ func (s *server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"url": link})
 }
 
+// handlePortal creates a Stripe Billing Portal session so the CEO can manage the subscription
+// (update card, view invoices, cancel) — what `mago billing` prints. Requires an existing
+// customer (i.e. they've subscribed at least once).
+func (s *server) handlePortal(w http.ResponseWriter, r *http.Request) {
+	uid, ok := s.authUID(r)
+	if !ok {
+		httpErr(w, 401, "unauthorized")
+		return
+	}
+	u := s.store.GetByID(uid)
+	if u == nil {
+		httpErr(w, 404, "not found")
+		return
+	}
+	if s.stripeKey == "" {
+		httpErr(w, 503, "billing not configured")
+		return
+	}
+	if u.StripeCustomer == "" {
+		httpErr(w, 409, "no billing account yet — run `mago subscribe` first")
+		return
+	}
+	link, err := stripeBillingPortal(s.stripeKey, u.StripeCustomer, s.appURL+"/subscribed?portal=1")
+	if err != nil {
+		log.Printf("stripe portal: %v", err)
+		httpErr(w, 500, "could not open billing portal")
+		return
+	}
+	writeJSON(w, 200, map[string]string{"url": link})
+}
+
+func stripeBillingPortal(key, customer, returnURL string) (string, error) {
+	f := url.Values{}
+	f.Set("customer", customer)
+	f.Set("return_url", returnURL)
+	var out struct {
+		URL string `json:"url"`
+	}
+	if err := stripePost(key, "billing_portal/sessions", f, &out); err != nil {
+		return "", err
+	}
+	return out.URL, nil
+}
+
 func stripeCreateCustomer(key, email, uid string) (string, error) {
 	f := url.Values{}
 	f.Set("email", email)
