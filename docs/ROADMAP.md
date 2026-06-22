@@ -67,9 +67,10 @@ event- or cadence-driven and lands as GitHub artifacts (issues/PRs/comments), ke
   autonomous work cycles per UTC day (worker pauses when hit; `budget.go`); `mago digest` shows the
   day's backlog/PRs/HITL + budget usage (`digest.go`). Still open: cost/token-based budgets,
   push delivery of the digest (Telegram — javimosch/mago#10), and auto-escalation on repeated fail.
-- **Dogfood — mago runs mago.** A real mago company operates mago's own roadmap, features, and
-  marketing. The cheapest proof of "runs a company," and it yields real metrics instead of test
-  accounts.
+- **Dogfood — mago runs mago** *(set up, review-only)*. A real mago company (`~/ai/mago-company`,
+  internal account) operates `javimosch/mago`: planner proposes → CTO PRs → reviewer comments →
+  CMO announces; scoped to a docs/DX/tests mission, label-scoped, budget-capped, `MAGO_NO_MERGE` so
+  PRs wait for human merge. Cheapest proof of "runs a company" + real metrics. See `docs/DOGFOOD.md`.
 - **First real user.** One friendly real customer — demand teaches more than dogfooding, and
   surfaces the gaps no internal run will.
 
