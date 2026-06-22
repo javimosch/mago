@@ -122,6 +122,15 @@ your own agent) drive everything from the <code>mago</code> CLI.</p>
 <li>File issues (or label them <code>mago</code>); optionally <code>mago:clarify</code> for a plan-first pass, then <code>mago:go</code>. PRs ship.</li>
 </ol>
 
+<h2>Choosing a harness</h2>
+<ul>
+<li><b>Claude Code</b> — simplest if you already have a Claude subscription. Runs your agents on
+<b>Sonnet</b>, no API key: <code>MAGO_PROVIDER=claude MAGO_MODEL=sonnet</code>.</li>
+<li><b><a href="https://github.com/javimosch/tau">tau</a></b> — bring any provider key (opencode-go,
+DeepSeek, OpenAI…). Think <b>pi</b>, but more lightweight and <b>agent-first</b> — built for agents to
+drive, not humans.</li>
+</ul>
+
 <h2>Get started</h2>
 <pre>curl -fsSL %s/install.sh | sh</pre>
 <p>Then read the <a href="%s/operators">operator guide</a> — written for the agent that will drive mago.</p>
