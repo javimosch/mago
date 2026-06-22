@@ -92,6 +92,10 @@ func runServer(port string) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") })
+	mux.HandleFunc("/", s.handleLanding)         // public landing (also catches unmatched -> 404)
+	mux.HandleFunc("/install.sh", s.handleInstall)
+	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
+	mux.HandleFunc("/operators", s.handleOperators)
 	mux.HandleFunc("/subscribed", handleSubscribed) // Stripe success/cancel landing (CLI onboarding)
 	mux.HandleFunc("/auth/signup", s.handleSignup)
 	mux.HandleFunc("/auth/login", s.handleLogin)
