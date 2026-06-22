@@ -334,7 +334,9 @@ func (b *githubBackend) SetStatus(t *Task, status string) error {
 }
 
 func (b *githubBackend) RaiseHITL(t *Task, agent, question string) error {
-	if _, err := b.gh("issue", "comment", t.ID, "--body", "🙋 **"+agent+" needs the CEO:** "+question); err != nil {
+	// Header on its own line, then the question as multi-line markdown (it's often a plan + a
+	// numbered list — keep its structure rather than flattening it into one line).
+	if _, err := b.gh("issue", "comment", t.ID, "--body", "🙋 **"+agent+"** needs the CEO:\n\n"+question); err != nil {
 		return err
 	}
 	_, err := b.gh("issue", "edit", t.ID, "--add-label", labHITL, "--remove-label", labInProgress)

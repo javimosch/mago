@@ -252,3 +252,30 @@ func diff(a, b string) string {
 	}
 	return out
 }
+
+func TestAppendToSection(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "mago-sec")
+	defer os.RemoveAll(dir)
+	c := &Company{Dir: dir, Name: "co"}
+	os.WriteFile(c.stateFile(), []byte("# co — company state\n\n## Shipped\n(nothing yet)\n\n## In flight\n(nothing yet)\n\n## Activity log\n- existing entry\n"), 0o644)
+
+	c.appendToSection("Shipped", "- 2026 #1 first plugin")
+	c.appendToSection("Shipped", "- 2026 #2 second plugin")
+	c.appendToSection("Shipped", "- 2026 #1 first plugin") // dup -> ignored
+
+	out, _ := os.ReadFile(c.stateFile())
+	s := string(out)
+	if !strings.Contains(s, "## In flight\n(nothing yet)") {
+		// "In flight" placeholder must remain untouched
+		t.Errorf("In flight section was disturbed:\n%s", s)
+	}
+	if strings.Count(s, "first plugin") != 1 {
+		t.Errorf("dup not deduped:\n%s", s)
+	}
+	if !strings.Contains(s, "## Shipped\n- 2026 #1 first plugin\n- 2026 #2 second plugin\n") {
+		t.Errorf("Shipped not populated correctly:\n%s", s)
+	}
+	if !strings.Contains(s, "## Activity log\n- existing entry") {
+		t.Errorf("Activity log disturbed:\n%s", s)
+	}
+}

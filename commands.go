@@ -52,9 +52,14 @@ func cmdInit(args []string) error {
 		}
 	}
 	name := filepath.Base(abs)
+	agentsDir := filepath.Join(abs, ".mago", "agents")
 	for fname, content := range starterTeam {
-		writeIfMissing(filepath.Join(abs, ".mago", "agents", fname), content)
+		writeIfMissing(filepath.Join(agentsDir, fname), content)
 	}
+	// Backfill role flags on EXISTING companies (writeIfMissing won't touch their agent files):
+	// companies scaffolded before these flags existed need them to use review/clarify routing.
+	backfillAgentFlag(filepath.Join(agentsDir, "head-of-product.md"), "plans", "true")
+	backfillAgentFlag(filepath.Join(agentsDir, "head-of-org-engineering.md"), "reviews", "true")
 	writeIfMissing(filepath.Join(abs, "STATE.md"), fmt.Sprintf(stateTemplate, name))
 	writeIfMissing(filepath.Join(abs, ".mago", "skills", "INDEX.md"), "# Skills index\n\n")
 
@@ -208,6 +213,22 @@ func writeIfMissing(path, content string) {
 	if _, err := os.Stat(path); err != nil {
 		os.WriteFile(path, []byte(content), 0o644)
 	}
+}
+
+// backfillAgentFlag ensures an existing agent file has a frontmatter flag (e.g. plans: true),
+// adding it if missing. No-op if the file is absent or the flag is already set.
+func backfillAgentFlag(path, key, val string) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	fm, body := parseFrontmatter(string(b))
+	if fm[key] == val {
+		return
+	}
+	fm[key] = val
+	order := []string{"name", "title", "provider", "model", "reviews", "plans"}
+	os.WriteFile(path, []byte(renderFrontmatter(fm, order, body)), 0o644)
 }
 
 // starterTeam is the executive team seeded by `mago init`. The CEO is the human.
