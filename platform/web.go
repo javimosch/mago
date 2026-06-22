@@ -164,7 +164,8 @@ const operatorsHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
 
 <h2>0. Prerequisites</h2>
 <ul>
-<li><b>tau</b> + <b>gh</b> on PATH, gh authenticated.</li>
+<li><b>tau</b> + <b>gh</b> on PATH, gh authenticated. Run <code>gh auth setup-git</code> once so the
+worker can push branches to <b>private</b> repos (public repos work without it).</li>
 <li><b>Provider key (BYOK):</b> put it in <code>~/.config/tau/config.json</code> →
 <code>{"keys": {"opencode-go": "sk-..."}}</code> (chmod 600), or export <code>OPENCODE_API_KEY</code>.
 The default agents use the <code>opencode-go</code> provider, so this key is all you need; without it
@@ -215,7 +216,8 @@ const llmsText = `# mago — operator guide for AI agents
 > The human only: pays, installs the GitHub App, answers clarify/HITL questions, says "go".
 
 ## Prerequisites
-- ` + "`tau`" + ` and ` + "`gh`" + ` on PATH; gh authenticated (` + "`gh auth status`" + `).
+- ` + "`tau`" + ` and ` + "`gh`" + ` on PATH; gh authenticated (` + "`gh auth status`" + `). Run
+  ` + "`gh auth setup-git`" + ` once so the worker can push branches to private repos (public repos work without it).
 - Provider key (BYOK): write ~/.config/tau/config.json -> {"keys":{"opencode-go":"sk-..."}} (chmod 600),
   or export OPENCODE_API_KEY. The default agents use the opencode-go provider, so this key is all
   you need. Without it tau falls back to a rate-limited shared key. (To use another harness/provider,
