@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type tickResult struct {
@@ -140,17 +142,40 @@ var providerKeyEnv = map[string]string{
 	"openai":      "OPENAI_API_KEY",
 }
 
-// warnIfNoProviderKey alerts (BYOK) when the resolved tau provider has no API key in the env.
-// Without it, tau silently falls back to its rate-limited BUILTIN key instead of the operator's
-// subscription — which is exactly what caused the throttling during batch runs.
+// warnIfNoProviderKey alerts (BYOK) when no API key is configured for the resolved tau provider
+// — neither in the env nor in ~/.config/tau/config.json. Without one, tau falls back to a
+// rate-limited keyless/builtin path, which is what caused the throttling during batch runs.
 func warnIfNoProviderKey() {
 	prov := os.Getenv("MAGO_PROVIDER") // the override operators actually use (e.g. opencode-go)
 	keyEnv, ok := providerKeyEnv[prov]
 	if !ok {
 		return
 	}
-	if os.Getenv(keyEnv) == "" {
-		fmt.Fprintf(os.Stderr, "[warn] %s is not set — tau will use its built-in (rate-limited) %s key; "+
-			"export your subscription key (e.g. `export %s=...`) to avoid throttling.\n", keyEnv, prov, keyEnv)
+	if os.Getenv(keyEnv) != "" || tauConfigHasKey(prov) {
+		return // key provided via env or the tau config file
 	}
+	fmt.Fprintf(os.Stderr, "[warn] no API key for provider %q — tau will use a rate-limited keyless/builtin "+
+		"path. Set %s in the env, or add it to ~/.config/tau/config.json: \"keys\": {%q: \"...\"}.\n",
+		prov, keyEnv, prov)
+}
+
+// tauConfigHasKey reports whether ~/.config/tau/config.json supplies a key for prov — a
+// per-provider `keys[prov]` entry or the global `api_key` fallback.
+func tauConfigHasKey(prov string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".config", "tau", "config.json"))
+	if err != nil {
+		return false
+	}
+	var c struct {
+		APIKey string            `json:"api_key"`
+		Keys   map[string]string `json:"keys"`
+	}
+	if json.Unmarshal(b, &c) != nil {
+		return false
+	}
+	return c.APIKey != "" || c.Keys[prov] != ""
 }
