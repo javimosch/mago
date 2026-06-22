@@ -115,23 +115,46 @@ func (w *eventWorker) run() {
 	for ev := range w.wake {
 		switch {
 		case ev.proactive:
+			if w.comp.guardBudget("proactive planning") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
 			w.comp.proposeBacklog()
+			w.comp.recordAction()
 		case ev.comms:
+			if w.comp.guardBudget("release note") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
 			w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle)
+			w.comp.recordAction()
 		case ev.prRepo != "":
+			if w.comp.guardBudget("PR review") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
 			w.comp.reviewPR(ev.prRepo, ev.prNum)
+			w.comp.recordAction()
 		case ev.target != "":
+			if w.comp.guardBudget("tick") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
 			if _, err := runTick(w.comp, ev.target); err != nil {
 				fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
 			}
+			w.comp.recordAction()
 		default:
+			if w.comp.guardBudget("reconcile") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
-			if _, err := reconcileOnce(w.comp); err != nil {
+			worked, err := reconcileOnce(w.comp)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
+			}
+			if worked { // only count cycles that actually did work (idle reconciles are free)
+				w.comp.recordAction()
 			}
 		}
 	}

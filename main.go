@@ -32,6 +32,8 @@ func main() {
 		err = cmdStatus(os.Args[2:])
 	case "answer":
 		err = cmdAnswer(os.Args[2:])
+	case "digest":
+		err = cmdDigest(os.Args[2:])
 	case "register":
 		err = cmdRegister(os.Args[2:])
 	case "login":
@@ -84,6 +86,7 @@ Usage:
                                   (--addr :8099, --secret <hmac>, --heartbeat <secs>,
                                    --relay = dial out to the platform instead of a tunnel)
   mago status [-C d]              show STATE.md, tasks, and pending HITL
+  mago digest [-C d]              "what your company did": backlog, PRs, HITL, autonomy budget
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
   mago version | help
 
