@@ -59,9 +59,10 @@ event- or cadence-driven and lands as GitHub artifacts (issues/PRs/comments), ke
   trigger non-code work: when a feature PR merges, the **CMO** autonomously produces comms — a
   `CHANGELOG.md`/release-note entry, an announcement draft — shipped as its own deliverable.
   Proves the company is more than a code bot. Opt-in per repo so it's safe.
-- **Proactive backlog — agents set the agenda.** The **Head of Product**, given the mission in
-  `STATE.md`, proposes and files issues itself on a cadence, instead of waiting for the CEO to
-  file every task. The single biggest step from "executes tasks" to "runs the company."
+- **Proactive backlog — agents set the agenda** *(shipped)*. With `MAGO_PROACTIVE=<secs>`, the
+  **Head of Product**, given the mission in `STATE.md`, proposes and files issues itself on a
+  cadence — capped (≤2/cycle, stops at 3 active) and deduped — instead of waiting for the CEO to
+  file every task. The biggest step from "executes tasks" to "runs the company." (`backlog.go`)
 - **Autonomy & trust guardrails.** Token/cost **budgets**, a daily **digest** ("what your company
   did today"), safe-action boundaries, and auto-escalation — so a company runs for days with
   minimal HITL. Tracked by an **autonomy metric**: % of tasks completed with no human input.

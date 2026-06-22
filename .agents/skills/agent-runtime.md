@@ -66,6 +66,17 @@ mago comment, recognized by `isMagoComment`, so no self-wake) and only fires for
 branches, so it can't loop. This is the v1.5 "task-executor → company-operator" direction (see
 `docs/ROADMAP.md`).
 
+## Proactive backlog (agents set the agenda)
+
+With `MAGO_PROACTIVE=<secs>`, a cadence ticks the **planner** (Head of Product, `plans: true`) to
+read the **mission** (`## Mission` in STATE.md) and **file new issues** itself to advance it —
+instead of waiting for the CEO to file every task (`backlog.go`). Guardrails: skips if no mission is
+set (placeholder `(Set by the CEO…)` counts as unset); proposes at most `proactivePerCycle` (2) per
+cycle and never when the active (not-done) backlog is ≥ `proactiveBacklogCap` (3); dedupes against
+open + shipped titles. Each proposed issue gets a "📋 Proposed by the Head of Product" comment, then
+flows through the normal route → implement → review → merge loop. The full self-running chain:
+**planner files an issue → CTO ships a PR → reviewer merges → CMO announces it.**
+
 ## Provider
 
 Agents run via **tau**. The starter personas default to **`opencode-go` / `deepseek-v4-flash`**
