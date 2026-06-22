@@ -17,17 +17,18 @@ const (
 	proactivePerCycle   = 2 // max new issues filed per planning cycle
 )
 
-// proposeBacklog asks the planner to file up to a few mission-advancing tasks, if the backlog is low.
-func (c *Company) proposeBacklog() {
+// proposeBacklog asks the planner to file up to a few mission-advancing tasks, if the backlog is
+// low. Returns the number of issues filed (0 = no work done — doesn't count against the budget).
+func (c *Company) proposeBacklog() int {
 	mission := c.missionText()
 	if mission == "" {
 		fmt.Fprintln(os.Stderr, "[backlog] no mission set in STATE.md — skipping proactive planning")
-		return
+		return 0
 	}
 	tasks, err := c.tasks.ListTasks()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[backlog] list tasks: %v\n", err)
-		return
+		return 0
 	}
 	var openTitles []string
 	active := 0
@@ -43,13 +44,13 @@ func (c *Company) proposeBacklog() {
 	}
 	if want <= 0 {
 		fmt.Fprintf(os.Stderr, "[backlog] %d active task(s) >= cap %d — not proposing\n", active, proactiveBacklogCap)
-		return
+		return 0
 	}
 
 	planner := c.plannerAgent()
 	if planner == nil {
 		fmt.Fprintln(os.Stderr, "[backlog] no planner (plans: true) in roster — skipping")
-		return
+		return 0
 	}
 
 	prompt := fmt.Sprintf(`You are the Head of Product. Propose the %d most valuable NEXT tasks to advance the mission.
@@ -68,7 +69,7 @@ ALREADY SHIPPED (do not repeat):
 	out, err := tauComplete(planner, prompt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[backlog] planner failed: %v\n", err)
-		return
+		return 0
 	}
 
 	filed := 0
@@ -93,6 +94,7 @@ ALREADY SHIPPED (do not repeat):
 	if filed == 0 {
 		fmt.Fprintln(os.Stderr, "[backlog] planner proposed nothing new")
 	}
+	return filed
 }
 
 // plannerAgent loads the designated planner (frontmatter `plans: true`), or nil.
