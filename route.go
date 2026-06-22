@@ -107,7 +107,18 @@ func plannerName(agents []*Agent) string {
 	return ""
 }
 
-// routeTask asks the cheap model which agent should own a task, given the roster.
+// implementerName returns the designated implementer (frontmatter `implements: true`), or "".
+func implementerName(agents []*Agent) string {
+	for _, a := range agents {
+		if a.Implements {
+			return a.Name
+		}
+	}
+	return ""
+}
+
+// routeTask asks the cheap model which agent should own a task, given the roster, with explicit
+// role rules and per-agent role hints so engineering work lands on the implementer (not the CMO).
 func routeTask(carrier *Agent, t *Task, agents []*Agent) string {
 	// Reviewers never own issue-tasks — they review PRs via the pull_request event path
 	// (reviewPR), not task routing. Excluding them here keeps an implement task whose text
@@ -124,9 +135,21 @@ func routeTask(carrier *Agent, t *Task, agents []*Agent) string {
 	}
 	var roster strings.Builder
 	for _, a := range candidates {
-		roster.WriteString("- " + a.Name + ": " + a.Title + "\n")
+		hint := " — marketing, READMEs, docs, copy, announcements"
+		switch {
+		case a.Implements:
+			hint = " — code: features, bug fixes, refactors, tests, technical implementation"
+		case a.Plans:
+			hint = " — product specs, requirements, scoping, prioritization"
+		}
+		roster.WriteString("- " + a.Name + ": " + a.Title + hint + "\n")
 	}
 	prompt := fmt.Sprintf(`Assign this task to exactly one team member based on their role.
+
+Routing rules:
+- Anything that changes code (features, bug fixes, refactors, tests, technical work) -> the implementer.
+- Marketing, READMEs, docs, copy, release notes, announcements -> the marketing role.
+- Product specs, requirements, scoping, prioritization -> the product role.
 
 TASK TITLE: %s
 TASK DETAIL: %s
@@ -136,15 +159,21 @@ TEAM (name: role):
 Reply with ONLY the name of the single best owner, nothing else.`,
 		t.Title, oneLine(t.Body), roster.String())
 
-	out, err := tauComplete(carrier, prompt)
-	if err != nil {
-		return ""
-	}
-	low := strings.ToLower(out)
-	for _, a := range candidates {
-		if strings.Contains(low, strings.ToLower(a.Name)) {
-			return a.Name
+	if out, err := tauComplete(carrier, prompt); err == nil {
+		low := strings.ToLower(out)
+		for _, a := range candidates {
+			if strings.Contains(low, strings.ToLower(a.Name)) {
+				return a.Name
+			}
 		}
+	}
+	// Model failed or returned no recognizable name: default to the implementer (most tasks are
+	// engineering work), then any candidate — never leave a routable task unowned.
+	if impl := implementerName(candidates); impl != "" {
+		return impl
+	}
+	if len(candidates) > 0 {
+		return candidates[0].Name
 	}
 	return ""
 }

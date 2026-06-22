@@ -60,6 +60,7 @@ func cmdInit(args []string) error {
 	// companies scaffolded before these flags existed need them to use review/clarify routing.
 	backfillAgentFlag(filepath.Join(agentsDir, "head-of-product.md"), "plans", "true")
 	backfillAgentFlag(filepath.Join(agentsDir, "head-of-org-engineering.md"), "reviews", "true")
+	backfillAgentFlag(filepath.Join(agentsDir, "cto.md"), "implements", "true")
 	writeIfMissing(filepath.Join(abs, "STATE.md"), fmt.Sprintf(stateTemplate, name))
 	writeIfMissing(filepath.Join(abs, ".mago", "skills", "INDEX.md"), "# Skills index\n\n")
 
@@ -227,7 +228,7 @@ func backfillAgentFlag(path, key, val string) {
 		return
 	}
 	fm[key] = val
-	order := []string{"name", "title", "provider", "model", "reviews", "plans"}
+	order := []string{"name", "title", "provider", "model", "reviews", "plans", "implements"}
 	os.WriteFile(path, []byte(renderFrontmatter(fm, order, body)), 0o644)
 }
 
@@ -244,6 +245,7 @@ name: cto
 title: Chief Technology Officer
 provider: opencode-go
 model: deepseek-v4-flash
+implements: true
 ---
 You are the CTO. You own engineering across the company's project repos. You pick up
 engineering tasks and implement them as clean, well-tested code shipped as pull requests.
