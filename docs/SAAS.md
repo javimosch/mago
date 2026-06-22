@@ -206,8 +206,10 @@ The whole loop is CLI + GitHub — no web panel. The human is the **CEO**; the s
    install→repos registry, `mago link` binds an installation to an account, and worker repo
    subscriptions are **entitlement-checked** against that registry (closes a cross-tenant relay
    leak). Verified end-to-end (ping ack, registry sync incl. add/remove/delete, link claim + 404,
-   entitlement drop of a spoofed repo). Remaining is operator-manual: create the App, customers
-   install it, point its webhook at the public host.
+   entitlement drop of a spoofed repo). The App is created in one click via
+   `mago-platform setup-github` (manifest flow). **Live in production:** App `mago-platform`
+   created + installed, `mago link`ed, and a real issue verified App → mago.intrane.fr → relay →
+   worker (entitlement from the installation alone) on 2026-06-22.
 6. **v2**: GitHub OAuth login (self-verifying account↔installation binding) + App installation
    tokens (replace the worker's `gh` PAT); live Stripe price; multiple workers per account.
 

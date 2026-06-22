@@ -93,7 +93,22 @@ curl -fsS -X POST https://mago.intrane.fr/auth/signup -d '{"email":"a@b.c","pass
 
 ## Not yet (follow-ups)
 
-- A real **GitHub App** (or `mago-platform webhook add --url https://mago.intrane.fr …`) to wire
-  customer repos to the live ingress.
 - A **systemd unit** would be sturdier than the `@reboot` crontab (needs root on dk1).
 - **Live Stripe** (`sk_live_`) + a live price for production billing.
+
+## GitHub App (live, App-mode)
+
+The platform runs in **App-mode**: GitHub App **`mago-platform`** (id `4111043`, owner
+`javimosch`, created via `mago-platform setup-github`) delivers webhooks. dk1's `.env` carries
+`GITHUB_APP_ID`, the App's `GITHUB_WEBHOOK_SECRET`, and `GITHUB_APP_PRIVATE_KEY=/home/dk1/
+mago-platform/github-app.pem`; entitlement is enforced from App installations.
+
+- Install on repos: `https://github.com/apps/mago-platform/installations/new`
+- On install, GitHub posts a signed `installation` event → the platform records
+  `installation_id → repos`; bind it to an account with `mago link --installation <id>`.
+- Verified end-to-end (2026-06-22): install (all repos) → `mago link` → a real `mago-poc` issue
+  flowed App → mago.intrane.fr (App-secret verified) → relay → worker, entitlement from the
+  installation alone.
+- App private key + creds: `~/.mago-platform/github-app.{pem,env}` on the operator machine.
+  The pre-App operator-token hook path was removed; old secret backups in `dk1:~/mago-platform/
+  .env.pre-app-bak`.
