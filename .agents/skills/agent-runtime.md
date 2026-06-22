@@ -77,6 +77,14 @@ open + shipped titles. Each proposed issue gets a "📋 Proposed by the Head of 
 flows through the normal route → implement → review → merge loop. The full self-running chain:
 **planner files an issue → CTO ships a PR → reviewer merges → CMO announces it.**
 
+## Autonomy guardrail (daily budget)
+
+`MAGO_DAILY_BUDGET=<n>` caps autonomous **work cycles** per UTC day (`budget.go`): the worker's run
+loop calls `guardBudget()` before each work-producing wake (reconcile / review / release note /
+planning) and skips + logs `[budget] … pausing` once the cap is hit, resuming at UTC midnight. Usage
+persists in `.mago/usage.json` (resets daily). `mago digest` surfaces it. This makes a company safe
+to leave running for days. Still coarse (1 cycle ≈ a few tau calls); token/cost budgets are a TODO.
+
 ## Provider
 
 Agents run via **tau**. The starter personas default to **`opencode-go` / `deepseek-v4-flash`**

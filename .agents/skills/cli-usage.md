@@ -25,8 +25,15 @@ mago serve [-C d] [--relay] [--heartbeat <s>] [--addr :8099] [--secret <hmac>]  
 mago run <agent> [-C d]                        # one tick   ·   mago tick [-C d] = reconcile once
 mago loop <agent> [-C d]                       # adaptive-cadence ticks
 mago status [-C d]                             # STATE.md, projects, tasks, pending HITL
+mago digest [-C d]                             # "what your company did": backlog, PRs (24h), HITL, budget
 mago answer <task-id> "<text>" [-C d]          # answer a needs_human task
 ```
+
+Autonomy (let a company run unattended): `MAGO_PROACTIVE=<secs>` ticks the planner to file
+mission-driven issues itself; `MAGO_COMMS=1` makes the CMO post a release note when a `mago/task-*`
+PR merges; `MAGO_DAILY_BUDGET=<n>` caps autonomous work cycles per UTC day (a reconcile/review/
+release-note/planning round each = 1; 0 = unlimited) and the worker pauses + says so when hit.
+`mago digest` shows the day's activity + budget usage; cron it or run it to check in.
 
 Backlog scoping (opt-in): set `MAGO_TASK_LABEL=mago` so the worker only reconciles issues
 carrying that label — lets `MAGO_GH_REPO` point at a real project repo without touching its other

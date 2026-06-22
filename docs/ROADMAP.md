@@ -63,9 +63,10 @@ event- or cadence-driven and lands as GitHub artifacts (issues/PRs/comments), ke
   **Head of Product**, given the mission in `STATE.md`, proposes and files issues itself on a
   cadence — capped (≤2/cycle, stops at 3 active) and deduped — instead of waiting for the CEO to
   file every task. The biggest step from "executes tasks" to "runs the company." (`backlog.go`)
-- **Autonomy & trust guardrails.** Token/cost **budgets**, a daily **digest** ("what your company
-  did today"), safe-action boundaries, and auto-escalation — so a company runs for days with
-  minimal HITL. Tracked by an **autonomy metric**: % of tasks completed with no human input.
+- **Autonomy & trust guardrails** *(shipped: budget + digest)*. `MAGO_DAILY_BUDGET=<n>` caps
+  autonomous work cycles per UTC day (worker pauses when hit; `budget.go`); `mago digest` shows the
+  day's backlog/PRs/HITL + budget usage (`digest.go`). Still open: cost/token-based budgets,
+  push delivery of the digest (Telegram — javimosch/mago#10), and auto-escalation on repeated fail.
 - **Dogfood — mago runs mago.** A real mago company operates mago's own roadmap, features, and
   marketing. The cheapest proof of "runs a company," and it yields real metrics instead of test
   accounts.
