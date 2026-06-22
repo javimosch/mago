@@ -1,0 +1,20 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "go-exit-codes",
+      "note": "For diagnostic/doctor-style commands that need non-standard exit codes (e.g. 101), call os.Exit() directly inside the function rather than returning an error — the main error handler always exits 1, which would violate the semantic exit code contract."
+    },
+    {
+      "skill": "gh-auth-check",
+      "note": "`gh auth status` exits 0 when authenticated and non-zero otherwise; suppress stdout/stderr with cmd.Stdout = nil / cmd.Stderr = nil to keep doctor output clean."
+    }
+  ],
+  "next": "Head of Org Engineering reviews and merges PR #12.",
+  "state_delta": "PR #12 opened: adds `mago worker doctor` command (worker.go + main.go); branch mago/task-11 pushed.",
+  "summary": "Implemented `mago worker doctor` pre-flight command. Created worker.go with four diagnostic checks (tau on PATH, gh on PATH, gh authenticated via `gh auth status`, OPENCODE_API_KEY env var set). Each check prints [ok]/[fail] with an actionable fix hint. Exits 101 on any failure per the AGENTS.md integration-error exit code range. Wired the `worker` top-level command into main.go switch and added it to the usage string. Build passes; manual runs confirm correct output and exit codes. PR #12 opened.",
+  "task_id": "11",
+  "task_status": "done",
+  "ts": "2026-06-22T18-24-01Z"
+}
