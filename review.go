@@ -24,11 +24,11 @@ func (c *Company) findReviewer() *Agent {
 	return nil
 }
 
-// reviewPR reviews a specific open PR (triggered by a pull_request webhook), with no
-// standing review task. To stay reliable on huge repos, the model NEVER touches the repo
-// or any tools: the worker fetches the diff, the model judges that text (verdict +
-// comment), and the worker posts the comment and squash-merges on approval. No-op unless
-// the PR's repo is one of this company's projects.
+// reviewPR reviews a specific open PR (triggered by a pull_request webhook), with no standing
+// review task. The MODEL never touches the repo — it judges the diff text (verdict + comment).
+// Separately, when verification is enabled (MAGO_VERIFY/MAGO_VERIFY_CMD), the WORKER checks out the
+// branch and runs build/tests; an auto-merge then requires both an approve AND a green check.
+// No-op unless the PR's repo is one of this company's projects.
 func (c *Company) reviewPR(prRepo string, prNum int) bool {
 	// Accept PRs on the company repo itself (label-scoped mode C) or any registered project repo.
 	known := prRepo == c.ghRepo
@@ -89,25 +89,48 @@ func (c *Company) reviewPR(prRepo string, prNum int) bool {
 	if strings.TrimSpace(comment) == "" {
 		comment = "(no comment)"
 	}
-	// MAGO_NO_MERGE: the reviewer still judges + comments, but leaves merging to the human (a
-	// guardrail for running mago on a repo where you don't want LLM-approved auto-merges to land).
-	noMerge := os.Getenv("MAGO_NO_MERGE") == "1"
-	tag := "**Review — " + reviewer.Title + ":** " + comment
-	if noMerge && verdict == "approve" {
-		tag += "\n\n_(auto-merge disabled — approved; merge when you're ready.)_"
+	// Verify the PR for real — check out the branch and run build/tests — so an auto-merge is
+	// trustworthy, not just a diff the model liked. No-op unless MAGO_VERIFY / MAGO_VERIFY_CMD is set.
+	vr := c.verifyPR(prRepo, prNum)
+	verifyOn := verifyEnabled()
+	noMerge := os.Getenv("MAGO_NO_MERGE") == "1"                 // never auto-merge (human merges)
+	mergeUnverified := os.Getenv("MAGO_MERGE_UNVERIFIED") == "1" // merge even when no check could run
+
+	approved := verdict == "approve"
+	verifyFailed := vr.ran && !vr.ok
+
+	body := "**Review — " + reviewer.Title + ":** " + comment
+	if vr.detail != "" {
+		body += "\n\n**Verification:** " + vr.detail
 	}
-	gh("-R", prRepo, "pr", "comment", n, "--body", tag)
+
+	suffix, doMerge, logmsg := "", false, ""
 	switch {
-	case verdict != "approve":
-		fmt.Fprintf(os.Stderr, "[review] PR #%d: changes requested (not merged)\n", prNum)
+	case verifyFailed: // build/tests failed — a real blocker the diff-only review can't see
+		suffix = "\n\n_Changes requested: automated verification failed._"
+		logmsg = "verification FAILED — changes requested"
+	case !approved:
+		logmsg = "changes requested (not merged)"
 	case noMerge:
-		fmt.Fprintf(os.Stderr, "[review] PR #%d approved — left for human merge (MAGO_NO_MERGE)\n", prNum)
+		suffix = "\n\n_(approved" + ifStr(vr.ok, " + verified", "") + " — auto-merge off; merge when ready.)_"
+		logmsg = "approved — left for human merge (MAGO_NO_MERGE)"
+	case verifyOn && !vr.ok && !(!vr.ran && mergeUnverified):
+		// verification is on but nothing green to stand on (no checks found, and not opted into
+		// merging unverified) — approve but don't auto-merge.
+		suffix = "\n\n_(approved but not auto-merged — no passing verification; set MAGO_MERGE_UNVERIFIED=1 or merge manually.)_"
+		logmsg = "approved, unverified — not merged"
 	default:
+		doMerge = true
+	}
+	gh("-R", prRepo, "pr", "comment", n, "--body", body+suffix)
+	if doMerge {
 		if mout, merr := gh("-R", prRepo, "pr", "merge", n, "--squash", "--delete-branch"); merr != nil {
 			fmt.Fprintf(os.Stderr, "[review] merge PR #%d failed: %v %s\n", prNum, merr, strings.TrimSpace(mout))
 		} else {
-			fmt.Fprintf(os.Stderr, "[review] PR #%d approved and merged\n", prNum)
+			fmt.Fprintf(os.Stderr, "[review] PR #%d approved%s and merged\n", prNum, ifStr(vr.ok, " + verified", ""))
 		}
+	} else {
+		fmt.Fprintf(os.Stderr, "[review] PR #%d: %s\n", prNum, logmsg)
 	}
 	return true
 }
