@@ -64,7 +64,7 @@ func defaultBranch(repo string) string {
 //
 // The agent then just edits, commits, pushes, and opens/updates the PR.
 func (c *Company) prepProjectWorkspace(t *Task, repo string) (string, error) {
-	ws := c.projectDir(t.Project)
+	ws := c.workspaceFor(t) // project dir for a project task, else the company's default workspace
 	if err := ensureClone(ws, repo); err != nil {
 		return "", err
 	}
