@@ -25,6 +25,8 @@ const (
 	labInProgress = "mago:in-progress"
 	labBlocked    = "mago:blocked"
 	labHITL       = "mago:hitl"
+	labClarify    = "mago:clarify" // human opt-in: run a clarification/planning phase first
+	labGo         = "mago:go"      // human approval: stop clarifying, implement now
 )
 
 func gh(args ...string) (string, error) {
@@ -45,6 +47,7 @@ func (b *githubBackend) gh(args ...string) (string, error) {
 func (b *githubBackend) ensureLabels() {
 	for _, l := range []struct{ name, color string }{
 		{labInProgress, "1d76db"}, {labBlocked, "b60205"}, {labHITL, "fbca04"},
+		{labClarify, "c5def5"}, {labGo, "0e8a16"},
 	} {
 		b.gh("label", "create", l.name, "--color", l.color, "--force")
 	}
@@ -125,6 +128,8 @@ func (gi ghIssue) toTask() *Task {
 		Assignee: gi.assignee(),
 		Project:  gi.project(),
 		Body:     strings.TrimSpace(body),
+		Clarify:  gi.hasLabel(labClarify),
+		Go:       gi.hasLabel(labGo),
 	}
 }
 
@@ -287,6 +292,21 @@ func (b *githubBackend) Bounce(t *Task) error {
 	t.Status = "open"
 	_, err := b.gh("issue", "comment", t.ID, "--body", "↩ Not the right role for this task — bouncing for re-routing.")
 	return err
+}
+
+// ClearClarify promotes a clarify-phase issue to implementation: drop the planning labels and
+// the planner's assignment so it re-routes fresh to an implementer (mago:go is left in place).
+func (b *githubBackend) ClearClarify(t *Task) error {
+	for _, l := range []string{labClarify, labHITL, labInProgress} {
+		b.gh("issue", "edit", t.ID, "--remove-label", l) // best-effort: ok if absent
+	}
+	if t.Assignee != "" {
+		b.gh("issue", "edit", t.ID, "--remove-label", "agent:"+t.Assignee)
+	}
+	t.Assignee = ""
+	t.Status = "open"
+	b.gh("issue", "comment", t.ID, "--body", "**mago** _(mago agent)_\n\n🚀 `mago:go` received — clarification done, routing to implementation.")
+	return nil
 }
 
 func (b *githubBackend) RecordProgress(t *Task, who, note string) error {

@@ -12,6 +12,7 @@ type Agent struct {
 	Provider string
 	Model    string
 	Reviews  bool // designated PR reviewer/merger (frontmatter `reviews: true`)
+	Plans    bool // designated planner for the clarification phase (frontmatter `plans: true`)
 	Persona  string
 }
 
@@ -25,6 +26,8 @@ type Task struct {
 	Project   string // which project repo/workspace this task targets ("" = default)
 	ClaimedAt string
 	Body      string
+	Clarify   bool // issue carries mago:clarify — run the planning phase before implementing
+	Go        bool // issue carries mago:go — the human approved; implement now
 }
 
 // Lesson is a learning/caveat/pitfall the agent recorded, destined for skills.

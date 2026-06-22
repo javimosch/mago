@@ -53,10 +53,22 @@ func reconcileOnce(comp *Company) (bool, error) {
 		return false, err
 	}
 	for _, t := range tasks {
+		// mago:go on a still-in-clarification task — promote it (drop planning state) so it
+		// routes fresh to an implementer.
+		if t.Go && (t.Clarify || t.Status == "needs_human") {
+			comp.tasks.ClearClarify(t)
+			fmt.Fprintf(os.Stderr, "[route] task #%s: mago:go -> promoting to implementation\n", t.ID)
+		}
 		if t.Status != "open" || t.Assignee != "" {
 			continue
 		}
-		owner := routeTask(agents[0], t, agents)
+		owner := ""
+		if t.Clarify && !t.Go { // clarification phase -> the planner (head-of-product), not the implement router
+			owner = plannerName(agents)
+		}
+		if owner == "" {
+			owner = routeTask(agents[0], t, agents)
+		}
 		if owner == "" {
 			fmt.Fprintf(os.Stderr, "[route] task #%s -> (no match)\n", t.ID)
 			continue
@@ -65,7 +77,7 @@ func reconcileOnce(comp *Company) (bool, error) {
 			fmt.Fprintf(os.Stderr, "[route] task #%s: %v\n", t.ID, err)
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "[route] task #%s -> %s\n", t.ID, owner)
+		fmt.Fprintf(os.Stderr, "[route] task #%s -> %s%s\n", t.ID, owner, ifStr(t.Clarify && !t.Go, " (clarify)", ""))
 	}
 
 	worked := false
@@ -82,6 +94,17 @@ func reconcileOnce(comp *Company) (bool, error) {
 		}
 	}
 	return worked, nil
+}
+
+// plannerName returns the designated planner (frontmatter `plans: true`) for the clarification
+// phase, or "" if none — callers then fall back to the normal router.
+func plannerName(agents []*Agent) string {
+	for _, a := range agents {
+		if a.Plans {
+			return a.Name
+		}
+	}
+	return ""
 }
 
 // routeTask asks the cheap model which agent should own a task, given the roster.
