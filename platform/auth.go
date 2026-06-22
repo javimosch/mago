@@ -98,6 +98,7 @@ func (s *server) handleSignup(w http.ResponseWriter, r *http.Request) {
 			uu.LicenseKey = genLicense()
 		}
 	})
+	s.store.LogEvent("signup", u.ID, "48h trial")
 	writeJSON(w, 200, map[string]string{"token": jwtSign(s.jwtSecret, u.ID, u.Email)})
 }
 

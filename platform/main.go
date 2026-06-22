@@ -40,6 +40,9 @@ func main() {
 		case "status":
 			fail(cmdStatus())
 			return
+		case "activity": // onboarding observability: signups, subs, worker connects
+			fail(cmdActivity(os.Args[2:]))
+			return
 		case "setup-github": // create the GitHub App via the manifest flow (one browser click)
 			fail(cmdSetupGithub(os.Args[2:]))
 			return
@@ -92,17 +95,17 @@ func runServer(port string) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") })
-	mux.HandleFunc("/", s.handleLanding)         // public landing (also catches unmatched -> 404)
+	mux.HandleFunc("/", s.handleLanding) // public landing (also catches unmatched -> 404)
 	mux.HandleFunc("/install.sh", s.handleInstall)
 	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
 	mux.HandleFunc("/operators", s.handleOperators)
-	mux.HandleFunc("/llms.txt", s.handleLLMs) // agent-readable onboarding (the operator "skill")
+	mux.HandleFunc("/llms.txt", s.handleLLMs)       // agent-readable onboarding (the operator "skill")
 	mux.HandleFunc("/subscribed", handleSubscribed) // Stripe success/cancel landing (CLI onboarding)
 	mux.HandleFunc("/auth/signup", s.handleSignup)
 	mux.HandleFunc("/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/account", s.handleAccount)
 	mux.HandleFunc("/api/checkout", s.handleCheckout)
-	mux.HandleFunc("/api/portal", s.handlePortal) // `mago billing`: Stripe customer portal link
+	mux.HandleFunc("/api/portal", s.handlePortal)               // `mago billing`: Stripe customer portal link
 	mux.HandleFunc("/api/installations", s.handleInstallations) // `mago link`: claim/list App installs
 	mux.HandleFunc("/stripe/webhook", s.handleWebhook)
 	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)

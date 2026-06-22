@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -125,6 +126,7 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 	s.hub.register(conn)
 	defer s.hub.unregister(conn)
 	log.Printf("relay: worker connected (user %d, repos=%v)", u.ID, keys(repos))
+	s.store.LogEvent("worker_connect", u.ID, "repos="+strings.Join(keys(repos), ","))
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -139,6 +141,7 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done(): // worker disconnected
 			log.Printf("relay: worker disconnected (user %d)", u.ID)
+			s.store.LogEvent("worker_disconnect", u.ID, "")
 			return
 		case msg, open := <-conn.ch:
 			if !open { // replaced by a newer connection
@@ -265,6 +268,7 @@ func (s *server) handleInstallations(w http.ResponseWriter, r *http.Request) {
 			httpErr(w, 404, err.Error())
 			return
 		}
+		s.store.LogEvent("linked", uid, fmt.Sprintf("installation %d (%d repos)", in.InstallationID, len(s.store.EntitledRepos(uid))))
 	}
 	writeJSON(w, 200, map[string]any{
 		"installations": s.store.InstallationsForAccount(uid),

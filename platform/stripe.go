@@ -179,6 +179,7 @@ func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 				}
 			})
 			log.Printf("stripe: user %d activated (mago)", uid)
+			s.store.LogEvent("subscribed", uid, "→ mago €20/mo")
 		}
 	case "customer.subscription.deleted":
 		var o struct {
@@ -188,6 +189,7 @@ func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		if uid := atoi(o.Metadata["user_id"]); uid > 0 {
 			s.store.Update(uid, func(u *User) { u.Plan = "free" })
 			log.Printf("stripe: user %d downgraded (free)", uid)
+			s.store.LogEvent("canceled", uid, "→ free")
 		}
 	}
 	w.WriteHeader(200)

@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS stripe_events (
   id      TEXT PRIMARY KEY,
   seen_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS events (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts      INTEGER NOT NULL,
+  kind    TEXT NOT NULL,              -- signup | subscribed | canceled | worker_connect | worker_disconnect | linked
+  user_id INTEGER NOT NULL DEFAULT 0,
+  detail  TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS installations (
   installation_id INTEGER PRIMARY KEY,        -- GitHub App installation id
   account_id      INTEGER NOT NULL DEFAULT 0, -- mago user id; 0 = unclaimed (set by ` + "`mago link`" + `)
@@ -146,6 +153,65 @@ func (s *Store) Update(id int64, fn func(*User)) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// --- onboarding observability ---
+
+// Event is a recorded onboarding moment (signup, subscribe, worker connect, …) for `mago-platform activity`.
+type Event struct {
+	TS     int64
+	Kind   string
+	UserID int64
+	Email  string
+	Detail string
+}
+
+// LogEvent records an onboarding event (best-effort; never blocks the request path).
+func (s *Store) LogEvent(kind string, uid int64, detail string) {
+	s.db.Exec("INSERT INTO events (ts, kind, user_id, detail) VALUES (?, ?, ?, ?)", time.Now().Unix(), kind, uid, detail)
+}
+
+// RecentEvents returns the newest events first, resolving the account email when known.
+func (s *Store) RecentEvents(limit int) []Event {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := s.db.Query(
+		"SELECT e.ts, e.kind, e.user_id, COALESCE(u.email,''), e.detail FROM events e "+
+			"LEFT JOIN users u ON u.id = e.user_id ORDER BY e.id DESC LIMIT ?", limit)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []Event
+	for rows.Next() {
+		var e Event
+		if rows.Scan(&e.TS, &e.Kind, &e.UserID, &e.Email, &e.Detail) == nil {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// Stats is a point-in-time account breakdown for the activity summary line.
+type Stats struct {
+	Total, Free, TrialLive, TrialExpired, Active int
+}
+
+func (s *Store) Stats() Stats {
+	now := time.Now().Unix()
+	one := func(q string, args ...any) int {
+		var n int
+		s.db.QueryRow(q, args...).Scan(&n)
+		return n
+	}
+	return Stats{
+		Total:        one("SELECT COUNT(*) FROM users"),
+		Free:         one("SELECT COUNT(*) FROM users WHERE plan='free'"),
+		Active:       one("SELECT COUNT(*) FROM users WHERE plan='mago'"),
+		TrialLive:    one("SELECT COUNT(*) FROM users WHERE plan='trial' AND trial_ends > ?", now),
+		TrialExpired: one("SELECT COUNT(*) FROM users WHERE plan='trial' AND trial_ends <= ?", now),
+	}
 }
 
 // FirstEvent records a stripe event id; returns false if already seen (webhook dedup).
