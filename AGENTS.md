@@ -89,3 +89,10 @@ authenticated; fail with a clear `100–109` integration error, not a crash, whe
   `docs/SAAS.md` authoritative; update them when a locked decision changes.
 - When mago's behavior changes in a way that affects how agents operate it, update the matching
   skill in `.agents/skills/`.
+
+## Metrics / observability
+
+- Asked for **stats on prod/live/dk1 activity**? Start with `mago-platform activity` on dk1
+  (accounts breakdown + signup/subscribe/worker-connect timeline), then SQLite queries on
+  `platform.db` for anything ad-hoc. Full playbook: [`.agents/skills/metrics.md`](.agents/skills/metrics.md).
+  Read-only on prod; never print secrets.
