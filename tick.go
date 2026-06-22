@@ -45,10 +45,11 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 	if task == nil {
 		return tickResult{worked: false, signal: "idle"}, nil
 	}
-	// Structural guard: a review-only agent must never sit on a non-review task.
-	// Bounce it (unassign + reopen) so it re-routes — no model call, no stall.
-	if isReviewerRole(a) && !looksLikeReview(task) {
-		fmt.Fprintf(os.Stderr, "[guard] %s is review-only but #%s isn't a review task — bouncing for re-routing\n", agentName, task.ID)
+	// Structural guard: a review-only agent must never sit on an issue-task — reviewers act on
+	// PRs via the pull_request event path (reviewPR), not task routing. Bounce it (unassign +
+	// reopen) so it re-routes to an implementer — no model call, no stall.
+	if isReviewerRole(a) {
+		fmt.Fprintf(os.Stderr, "[guard] %s is review-only — bouncing #%s for re-routing\n", agentName, task.ID)
 		comp.tasks.Bounce(task)
 		return tickResult{worked: true, signal: "working"}, nil
 	}
