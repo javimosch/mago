@@ -7,13 +7,14 @@ import (
 
 // Agent is a company worker definition (.mago/agents/<name>.md).
 type Agent struct {
-	Name     string
-	Title    string
-	Provider string
-	Model    string
-	Reviews  bool // designated PR reviewer/merger (frontmatter `reviews: true`)
-	Plans    bool // designated planner for the clarification phase (frontmatter `plans: true`)
-	Persona  string
+	Name       string
+	Title      string
+	Provider   string
+	Model      string
+	Reviews    bool // designated PR reviewer/merger (frontmatter `reviews: true`)
+	Plans      bool // designated planner for the clarification phase (frontmatter `plans: true`)
+	Implements bool // designated implementer: owns code tasks by default (frontmatter `implements: true`)
+	Persona    string
 }
 
 // Task is a unit of work (tasks/task-<id>.md). The Body holds the description

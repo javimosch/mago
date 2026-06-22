@@ -203,13 +203,14 @@ func (c *Company) loadAgent(name string) (*Agent, error) {
 	}
 	fm, body := parseFrontmatter(string(b))
 	return &Agent{
-		Name:     name,
-		Title:    orDefault(fm["title"], name),
-		Provider: orDefault(fm["provider"], "deepseek"),
-		Model:    orDefault(fm["model"], "deepseek-chat"),
-		Reviews:  fm["reviews"] == "true",
-		Plans:    fm["plans"] == "true",
-		Persona:  strings.TrimSpace(body),
+		Name:       name,
+		Title:      orDefault(fm["title"], name),
+		Provider:   orDefault(fm["provider"], "deepseek"),
+		Model:      orDefault(fm["model"], "deepseek-chat"),
+		Reviews:    fm["reviews"] == "true",
+		Plans:      fm["plans"] == "true",
+		Implements: fm["implements"] == "true",
+		Persona:    strings.TrimSpace(body),
 	}, nil
 }
 
