@@ -17,6 +17,18 @@ import (
 // and holds a streaming connection; the platform pushes matching repo events down it. Each
 // event is fed through the SAME classifyEvent -> signal path that the local listener uses.
 
+// workerID identifies this worker to the platform so an account can run several at once (each
+// serving its own repos). Defaults to the hostname; override with MAGO_WORKER_ID.
+func workerID() string {
+	if id := strings.TrimSpace(os.Getenv("MAGO_WORKER_ID")); id != "" {
+		return id
+	}
+	if h, err := os.Hostname(); err == nil && strings.TrimSpace(h) != "" {
+		return h
+	}
+	return "worker"
+}
+
 // runRelay connects to the platform and feeds relayed GitHub events into the worker. It blocks,
 // reconnecting with backoff until ctx is cancelled. License key + platform URL come from the
 // CLI config (~/.mago/config.json); repos come from the company.
@@ -49,6 +61,7 @@ func streamRelay(ctx context.Context, w *eventWorker, cfg *cliConfig, repos []st
 	q := url.Values{}
 	q.Set("token", cfg.LicenseKey)
 	q.Set("repos", strings.Join(repos, ","))
+	q.Set("worker", workerID()) // identifies this worker so the platform keeps several per account
 	u := strings.TrimRight(cfg.PlatformURL, "/") + "/ws/worker?" + q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
