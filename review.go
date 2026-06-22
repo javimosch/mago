@@ -30,15 +30,16 @@ func (c *Company) findReviewer() *Agent {
 // comment), and the worker posts the comment and squash-merges on approval. No-op unless
 // the PR's repo is one of this company's projects.
 func (c *Company) reviewPR(prRepo string, prNum int) {
-	inProject := false
+	// Accept PRs on the company repo itself (label-scoped mode C) or any registered project repo.
+	known := prRepo == c.ghRepo
 	for _, repo := range c.loadProjects() {
 		if repo == prRepo {
-			inProject = true
+			known = true
 			break
 		}
 	}
-	if !inProject {
-		fmt.Fprintf(os.Stderr, "[review] PR #%d on %s is not a company project — ignoring\n", prNum, prRepo)
+	if !known {
+		fmt.Fprintf(os.Stderr, "[review] PR #%d on %s is not a company repo/project — ignoring\n", prNum, prRepo)
 		return
 	}
 	reviewer := c.findReviewer()

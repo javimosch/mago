@@ -191,8 +191,24 @@ func (c *Company) loadAgent(name string) (*Agent, error) {
 		Provider: orDefault(fm["provider"], "deepseek"),
 		Model:    orDefault(fm["model"], "deepseek-chat"),
 		Reviews:  fm["reviews"] == "true",
+		Plans:    fm["plans"] == "true",
 		Persona:  strings.TrimSpace(body),
 	}, nil
+}
+
+func isPlannerRole(a *Agent) bool { return a.Plans }
+
+// clarifyInstructions guides the planner during the mago:clarify phase: produce a plan + open
+// questions and hand back to the human, iterating until they add mago:go. No code, no PR.
+func clarifyInstructions() string {
+	return "The CEO opened this with `mago:clarify` — it needs a planning pass BEFORE any code.\n" +
+		"- Do NOT modify any repo, write code, or open a PR this tick.\n" +
+		"- Read the issue and the progress log above (your prior plan + the CEO's answers).\n" +
+		"- Produce a concise PLAN (approach + key steps) and a short numbered list of OPEN QUESTIONS the CEO must answer.\n" +
+		"- Set task_status to \"needs_human\" and put the plan + questions in hitl_question.\n" +
+		"- Each round: fold in the CEO's latest answers, tighten the plan, ask only what's still unresolved.\n" +
+		"- When the plan is solid, still set needs_human, present the FINAL plan, and tell the CEO to add the " +
+		"`mago:go` label to start implementation."
 }
 
 // reflectionInstruction tells the agent to end with a single fenced json block we parse.
@@ -304,7 +320,10 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	b.WriteString("## Your role\n" + a.Title + "\n\n")
 	b.WriteString("## Company state (STATE.md)\n" + readFileOr(c.stateFile(), "(empty)") + "\n\n")
 	b.WriteString(fmt.Sprintf("## Active task #%s: %s\nstatus: %s\n\n%s\n\n", t.ID, t.Title, t.Status, t.Body))
-	if repo := c.taskRepo(t); repo != "" {
+	clarifyMode := t.Clarify && !t.Go
+	if clarifyMode {
+		b.WriteString("## CLARIFICATION PHASE (do NOT implement)\n" + clarifyInstructions() + "\n\n")
+	} else if repo := c.taskRepo(t); repo != "" {
 		// Which issue the PR should close (0 = none):
 		//   - project + mirror_issue (B): a tracking issue opened on the project repo, once.
 		//   - working the company repo directly (C, label-scoped): the task's own issue.
@@ -322,8 +341,12 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	}
 	b.WriteString("## Skills (learnings/caveats/pitfalls from past work)\n" + c.selectSkillsText(a, t) + "\n\n")
 	b.WriteString("## Your recent runs\n" + c.recentJournalSummaries(a.Name, 3) + "\n\n")
-	b.WriteString("## Instruction\nWork on the active task for this tick. First check the progress log and state to " +
-		"see what is already done — do not repeat it. Make concrete progress, then emit your reflection JSON.\n")
+	if clarifyMode {
+		b.WriteString("## Instruction\nFollow the CLARIFICATION PHASE rules above: plan + open questions, then needs_human. Do NOT write code or open a PR this tick.\n")
+	} else {
+		b.WriteString("## Instruction\nWork on the active task for this tick. First check the progress log and state to " +
+			"see what is already done — do not repeat it. Make concrete progress, then emit your reflection JSON.\n")
+	}
 	return b.String()
 }
 
