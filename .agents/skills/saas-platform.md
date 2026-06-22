@@ -44,6 +44,12 @@ a repo event arrives at `/webhooks/github/`, signature is verified against `GITH
 and it's streamed to the worker serving that repo, which feeds it through the same
 `classifyEvent` path the local listener uses.
 
+**Multiple workers per account:** connections are keyed by `license + worker-id` (the worker sends
+`&worker=`, default hostname / `MAGO_WORKER_ID`), so one account can hold many live workers at once
+(each on its own machine, serving its own repos) — not just the newest. `route()` delivers each
+repo's events to exactly ONE matching worker (stable by repo hash), so two workers serving the same
+repo never double-process the same event. Connect events are logged per worker (`mago-platform activity`).
+
 ## Repo entitlement (multi-tenant safety)
 
 Workers self-declare `?repos=`, so when `GITHUB_APP_ID` (or `GITHUB_ENFORCE_ENTITLEMENT=1`) is

@@ -35,6 +35,11 @@ PR merges; `MAGO_DAILY_BUDGET=<n>` caps autonomous work cycles per UTC day (a re
 release-note/planning round each = 1; 0 = unlimited) and the worker pauses + says so when hit.
 `mago digest` shows the day's activity + budget usage; cron it or run it to check in.
 
+**Multiple workers per account:** run a worker on as many machines as you like under the same
+account/license — each with its own company + repos. They coexist on the relay (keyed by
+`MAGO_WORKER_ID`, default the hostname), and the platform routes each repo's events to exactly one
+worker. Run different companies/repos per machine to parallelize; distinct hostnames need no config.
+
 Backlog scoping (opt-in): set `MAGO_TASK_LABEL=mago` so the worker only reconciles issues
 carrying that label — lets `MAGO_GH_REPO` point at a real project repo without touching its other
 issues; adding the label to an existing issue triggers pickup (the `issues.labeled` wake fires

@@ -78,7 +78,10 @@ event- or cadence-driven and lands as GitHub artifacts (issues/PRs/comments), ke
 
 - **GitHub login** (replaces email/password) and a **GitHub App** (fine-grained tokens,
   one central webhook ingress, bot identity).
-- **Multiple workers per account** with load distribution.
+- **Multiple workers per account** *(shipped)* — workers coexist on the relay keyed by
+  `MAGO_WORKER_ID` (default hostname); each repo's events route to exactly one worker. Run a worker
+  per machine/company. (Load-balancing *within* a single repo is still future work — currently one
+  repo maps to one worker.)
 - **Hiring** — the **Head of Org Engineering** grows from maintaining the company to
   staffing it: writing new agent definitions (PRs to `main`) when the backlog needs a role
   that doesn't exist. The company hires itself.
