@@ -3,3 +3,7 @@
 *.test
 platform/.env
 .env
+/mago-platform
+*.db
+*.db-wal
+*.db-shm

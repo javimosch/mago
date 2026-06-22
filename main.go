@@ -32,6 +32,20 @@ func main() {
 		err = cmdStatus(os.Args[2:])
 	case "answer":
 		err = cmdAnswer(os.Args[2:])
+	case "digest":
+		err = cmdDigest(os.Args[2:])
+	case "register":
+		err = cmdRegister(os.Args[2:])
+	case "login":
+		err = cmdLogin(os.Args[2:])
+	case "subscribe":
+		err = cmdSubscribe(os.Args[2:])
+	case "billing":
+		err = cmdBilling(os.Args[2:])
+	case "account":
+		err = cmdAccount(os.Args[2:])
+	case "link":
+		err = cmdLink(os.Args[2:])
 	case "worker":
 		err = cmdWorker(os.Args[2:])
 	case "version", "-v", "--version":
@@ -53,15 +67,28 @@ func usage() {
 	fmt.Print(`mago ` + version + ` — local POC: autonomy-level-3 agents over a local company
 
 Usage:
+  Account (platform):
+  mago register [--email <e>] [--password <p>]   create an account (token -> ~/.mago/config.json)
+  mago login [--email <e>] [--password <p>]      log in to an existing account
+  mago subscribe                  print the Stripe checkout link (€20/month)
+  mago billing                    print the Stripe customer-portal link (manage/cancel)
+  mago account status             show plan + license key
+  mago link --installation <id>   claim a GitHub App installation (entitles your repos)
+  mago link list                  show linked installations + entitled repos
+
+  Company (local/worker):
   mago init [dir]                 scaffold a local company (.mago/, STATE.md, tasks/, workspace/)
   mago task add "<title>" [--project <p>] [-C d]  create a task (optionally for a project)
-  mago project add <name> [-C d]  register a project repo/workspace
+  mago project add <name> --repo owner/repo [-C d]   register a project repo (or: add owner/repo)
+  mago project list [-C d]        list registered projects + repos
   mago run <agent> [-C d]         run ONE tick: brief -> tau -> reflect -> write back
   mago loop <agent> [-C d]        run ticks on an adaptive cadence (--base/--max/--max-ticks secs)
   mago tick [-C d]                route open tasks to best-fit agents, then run each agent
   mago serve [-C d]               event-driven worker: GitHub webhooks wake a reconcile
-                                  (--addr :8099, --secret <hmac>, --heartbeat <secs>)
+                                  (--addr :8099, --secret <hmac>, --heartbeat <secs>,
+                                   --relay = dial out to the platform instead of a tunnel)
   mago status [-C d]              show STATE.md, tasks, and pending HITL
+  mago digest [-C d]              "what your company did": backlog, PRs, HITL, autonomy budget
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
   mago worker doctor               validate tau, gh, and OPENCODE_API_KEY (exits 101 on failure)
   mago version | help
@@ -71,6 +98,8 @@ Flags:
 
 Env overrides (smoke test):
   MAGO_PROVIDER, MAGO_MODEL    override the agent's tau provider/model
+  MAGO_PLATFORM_URL            platform API base (default http://localhost:9100)
+  MAGO_PASSWORD                non-interactive password for register/login
 
 The worker drives tau (stateless per tick) in <company>/workspace. Memory lives in
 files: STATE.md (world), tasks/ (task), .mago/skills/ (lessons), .mago/runs/ (journals).

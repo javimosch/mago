@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type tickResult struct {
@@ -45,10 +47,11 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 	if task == nil {
 		return tickResult{worked: false, signal: "idle"}, nil
 	}
-	// Structural guard: a review-only agent must never sit on a non-review task.
-	// Bounce it (unassign + reopen) so it re-routes — no model call, no stall.
-	if isReviewerRole(a) && !looksLikeReview(task) {
-		fmt.Fprintf(os.Stderr, "[guard] %s is review-only but #%s isn't a review task — bouncing for re-routing\n", agentName, task.ID)
+	// Structural guard: a review-only agent must never sit on an issue-task — reviewers act on
+	// PRs via the pull_request event path (reviewPR), not task routing. Bounce it (unassign +
+	// reopen) so it re-routes to an implementer — no model call, no stall.
+	if isReviewerRole(a) {
+		fmt.Fprintf(os.Stderr, "[guard] %s is review-only — bouncing #%s for re-routing\n", agentName, task.ID)
 		comp.tasks.Bounce(task)
 		return tickResult{worked: true, signal: "working"}, nil
 	}
@@ -56,7 +59,7 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 		return tickResult{}, err
 	}
 	ws := comp.workspaceFor(task)
-	if repo := comp.projectRepo(task.Project); task.Project != "" && repo != "" {
+	if repo := comp.taskRepo(task); repo != "" {
 		w, err := comp.prepProjectWorkspace(task, repo) // fetch + branch from latest origin/<default>
 		if err != nil {
 			return tickResult{}, err
@@ -130,4 +133,49 @@ func applyModelOverrides(a *Agent) {
 	if m := os.Getenv("MAGO_MODEL"); m != "" {
 		a.Model = m
 	}
+}
+
+// providerKeyEnv maps a tau provider to the env var tau reads for its API key.
+var providerKeyEnv = map[string]string{
+	"opencode-go": "OPENCODE_API_KEY",
+	"deepseek":    "DEEPSEEK_API_KEY",
+	"openai":      "OPENAI_API_KEY",
+}
+
+// warnIfNoProviderKey alerts (BYOK) when no API key is configured for the resolved tau provider
+// — neither in the env nor in ~/.config/tau/config.json. Without one, tau falls back to a
+// rate-limited keyless/builtin path, which is what caused the throttling during batch runs.
+func warnIfNoProviderKey() {
+	prov := os.Getenv("MAGO_PROVIDER") // the override operators actually use (e.g. opencode-go)
+	keyEnv, ok := providerKeyEnv[prov]
+	if !ok {
+		return
+	}
+	if os.Getenv(keyEnv) != "" || tauConfigHasKey(prov) {
+		return // key provided via env or the tau config file
+	}
+	fmt.Fprintf(os.Stderr, "[warn] no API key for provider %q — tau will use a rate-limited keyless/builtin "+
+		"path. Set %s in the env, or add it to ~/.config/tau/config.json: \"keys\": {%q: \"...\"}.\n",
+		prov, keyEnv, prov)
+}
+
+// tauConfigHasKey reports whether ~/.config/tau/config.json supplies a key for prov — a
+// per-provider `keys[prov]` entry or the global `api_key` fallback.
+func tauConfigHasKey(prov string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".config", "tau", "config.json"))
+	if err != nil {
+		return false
+	}
+	var c struct {
+		APIKey string            `json:"api_key"`
+		Keys   map[string]string `json:"keys"`
+	}
+	if json.Unmarshal(b, &c) != nil {
+		return false
+	}
+	return c.APIKey != "" || c.Keys[prov] != ""
 }

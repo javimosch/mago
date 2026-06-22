@@ -53,10 +53,22 @@ func reconcileOnce(comp *Company) (bool, error) {
 		return false, err
 	}
 	for _, t := range tasks {
+		// mago:go on a still-in-clarification task — promote it (drop planning state) so it
+		// routes fresh to an implementer.
+		if t.Go && (t.Clarify || t.Status == "needs_human") {
+			comp.tasks.ClearClarify(t)
+			fmt.Fprintf(os.Stderr, "[route] task #%s: mago:go -> promoting to implementation\n", t.ID)
+		}
 		if t.Status != "open" || t.Assignee != "" {
 			continue
 		}
-		owner := routeTask(agents[0], t, agents)
+		owner := ""
+		if t.Clarify && !t.Go { // clarification phase -> the planner (head-of-product), not the implement router
+			owner = plannerName(agents)
+		}
+		if owner == "" {
+			owner = routeTask(agents[0], t, agents)
+		}
 		if owner == "" {
 			fmt.Fprintf(os.Stderr, "[route] task #%s -> (no match)\n", t.ID)
 			continue
@@ -65,7 +77,7 @@ func reconcileOnce(comp *Company) (bool, error) {
 			fmt.Fprintf(os.Stderr, "[route] task #%s: %v\n", t.ID, err)
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "[route] task #%s -> %s\n", t.ID, owner)
+		fmt.Fprintf(os.Stderr, "[route] task #%s -> %s%s\n", t.ID, owner, ifStr(t.Clarify && !t.Go, " (clarify)", ""))
 	}
 
 	worked := false
@@ -84,27 +96,60 @@ func reconcileOnce(comp *Company) (bool, error) {
 	return worked, nil
 }
 
-// routeTask asks the cheap model which agent should own a task, given the roster.
+// plannerName returns the designated planner (frontmatter `plans: true`) for the clarification
+// phase, or "" if none — callers then fall back to the normal router.
+func plannerName(agents []*Agent) string {
+	for _, a := range agents {
+		if a.Plans {
+			return a.Name
+		}
+	}
+	return ""
+}
+
+// implementerName returns the designated implementer (frontmatter `implements: true`), or "".
+func implementerName(agents []*Agent) string {
+	for _, a := range agents {
+		if a.Implements {
+			return a.Name
+		}
+	}
+	return ""
+}
+
+// routeTask asks the cheap model which agent should own a task, given the roster, with explicit
+// role rules and per-agent role hints so engineering work lands on the implementer (not the CMO).
 func routeTask(carrier *Agent, t *Task, agents []*Agent) string {
-	// Structural guard: reviewers are eligible only for review tasks. The LLM router
-	// can't be trusted to honour this, so we restrict the candidate set directly.
-	candidates := agents
-	if !looksLikeReview(t) {
-		var nonRev []*Agent
-		for _, a := range agents {
-			if !a.Reviews {
-				nonRev = append(nonRev, a)
-			}
+	// Reviewers never own issue-tasks — they review PRs via the pull_request event path
+	// (reviewPR), not task routing. Excluding them here keeps an implement task whose text
+	// merely mentions "PR"/"review"/"merge" from being misrouted to a reviewer (and burning a
+	// tick on a guaranteed reassign). Fall back to the full roster only if every agent reviews.
+	var candidates []*Agent
+	for _, a := range agents {
+		if !isReviewerRole(a) {
+			candidates = append(candidates, a)
 		}
-		if len(nonRev) > 0 {
-			candidates = nonRev
-		}
+	}
+	if len(candidates) == 0 {
+		candidates = agents
 	}
 	var roster strings.Builder
 	for _, a := range candidates {
-		roster.WriteString("- " + a.Name + ": " + a.Title + "\n")
+		hint := " — marketing, READMEs, docs, copy, announcements"
+		switch {
+		case a.Implements:
+			hint = " — code: features, bug fixes, refactors, tests, technical implementation"
+		case a.Plans:
+			hint = " — product specs, requirements, scoping, prioritization"
+		}
+		roster.WriteString("- " + a.Name + ": " + a.Title + hint + "\n")
 	}
 	prompt := fmt.Sprintf(`Assign this task to exactly one team member based on their role.
+
+Routing rules:
+- Anything that changes code (features, bug fixes, refactors, tests, technical work) -> the implementer.
+- Marketing, READMEs, docs, copy, release notes, announcements -> the marketing role.
+- Product specs, requirements, scoping, prioritization -> the product role.
 
 TASK TITLE: %s
 TASK DETAIL: %s
@@ -114,28 +159,21 @@ TEAM (name: role):
 Reply with ONLY the name of the single best owner, nothing else.`,
 		t.Title, oneLine(t.Body), roster.String())
 
-	out, err := tauComplete(carrier, prompt)
-	if err != nil {
-		return ""
-	}
-	low := strings.ToLower(out)
-	for _, a := range candidates {
-		if strings.Contains(low, strings.ToLower(a.Name)) {
-			return a.Name
+	if out, err := tauComplete(carrier, prompt); err == nil {
+		low := strings.ToLower(out)
+		for _, a := range candidates {
+			if strings.Contains(low, strings.ToLower(a.Name)) {
+				return a.Name
+			}
 		}
+	}
+	// Model failed or returned no recognizable name: default to the implementer (most tasks are
+	// engineering work), then any candidate — never leave a routable task unowned.
+	if impl := implementerName(candidates); impl != "" {
+		return impl
+	}
+	if len(candidates) > 0 {
+		return candidates[0].Name
 	}
 	return ""
-}
-
-// looksLikeReview reports whether a task is about reviewing/merging existing PRs —
-// the only kind of work a review-only agent may own. Checks the TITLE only: a GitHub
-// task's Body includes prior comments, which are polluted with review/merge chatter.
-func looksLikeReview(t *Task) bool {
-	s := strings.ToLower(t.Title)
-	for _, kw := range []string{"review", "merge", "pull request", "pr #", "approve"} {
-		if strings.Contains(s, kw) {
-			return true
-		}
-	}
-	return false
 }

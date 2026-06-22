@@ -28,28 +28,40 @@ func (c *Company) writeBack(a *Agent, t *Task, r *Reflection, raw string) error 
 	return nil
 }
 
+// progressNote formats a status update as readable markdown for an issue comment: a bold status
+// line, the summary as its own paragraph (structure preserved), and an optional Next line — so
+// comments read cleanly instead of a single run-on bold line.
+func progressNote(status, summary, next string) string {
+	s := "**" + status + "**\n\n" + strings.TrimSpace(summary)
+	if n := strings.TrimSpace(next); n != "" {
+		s += "\n\n_Next:_ " + oneLine(n)
+	}
+	return s
+}
+
 func (c *Company) applyTaskStatus(t *Task, a *Agent, r *Reflection) {
 	switch r.TaskStatus {
 	case "done":
-		c.tasks.RecordProgress(t, a.Name, "DONE: "+oneLine(r.Summary)+" (next: "+oneLine(r.Next)+")")
+		c.tasks.RecordProgress(t, a.Name, progressNote("✅ done", r.Summary, r.Next))
+		c.appendToSection("Shipped", fmt.Sprintf("- %s #%s %s", nowStamp(), t.ID, oneLine(truncate(t.Title, 120))))
 		c.tasks.SetStatus(t, "done")
 	case "needs_human":
 		q := r.HitlQuestion
 		if q == "" {
 			q = r.Next
 		}
-		c.tasks.RaiseHITL(t, a.Name, oneLine(q))
+		c.tasks.RaiseHITL(t, a.Name, strings.TrimSpace(q)) // keep markdown structure (don't flatten)
 	case "already_done":
-		c.tasks.RecordProgress(t, a.Name, "ALREADY DONE (no PR needed): "+oneLine(r.Summary))
+		c.tasks.RecordProgress(t, a.Name, progressNote("✅ already done (no PR needed)", r.Summary, ""))
 		c.tasks.SetStatus(t, "done")
 	case "reassign":
-		c.tasks.RecordProgress(t, a.Name, "REASSIGN (not my role): "+oneLine(r.Summary))
+		c.tasks.RecordProgress(t, a.Name, progressNote("↩ reassign (not my role)", r.Summary, ""))
 		c.tasks.Bounce(t)
 	case "blocked":
-		c.tasks.RecordProgress(t, a.Name, "BLOCKED: "+oneLine(r.Summary))
+		c.tasks.RecordProgress(t, a.Name, progressNote("⛔ blocked", r.Summary, r.Next))
 		c.tasks.SetStatus(t, "blocked")
 	default:
-		c.tasks.RecordProgress(t, a.Name, oneLine(r.Summary)+" (next: "+oneLine(r.Next)+")")
+		c.tasks.RecordProgress(t, a.Name, progressNote("… in progress", r.Summary, r.Next))
 		c.tasks.SetStatus(t, "in_progress")
 	}
 }
@@ -79,6 +91,54 @@ func (c *Company) writeRawFailure(a *Agent, t *Task, raw string) {
 	dir := filepath.Join(c.runsDir(), a.Name)
 	ensureDir(dir)
 	os.WriteFile(filepath.Join(dir, nowStamp()+"-RAW.txt"), []byte(raw), 0o644)
+}
+
+// appendToSection inserts a bullet under "## <header>" in STATE.md, replacing a placeholder like
+// "(nothing yet)" and de-duping. Used to keep curated sections (e.g. Shipped) current as work
+// completes, rather than only on threshold-gated compaction.
+func (c *Company) appendToSection(header, line string) {
+	p := c.stateFile()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return
+	}
+	content := string(b)
+	if strings.Contains(content, strings.TrimSpace(line)) {
+		return // already recorded
+	}
+	lines := strings.Split(content, "\n")
+	hdr := "## " + header
+	hi := -1
+	for i, l := range lines {
+		if strings.TrimSpace(l) == hdr {
+			hi = i
+			break
+		}
+	}
+	if hi < 0 {
+		return // section not present (e.g. minimal STATE.md) — skip
+	}
+	end := len(lines)
+	for i := hi + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "## ") {
+			end = i
+			break
+		}
+	}
+	var body []string // existing real bullets in the section (drop blanks + "(...)" placeholders)
+	for i := hi + 1; i < end; i++ {
+		t := strings.TrimSpace(lines[i])
+		if t == "" || strings.HasPrefix(t, "(") {
+			continue
+		}
+		body = append(body, lines[i])
+	}
+	body = append(body, line)
+	out := append([]string{}, lines[:hi+1]...)
+	out = append(out, body...)
+	out = append(out, "")
+	out = append(out, lines[end:]...)
+	os.WriteFile(p, []byte(strings.Join(out, "\n")), 0o644)
 }
 
 func (c *Company) appendState(line string) {

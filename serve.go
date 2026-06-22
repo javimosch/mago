@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,6 +22,7 @@ func cmdServe(args []string) error {
 	addr := ":8099"
 	secret := os.Getenv("MAGO_WEBHOOK_SECRET")
 	heartbeat := 0
+	relay := false
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
 		case "--addr":
@@ -38,35 +40,61 @@ func cmdServe(args []string) error {
 				heartbeat = atoiSafe(rest[i+1])
 				i++
 			}
+		case "--relay":
+			relay = true
 		}
 	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
+	warnIfNoProviderKey()
 
-	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 8)}
+	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 64)}
 	go w.run()
 	w.signal(wakeEvent{reason: "startup"})
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
 	}
+	// MAGO_PROACTIVE=<secs>: the planner proposes new backlog from the mission on this cadence.
+	if iv := atoiSafe(os.Getenv("MAGO_PROACTIVE")); iv > 0 {
+		go w.proactiveLoop(time.Duration(iv) * time.Second)
+	}
+	repos := comp.repos()
+	reposStr := "none — add with `mago project add <name> --repo owner/repo`"
+	if len(repos) > 0 {
+		reposStr = strings.Join(repos, ", ")
+	}
 
+	// --relay: dial out to the platform for GitHub events. The relay connection is outbound and
+	// long-lived, so there's NO inbound webhook — we don't bind a local port (avoids a needless
+	// listener and lets several relay workers share a box). runRelay blocks, reconnecting until killed.
+	if relay {
+		fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s); relay -> platform (no inbound port)\n",
+			comp.Name, reposStr)
+		runRelay(context.Background(), w, loadConfig(), repos)
+		return nil
+	}
+
+	// Tunnel/direct mode: bind the local webhook listener.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(rw http.ResponseWriter, _ *http.Request) { fmt.Fprintln(rw, "ok") })
 	mux.HandleFunc("/webhook/github", w.handleWebhook(secret))
-	fmt.Fprintf(os.Stderr, "mago serve: company %q (gh repo %q) listening on %s; webhook at /webhook/github\n",
-		comp.Name, comp.ghRepo, addr)
+	fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s) listening on %s; webhook at /webhook/github\n",
+		comp.Name, reposStr, addr)
 	return http.ListenAndServe(addr, mux)
 }
 
 // wakeEvent carries why we woke and how to act: a single agent to wake (target), a PR to
 // review (prRepo/prNum), or — when all are empty — a full reconcile (routing + all agents).
 type wakeEvent struct {
-	reason string
-	target string
-	prRepo string
-	prNum  int
+	reason    string
+	target    string
+	prRepo    string
+	prNum     int
+	comms     bool   // a merged PR -> CMO drafts a release note (non-code loop)
+	prTitle   string // merged PR title, for the comms note
+	proactive bool   // cadence tick -> planner proposes new backlog from the mission
 }
 
 type eventWorker struct {
@@ -75,9 +103,17 @@ type eventWorker struct {
 }
 
 func (w *eventWorker) signal(ev wakeEvent) {
+	// Recurring wakes (heartbeat reconcile, proactive cadence) are idempotent — another fires soon.
+	// While a long tick blocks the loop they can flood the queue and starve one-shot events (PR
+	// review, comms, a targeted tick), so drop them once the queue is half full; one-shot events
+	// keep trying (and the larger buffer absorbs the burst).
+	coalescable := ev.proactive || ev.reason == "heartbeat"
+	if coalescable && len(w.wake) > cap(w.wake)/2 {
+		return
+	}
 	select {
 	case w.wake <- ev:
-	default: // queue full — heartbeat / next event will catch up
+	default: // queue genuinely full — a future event/heartbeat will catch up
 	}
 }
 
@@ -86,18 +122,50 @@ func (w *eventWorker) signal(ev wakeEvent) {
 func (w *eventWorker) run() {
 	for ev := range w.wake {
 		switch {
+		case ev.proactive:
+			if w.comp.guardBudget("proactive planning") {
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
+			if w.comp.proposeBacklog() > 0 { // only count cycles that actually filed work
+				w.comp.recordAction()
+			}
+		case ev.comms:
+			if w.comp.guardBudget("release note") {
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
+			if w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle) {
+				w.comp.recordAction()
+			}
 		case ev.prRepo != "":
+			if w.comp.guardBudget("PR review") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
-			w.comp.reviewPR(ev.prRepo, ev.prNum)
+			if w.comp.reviewPR(ev.prRepo, ev.prNum) {
+				w.comp.recordAction()
+			}
 		case ev.target != "":
+			if w.comp.guardBudget("tick") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
 			if _, err := runTick(w.comp, ev.target); err != nil {
 				fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
 			}
+			w.comp.recordAction()
 		default:
+			if w.comp.guardBudget("reconcile") {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
-			if _, err := reconcileOnce(w.comp); err != nil {
+			worked, err := reconcileOnce(w.comp)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
+			}
+			if worked { // only count cycles that actually did work (idle reconciles are free)
+				w.comp.recordAction()
 			}
 		}
 	}
@@ -107,6 +175,14 @@ func (w *eventWorker) heartbeatLoop(every time.Duration) {
 	t := time.NewTicker(every)
 	for range t.C {
 		w.signal(wakeEvent{reason: "heartbeat"})
+	}
+}
+
+// proactiveLoop ticks the planner on a cadence to propose new backlog from the mission.
+func (w *eventWorker) proactiveLoop(every time.Duration) {
+	t := time.NewTicker(every)
+	for range t.C {
+		w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
 	}
 }
 
@@ -151,8 +227,16 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 			} `json:"labels"`
 		} `json:"issue"`
 		PullRequest struct {
-			Number int `json:"number"`
+			Number int    `json:"number"`
+			Title  string `json:"title"`
+			Merged bool   `json:"merged"`
+			Head   struct {
+				Ref string `json:"ref"`
+			} `json:"head"`
 		} `json:"pull_request"`
+		Label struct {
+			Name string `json:"name"`
+		} `json:"label"`
 		Repository struct {
 			FullName string `json:"full_name"`
 		} `json:"repository"`
@@ -170,11 +254,17 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 
 	switch event {
 	case "issues":
-		// not "labeled": mago changes its own labels constantly (agent:, mago:in-progress)
-		// and would wake itself in a loop.
 		switch p.Action {
 		case "opened", "reopened", "assigned":
 			return wakeEvent{reason: fmt.Sprintf("issue #%d %s", p.Issue.Number, p.Action)}, true
+		case "labeled":
+			// Wake only on HUMAN-applied control labels: the scoped-backlog label (MAGO_TASK_LABEL),
+			// or the clarify/go labels. mago never applies these itself (it toggles agent:/mago:in-
+			// progress/hitl), so this can't self-wake in a loop.
+			tl := os.Getenv("MAGO_TASK_LABEL")
+			if p.Label.Name == "mago:clarify" || p.Label.Name == "mago:go" || (tl != "" && p.Label.Name == tl) {
+				return wakeEvent{reason: fmt.Sprintf("issue #%d labeled %s", p.Issue.Number, p.Label.Name)}, true
+			}
 		}
 	case "issue_comment":
 		// a human reply (HITL answer, new instruction); mago's own comments are skipped.
@@ -189,6 +279,19 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 				prRepo: p.Repository.FullName,
 				prNum:  p.PullRequest.Number,
 			}, true
+		case "closed":
+			// Beyond-code loop (opt-in MAGO_COMMS=1): a merged implementer PR (mago/task-*) wakes the
+			// CMO to draft a release note. Exclude mago/news-* (the comms' own branch) so it can't loop.
+			if p.PullRequest.Merged && os.Getenv("MAGO_COMMS") == "1" &&
+				strings.HasPrefix(p.PullRequest.Head.Ref, "mago/task-") {
+				return wakeEvent{
+					reason:  fmt.Sprintf("PR #%d merged", p.PullRequest.Number),
+					prRepo:  p.Repository.FullName,
+					prNum:   p.PullRequest.Number,
+					prTitle: p.PullRequest.Title,
+					comms:   true,
+				}, true
+			}
 		}
 	}
 	return wakeEvent{}, false

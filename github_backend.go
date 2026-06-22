@@ -9,18 +9,24 @@ import (
 )
 
 // githubBackend maps mago's task/HITL model onto GitHub issues:
-//   task        = issue            status open      = open issue (no special label)
-//   in_progress = label mago:in-progress + agent:<name>
-//   blocked     = label mago:blocked
-//   needs_human = label mago:hitl   (the question is a comment)
-//   done        = closed issue
-//   progress / HITL question / answer = issue comments
-type githubBackend struct{ repo string }
+//
+//	task        = issue            status open      = open issue (no special label)
+//	in_progress = label mago:in-progress + agent:<name>
+//	blocked     = label mago:blocked
+//	needs_human = label mago:hitl   (the question is a comment)
+//	done        = closed issue
+//	progress / HITL question / answer = issue comments
+//
+// taskLabel (MAGO_TASK_LABEL), when set, scopes the backlog to issues carrying that label —
+// so MAGO_GH_REPO can point at a real project repo and mago only acts on opted-in issues.
+type githubBackend struct{ repo, taskLabel string }
 
 const (
 	labInProgress = "mago:in-progress"
 	labBlocked    = "mago:blocked"
 	labHITL       = "mago:hitl"
+	labClarify    = "mago:clarify" // human opt-in: run a clarification/planning phase first
+	labGo         = "mago:go"      // human approval: stop clarifying, implement now
 )
 
 func gh(args ...string) (string, error) {
@@ -41,6 +47,7 @@ func (b *githubBackend) gh(args ...string) (string, error) {
 func (b *githubBackend) ensureLabels() {
 	for _, l := range []struct{ name, color string }{
 		{labInProgress, "1d76db"}, {labBlocked, "b60205"}, {labHITL, "fbca04"},
+		{labClarify, "c5def5"}, {labGo, "0e8a16"},
 	} {
 		b.gh("label", "create", l.name, "--color", l.color, "--force")
 	}
@@ -51,11 +58,13 @@ func (b *githubBackend) ensureAgentLabel(agent string) {
 }
 
 type ghIssue struct {
-	Number   int    `json:"number"`
-	Title    string `json:"title"`
-	State    string `json:"state"`
-	Body     string `json:"body"`
-	Labels   []struct{ Name string `json:"name"` } `json:"labels"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	Body   string `json:"body"`
+	Labels []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
 	Comments []struct {
 		Author struct {
 			Login string `json:"login"`
@@ -119,10 +128,15 @@ func (gi ghIssue) toTask() *Task {
 		Assignee: gi.assignee(),
 		Project:  gi.project(),
 		Body:     strings.TrimSpace(body),
+		Clarify:  gi.hasLabel(labClarify),
+		Go:       gi.hasLabel(labGo),
 	}
 }
 
 func (b *githubBackend) listIssues(extra ...string) ([]ghIssue, error) {
+	if b.taskLabel != "" {
+		extra = append(extra, "--label", b.taskLabel) // scope to opted-in issues
+	}
 	args := append([]string{"issue", "list", "--state", "all", "--limit", "200",
 		"--json", "number,title,state,labels"}, extra...)
 	out, err := b.gh(args...)
@@ -160,7 +174,7 @@ func (b *githubBackend) loadIssue(number string) (*Task, error) {
 // mago's comments start with a known marker; a human typing on GitHub does not.
 func isMagoComment(body string) bool {
 	t := strings.TrimSpace(body)
-	for _, m := range []string{"🔧", "🙋", "📋", "↩", "**"} {
+	for _, m := range []string{"🔧", "🙋", "📋", "↩", "📣", "**"} {
 		if strings.HasPrefix(t, m) {
 			return true
 		}
@@ -204,6 +218,10 @@ func (b *githubBackend) FindTask(id string) (*Task, error) { return b.loadIssue(
 func (b *githubBackend) AddTask(title, project string) (*Task, error) {
 	b.ensureLabels()
 	args := []string{"issue", "create", "--title", title, "--body", "Created via mago."}
+	if b.taskLabel != "" { // keep mago-created tasks inside the scoped backlog
+		b.gh("label", "create", b.taskLabel, "--color", "5319e7", "--force")
+		args = append(args, "--label", b.taskLabel)
+	}
 	if project != "" {
 		b.gh("label", "create", "project:"+project, "--color", "5319e7", "--force")
 		args = append(args, "--label", "project:"+project)
@@ -276,8 +294,25 @@ func (b *githubBackend) Bounce(t *Task) error {
 	return err
 }
 
+// ClearClarify promotes a clarify-phase issue to implementation: drop the planning labels and
+// the planner's assignment so it re-routes fresh to an implementer (mago:go is left in place).
+func (b *githubBackend) ClearClarify(t *Task) error {
+	for _, l := range []string{labClarify, labHITL, labInProgress} {
+		b.gh("issue", "edit", t.ID, "--remove-label", l) // best-effort: ok if absent
+	}
+	if t.Assignee != "" {
+		b.gh("issue", "edit", t.ID, "--remove-label", "agent:"+t.Assignee)
+	}
+	t.Assignee = ""
+	t.Status = "open"
+	b.gh("issue", "comment", t.ID, "--body", "**mago** _(mago agent)_\n\n🚀 `mago:go` received — clarification done, routing to implementation.")
+	return nil
+}
+
 func (b *githubBackend) RecordProgress(t *Task, who, note string) error {
-	_, err := b.gh("issue", "comment", t.ID, "--body", "**"+who+":** "+note)
+	// Header line identifies the agent (and marks it a mago comment for isMagoComment); the note
+	// is structured markdown on its own lines (see progressNote) so the comment renders cleanly.
+	_, err := b.gh("issue", "comment", t.ID, "--body", "**"+who+"** _(mago agent)_\n\n"+note)
 	return err
 }
 
@@ -299,7 +334,9 @@ func (b *githubBackend) SetStatus(t *Task, status string) error {
 }
 
 func (b *githubBackend) RaiseHITL(t *Task, agent, question string) error {
-	if _, err := b.gh("issue", "comment", t.ID, "--body", "🙋 **"+agent+" needs the CEO:** "+question); err != nil {
+	// Header on its own line, then the question as multi-line markdown (it's often a plan + a
+	// numbered list — keep its structure rather than flattening it into one line).
+	if _, err := b.gh("issue", "comment", t.ID, "--body", "🙋 **"+agent+"** needs the CEO:\n\n"+question); err != nil {
 		return err
 	}
 	_, err := b.gh("issue", "edit", t.ID, "--add-label", labHITL, "--remove-label", labInProgress)

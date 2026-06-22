@@ -17,6 +17,7 @@ type TaskBackend interface {
 	PickActiveTask(agent string) (*Task, error)
 	Assign(t *Task, agent string) error // route an open task to an owner without starting it
 	Bounce(t *Task) error               // hand a mis-assigned task back: unassign + reopen
+	ClearClarify(t *Task) error         // mago:go received — drop planning state so it re-routes to implement
 	Claim(t *Task, agent string) error
 	RecordProgress(t *Task, who, note string) error
 	SetStatus(t *Task, status string) error
@@ -129,6 +130,9 @@ func (b *localBackend) Bounce(t *Task) error {
 	t.Status = "open"
 	return b.save(t)
 }
+
+// ClearClarify is a no-op locally — the clarify/go flow is a GitHub-label feature.
+func (b *localBackend) ClearClarify(t *Task) error { return nil }
 
 func (b *localBackend) Claim(t *Task, agent string) error {
 	t.Status = "in_progress"

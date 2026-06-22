@@ -28,6 +28,9 @@ const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 // main), and the defs worktree OUT of the mago-state runtime branch.
 const stateGitignore = "workspace/\nprojects/\ntasks/\n.mago/agents/\n.mago/config.json\n.mago/projects.json\n.maindefs/\n"
 
+// stateRuntimePaths is the company's runtime exhaust that lives on the mago-state branch.
+var stateRuntimePaths = []string{"STATE.md", ".mago/runs", ".mago/skills", ".mago/memory", ".mago/inbox"}
+
 // ensureClone makes dir a clone of the given GitHub repo (clone if absent). gh handles
 // auth; the agent then branches/commits/pushes/PRs inside this working tree via bash.
 func ensureClone(dir, repo string) error {
@@ -58,9 +61,10 @@ func defaultBranch(repo string) string {
 // before the agent runs, so work never starts from a stale repo state:
 //   - resume the agent's existing remote branch if it already pushed one, OR
 //   - create the branch fresh from the LATEST origin/<default>.
+//
 // The agent then just edits, commits, pushes, and opens/updates the PR.
 func (c *Company) prepProjectWorkspace(t *Task, repo string) (string, error) {
-	ws := c.projectDir(t.Project)
+	ws := c.workspaceFor(t) // project dir for a project task, else the company's default workspace
 	if err := ensureClone(ws, repo); err != nil {
 		return "", err
 	}
@@ -92,7 +96,7 @@ func (c *Company) pushState(msg string) {
 	// would sweep up stray files (logs, scratch) sitting in the company dir into the
 	// runtime branch, polluting it and causing re-clone conflicts.
 	var paths []string
-	for _, p := range []string{"STATE.md", ".mago/runs", ".mago/skills", ".mago/memory", ".mago/inbox"} {
+	for _, p := range stateRuntimePaths {
 		if _, err := os.Stat(filepath.Join(c.Dir, p)); err == nil {
 			paths = append(paths, p)
 		}
@@ -126,17 +130,27 @@ func (c *Company) ensureStateRepo() error {
 	gitRun(c.Dir, "fetch", "-q", "origin")
 
 	if gitOK(c.Dir, "rev-parse", "--verify", "origin/mago-state") {
-		// Adopt the remote runtime history so pushes fast-forward (re-clone safe).
-		// Remove fresh local files that would conflict with the remote checkout — the
-		// remote runtime (incl. its .gitignore) is authoritative.
-		os.Remove(filepath.Join(c.Dir, ".gitignore"))
-		os.Remove(filepath.Join(c.Dir, "STATE.md"))
-		for _, d := range []string{"runs", "skills", "memory", "inbox"} {
-			os.RemoveAll(filepath.Join(c.Dir, ".mago", d))
-		}
-		if out, err := gitRun(c.Dir, "checkout", "-q", "-B", "mago-state", "origin/mago-state"); err != nil {
+		// Adopt the remote runtime history WITHOUT a full `checkout`: the company dir holds live
+		// definitions (.mago/agents, projects.json) that checkout would refuse to clobber (and
+		// that ticks need). Point branch + index at the remote, then restore ONLY the runtime
+		// exhaust into the working tree so it keeps ACCUMULATING; leave definitions untouched.
+		// A CEO mission set locally must survive adopting the remote STATE.md (which may be a stale
+		// placeholder from a prior session on this repo). Capture it before the checkout overwrites it.
+		localMission := c.missionText()
+		gitRun(c.Dir, "branch", "-f", "mago-state", "origin/mago-state")
+		if out, err := gitRun(c.Dir, "symbolic-ref", "HEAD", "refs/heads/mago-state"); err != nil {
 			return fmt.Errorf("adopt mago-state: %v %s", err, out)
 		}
+		gitRun(c.Dir, "reset", "-q") // index <- remote tree; working tree kept (defs safe)
+		for _, p := range stateRuntimePaths {
+			gitRun(c.Dir, "checkout", "-q", "--", p) // restore accumulated exhaust (no-op if absent)
+		}
+		if localMission != "" { // local (freshly-set) mission wins over a stale remote one
+			c.setMission(localMission)
+		}
+		// Definitions belong on main; drop any a historical run leaked onto mago-state so it
+		// converges to runtime-only and stops colliding with the company dir's live defs.
+		gitRun(c.Dir, "rm", "-r", "-q", "--cached", "--ignore-unmatch", ".mago/agents", ".mago/config.json", ".mago/projects.json")
 	} else {
 		os.WriteFile(filepath.Join(c.Dir, ".gitignore"), []byte(stateGitignore), 0o644)
 		if out, err := gitRun(c.Dir, "checkout", "-q", "--orphan", "mago-state"); err != nil {

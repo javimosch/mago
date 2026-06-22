@@ -20,6 +20,9 @@ func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string
 		// a reflection, to exercise the recovery/self-heal path deterministically.
 		return "<｜｜DSML｜｜tool_calls> name=bash command=ls (no reflection json here)", nil
 	}
+	if a.Provider == "claude" { // Claude Code harness (local subscription; no API key)
+		return runClaude(workspace, a, systemPrompt, userPrompt)
+	}
 	args := []string{
 		"-p",
 		"--provider", a.Provider,
@@ -63,29 +66,41 @@ func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string
 	return content, nil
 }
 
-// tauComplete is a lightweight one-shot call (no tools, no stream) used for
-// auxiliary reasoning like skill selection. Returns the model's content.
+// tauComplete is a lightweight one-shot call (no tools, no stream) used for auxiliary reasoning
+// (routing, planning, review verdicts, release notes). It retries a few times with backoff so a
+// transient provider blip (HTTPRequestFailed) doesn't abandon a whole autonomous cycle.
 func tauComplete(a *Agent, prompt string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "tau", "-p",
-		"--provider", a.Provider, "--model", a.Model,
-		"--no-tools", "--no-stream", "--mode", "json", prompt)
-	cmd.Env = os.Environ()
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
+	if a.Provider == "claude" { // Claude Code harness
+		return claudeComplete(a, prompt)
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		var m map[string]any
-		if json.Unmarshal([]byte(strings.TrimSpace(lines[i])), &m) == nil {
-			if c, ok := m["content"].(string); ok && c != "" {
-				return c, nil
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 2 * time.Second) // 2s, 4s backoff
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		cmd := exec.CommandContext(ctx, "tau", "-p",
+			"--provider", a.Provider, "--model", a.Model,
+			"--no-tools", "--no-stream", "--mode", "json", prompt)
+		cmd.Env = os.Environ()
+		out, err := cmd.Output()
+		cancel()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		for i := len(lines) - 1; i >= 0; i-- {
+			var m map[string]any
+			if json.Unmarshal([]byte(strings.TrimSpace(lines[i])), &m) == nil {
+				if c, ok := m["content"].(string); ok && c != "" {
+					return c, nil
+				}
 			}
 		}
+		lastErr = fmt.Errorf("no content from tau")
 	}
-	return "", fmt.Errorf("no content from tau")
+	return "", lastErr
 }
 
 // emitProgress streams the model's text chunks to stderr so the human can watch.

@@ -1,10 +1,13 @@
 # Roadmap
 
-> **POC status:** the v1 **worker runtime** below (git-native tick, triggers, tau driver,
-> GitHub backend, memory/skills, HITL, role routing, adaptive cadence, multi-project,
-> state-on-`mago-state`) is built and verified — see [STATUS.md](STATUS.md). What remains
-> for v1: the **platform backend** (accounts, Stripe, webhook relay), the **two-binary
-> split**, real **project clone→PR**, and git **worktrees**.
+> **Status (2026-06):** v1 is **shipped and live at mago.intrane.fr** — worker runtime
+> (git-native tick, tau driver, GitHub backend, memory/skills, HITL, role routing, adaptive
+> cadence, multi-project, `mago-state`), the **two-module split**, and the **platform backend**
+> (accounts, **live Stripe** + 48h no-card trial + billing portal, GitHub App webhook relay,
+> repo entitlement), plus the public install path, operator/agent guides (`/operators`,
+> `/llms.txt`), and onboarding observability (`mago-platform activity`). The autonomous loop is
+> proven end-to-end — **20+ merged `mago/*` PRs** across real repos. Next: **v1.5 — from
+> task-executor to company-operator** (below).
 
 ## v1 — a single company, run cheaply
 
@@ -43,6 +46,33 @@ needed.
 - email/password only (no GitHub login yet).
 - No a2a bus, no web panel, no ACP transport.
 - The fixed executive team (no dynamic hiring yet — see v2).
+
+## v1.5 — from task-executor to company-operator
+
+The v1 loop is proven: agents pick up issues, ship PRs, review, merge. The gap to the north
+star isn't "can agents ship code?" — it's that agents don't yet **decide what to do**, work
+**only on code**, and need a human at each step. This phase closes that gap. Each item is
+event- or cadence-driven and lands as GitHub artifacts (issues/PRs/comments), keeping the
+"repo is the company" and "transparent by default" principles.
+
+- **Beyond code — non-engineering loops** *(in progress)*. Company **events**, not human issues,
+  trigger non-code work: when a feature PR merges, the **CMO** autonomously produces comms — a
+  `CHANGELOG.md`/release-note entry, an announcement draft — shipped as its own deliverable.
+  Proves the company is more than a code bot. Opt-in per repo so it's safe.
+- **Proactive backlog — agents set the agenda** *(shipped)*. With `MAGO_PROACTIVE=<secs>`, the
+  **Head of Product**, given the mission in `STATE.md`, proposes and files issues itself on a
+  cadence — capped (≤2/cycle, stops at 3 active) and deduped — instead of waiting for the CEO to
+  file every task. The biggest step from "executes tasks" to "runs the company." (`backlog.go`)
+- **Autonomy & trust guardrails** *(shipped: budget + digest)*. `MAGO_DAILY_BUDGET=<n>` caps
+  autonomous work cycles per UTC day (worker pauses when hit; `budget.go`); `mago digest` shows the
+  day's backlog/PRs/HITL + budget usage (`digest.go`). Still open: cost/token-based budgets,
+  push delivery of the digest (Telegram — javimosch/mago#10), and auto-escalation on repeated fail.
+- **Dogfood — mago runs mago** *(set up, review-only)*. A real mago company (`~/ai/mago-company`,
+  internal account) operates `javimosch/mago`: planner proposes → CTO PRs → reviewer comments →
+  CMO announces; scoped to a docs/DX/tests mission, label-scoped, budget-capped, `MAGO_NO_MERGE` so
+  PRs wait for human merge. Cheapest proof of "runs a company" + real metrics. See `docs/DOGFOOD.md`.
+- **First real user.** One friendly real customer — demand teaches more than dogfooding, and
+  surfaces the gaps no internal run will.
 
 ## v2 — scale and polish
 

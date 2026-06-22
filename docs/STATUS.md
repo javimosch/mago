@@ -1,19 +1,24 @@
 # Status — what's actually built
 
-This tracks the working POC versus the designed system in
-[ARCHITECTURE.md](ARCHITECTURE.md). The POC validates the **core loop** end to end on
-real models, with no platform, SaaS, accounts, or billing.
+This tracks the working system versus the design in [ARCHITECTURE.md](ARCHITECTURE.md).
+Both halves are now real: the **core loop** (agents shipping PRs over GitHub) AND the **SaaS
+platform** (accounts, billing, license, GitHub App webhook relay) — deployed live at
+**https://mago.intrane.fr** and validated end to end through it (see
+[SAAS.md](SAAS.md) / [DEPLOY.md](DEPLOY.md)). Only the live-Stripe switch (`sk_live_`) remains.
 
-## The binary
+## The binaries
 
-A single Go binary `mago` (the client+worker bundled; the operator/platform binary is
-not built yet). Commands:
+Two Go modules / binaries (see `.agents/skills/core-vs-platform.md`): **`mago`** (client +
+worker, open-source core, zero deps) and **`mago-platform`** (operator-private control plane,
+own module). `mago` commands:
 
 | Command | What it does |
 |---|---|
+| `mago register` / `login` / `subscribe` / `account status` | platform account (token+license in `~/.mago/config.json`) |
+| `mago link --installation <id>` / `link list` | claim a GitHub App installation (entitles your repos) |
 | `mago init [dir]` | scaffold a company: `.mago/` (agents, skills, runs, inbox), `STATE.md`, `tasks/`, `workspace/`, `projects/` |
 | `mago task add "<title>" [--project p]` | create a task (local file or GitHub issue) |
-| `mago project add <name> [--repo owner/repo]` | register a project (maps to a GitHub repo for clone→PR) |
+| `mago project add <name> --repo owner/repo` / `add owner/repo` / `project list` | register/inspect a project (maps to a GitHub repo for clone→PR) |
 | `mago run <agent>` | run ONE tick for one agent |
 | `mago tick` | reconcile once: route open tasks to best-fit agents, then run each |
 | `mago loop [<agent>]` | run ticks on an adaptive cadence (no agent = loop the full reconcile) |
@@ -23,8 +28,10 @@ not built yet). Commands:
 
 Env knobs (BYOK — keys stay on this machine, used by tau):
 `MAGO_PROVIDER` / `MAGO_MODEL` (override the agent's tau provider/model),
-`MAGO_GH_REPO=owner/repo` (switch the task backend to GitHub), `-C <dir>` / `$MAGO_COMPANY`
-(company directory). Requires `tau` and `gh` on `PATH`.
+the tau provider key for `opencode-go` — set it in `~/.config/tau/config.json` (`keys`, tau#30)
+or export `OPENCODE_API_KEY`; without either, tau uses a rate-limited keyless path and heavy ticks
+fail with `code 110` (`mago serve` warns), `MAGO_GH_REPO=owner/repo` (switch the task backend to GitHub),
+`-C <dir>` / `$MAGO_COMPANY` (company directory). Requires `tau` and `gh` on `PATH`.
 
 ## The tick (as built)
 
@@ -121,15 +128,32 @@ its progress log; lessons = `.mago/skills/<name>/SKILL.md` with an always-in-con
   hints alone aren't obeyed. The merge *mechanics* are solid; the *criteria* must be pinned down.
 - Same GitHub account → the reviewer merges **without a formal GitHub approval** (a GitHub App /
   per-agent identity would fix this and the self-approve gap).
-- First tick right after a fresh clone has its exhaust reset by the `mago-state` adopt.
 - Transient model API errors (exit 110) are handled by re-triggering the affected PR/tick.
+
+## Platform / SaaS (built + deployed live)
+
+- **`mago-platform`** (own Go module): accounts (email/password, bcrypt, JWT), **SQLite** store,
+  **Stripe** checkout + webhook → activation + license, daemon `start/stop/status`. Deployed on
+  the dk1 VM behind Traefik at **https://mago.intrane.fr** (test-mode Stripe).
+- **GitHub App webhook relay**: the worker dials out (`mago serve --relay`, NDJSON over HTTP, no
+  WebSocket dep); the platform owns one GitHub App ingress and streams matching repo events to
+  the NAT'd worker — **removes the per-worker tunnel**. License-gated (`401`/`403`).
+- **Repo entitlement**: a worker only receives events for repos its account claimed via a GitHub
+  App installation (`mago link`) or an operator `repo_grant` — closes a cross-tenant leak.
+- **GitHub App** `mago-platform` created via the one-click manifest flow (`setup-github`);
+  operator-token webhook provisioning (`webhook add`) is the no-App alternative.
+- **Verified live (2026-06-22)**: real test-card checkout → activation; agent-driven operator
+  onboarding via the CLI; and the full capstone — operator files a GitHub issue → relay →
+  agents ship a PR → reviewer merges — all through mago.intrane.fr.
+
+## Recently fixed (live-capstone findings)
+
+- Routing no longer misroutes implement tasks to the reviewer (dropped the brittle
+  `looksLikeReview`; reviewers are excluded from issue-task routing — they review PRs via events).
+- `mago-state` push no longer aborts on a fresh GitHub-backed company dir (adopt without a full
+  checkout; runtime exhaust accumulates; leaked defs are untracked).
 
 ## Not built yet
 
-Platform backend, accounts (email/password), Stripe, the two-binary split, the multi-tenant
-**webhook relay** (platform fan-out to NAT'd workers), GitHub App / per-agent identity, and the
-`decisions/` mechanism.
-
-Note: many earlier "not built" items are now done — exec-team personas, STATE.md compaction,
-real project clone→branch→PR→review→merge, git worktrees, agent-side dedup (`already_done`), the
-PR→reviewer trigger, fresh-branch/open-PR awareness, and the structural reviewer rubric.
+Live Stripe (`sk_live_` + live price), GitHub OAuth login (self-verifying account↔installation
+binding) + App installation tokens (replace the worker's `gh` PAT), and the `decisions/` mechanism.

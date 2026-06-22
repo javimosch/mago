@@ -52,9 +52,15 @@ func cmdInit(args []string) error {
 		}
 	}
 	name := filepath.Base(abs)
+	agentsDir := filepath.Join(abs, ".mago", "agents")
 	for fname, content := range starterTeam {
-		writeIfMissing(filepath.Join(abs, ".mago", "agents", fname), content)
+		writeIfMissing(filepath.Join(agentsDir, fname), content)
 	}
+	// Backfill role flags on EXISTING companies (writeIfMissing won't touch their agent files):
+	// companies scaffolded before these flags existed need them to use review/clarify routing.
+	backfillAgentFlag(filepath.Join(agentsDir, "head-of-product.md"), "plans", "true")
+	backfillAgentFlag(filepath.Join(agentsDir, "head-of-org-engineering.md"), "reviews", "true")
+	backfillAgentFlag(filepath.Join(agentsDir, "cto.md"), "implements", "true")
 	writeIfMissing(filepath.Join(abs, "STATE.md"), fmt.Sprintf(stateTemplate, name))
 	writeIfMissing(filepath.Join(abs, ".mago", "skills", "INDEX.md"), "# Skills index\n\n")
 
@@ -94,6 +100,7 @@ func cmdTask(args []string) error {
 func cmdProject(args []string) error {
 	dir, rest := parseCompanyDir(args)
 	repo := ""
+	mirror := false
 	var pos []string
 	for i := 0; i < len(rest); i++ {
 		if rest[i] == "--repo" && i+1 < len(rest) {
@@ -101,25 +108,46 @@ func cmdProject(args []string) error {
 			i++
 			continue
 		}
+		if rest[i] == "--mirror" {
+			mirror = true
+			continue
+		}
 		pos = append(pos, rest[i])
-	}
-	if len(pos) < 2 || pos[0] != "add" {
-		return fmt.Errorf("usage: mago project add <name> [--repo owner/repo] [-C dir]")
 	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
 	}
-	if err := ensureDir(comp.projectDir(pos[1])); err != nil {
-		return err
-	}
-	if repo != "" {
-		if err := comp.saveProject(pos[1], repo); err != nil {
+	switch {
+	case len(pos) >= 1 && pos[0] == "list":
+		confs := comp.loadProjectConfs()
+		if len(confs) == 0 {
+			fmt.Println("(no projects — add one with `mago project add <name> --repo owner/repo`)")
+			return nil
+		}
+		for name, pc := range confs {
+			fmt.Printf("  %s -> %s%s\n", name, orDefault(pc.Repo, "(no repo)"), ifStr(pc.MirrorIssue, "  [mirror-issue]", ""))
+		}
+		return nil
+	case len(pos) >= 2 && pos[0] == "add":
+		name := pos[1]
+		// Accept `mago project add owner/repo` as shorthand: infer repo + project name.
+		if repo == "" && strings.Contains(name, "/") {
+			repo = name
+			name = name[strings.LastIndex(name, "/")+1:]
+		}
+		if err := ensureDir(comp.projectDir(name)); err != nil {
 			return err
 		}
+		if repo != "" {
+			if err := comp.saveProject(name, repo, mirror); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("project %q ready%s%s\n", name, ifStr(repo != "", " -> "+repo, " (no repo set — pass --repo owner/repo)"), ifStr(mirror, " [mirror-issue on]", ""))
+		return nil
 	}
-	fmt.Printf("project %q ready%s\n", pos[1], ifStr(repo != "", " -> "+repo, ""))
-	return nil
+	return fmt.Errorf("usage:\n  mago project add <name> --repo owner/repo [--mirror] [-C dir]\n  mago project add owner/repo [-C dir]\n  mago project list [-C dir]")
 }
 
 func ifStr(cond bool, a, b string) string {
@@ -137,6 +165,13 @@ func cmdStatus(args []string) error {
 	}
 	fmt.Printf("# company: %s\n\n", comp.Name)
 	fmt.Println(readFileOr(comp.stateFile(), "(no STATE.md)"))
+
+	if projects := comp.loadProjects(); len(projects) > 0 {
+		fmt.Println("\n## Projects")
+		for name, r := range projects {
+			fmt.Printf("  %s -> %s\n", name, orDefault(r, "(no repo)"))
+		}
+	}
 
 	fmt.Println("\n## Tasks")
 	tasks, err := comp.tasks.ListTasks()
@@ -181,6 +216,22 @@ func writeIfMissing(path, content string) {
 	}
 }
 
+// backfillAgentFlag ensures an existing agent file has a frontmatter flag (e.g. plans: true),
+// adding it if missing. No-op if the file is absent or the flag is already set.
+func backfillAgentFlag(path, key, val string) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	fm, body := parseFrontmatter(string(b))
+	if fm[key] == val {
+		return
+	}
+	fm[key] = val
+	order := []string{"name", "title", "provider", "model", "reviews", "plans", "implements"}
+	os.WriteFile(path, []byte(renderFrontmatter(fm, order, body)), 0o644)
+}
+
 // starterTeam is the executive team seeded by `mago init`. The CEO is the human.
 var starterTeam = map[string]string{
 	"cto.md":                     personaCTO,
@@ -192,8 +243,9 @@ var starterTeam = map[string]string{
 const personaCTO = `---
 name: cto
 title: Chief Technology Officer
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
+implements: true
 ---
 You are the CTO. You own engineering across the company's project repos. You pick up
 engineering tasks and implement them as clean, well-tested code shipped as pull requests.
@@ -205,8 +257,8 @@ CEO can decide something, ask via needs_human. Record gotchas as lessons.
 const personaCMO = `---
 name: cmo
 title: Chief Marketing Officer
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
 ---
 You are the CMO. You own marketing and growth: positioning, READMEs and docs, landing
 copy, release notes, and announcements. You write clear, compelling copy. You do not
@@ -216,21 +268,24 @@ change core application code. Record useful messaging and lessons as skills.
 const personaHeadProduct = `---
 name: head-of-product
 title: Head of Product
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
+plans: true
 ---
 You are the Head of Product. You turn the CEO's intent into concrete specs and
 prioritized, well-scoped tasks with clear acceptance criteria. You define WHAT to build
-and why — not how to implement it. When something is ambiguous and only the CEO can
-decide, ask via needs_human. Record product decisions as lessons.
+and why — not how to implement it. You run the clarification phase: when an issue is opened
+with mago:clarify, draft the plan and the open questions for the CEO, and iterate until they
+approve with mago:go. When something is ambiguous and only the CEO can decide, ask via
+needs_human. Record product decisions as lessons.
 `
 
 const personaHeadOrgEng = `---
 name: head-of-org-engineering
 title: Head of Org Engineering
 reviews: true
-provider: deepseek
-model: deepseek-chat
+provider: opencode-go
+model: deepseek-v4-flash
 ---
 You are the Head of Org Engineering. You safeguard the company's quality and engineering
 process. You REVIEW open mago pull requests and merge the ones that are correct, safe, and
