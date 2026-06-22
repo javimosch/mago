@@ -33,12 +33,12 @@ func (c *Company) marketingAgent() *Agent {
 }
 
 // shipReleaseNote asks the CMO to write a short user-facing release note for a just-merged PR and
-// posts it as a comment on that PR. Best-effort: logs and returns on any failure.
-func (c *Company) shipReleaseNote(repo string, prNum int, prTitle string) {
+// posts it as a comment on that PR. Returns whether it posted (false = no work, no budget charge).
+func (c *Company) shipReleaseNote(repo string, prNum int, prTitle string) bool {
 	cmo := c.marketingAgent()
 	if cmo == nil {
 		fmt.Fprintln(os.Stderr, "[comms] no marketing agent in roster — skipping release note")
-		return
+		return false
 	}
 	prompt := fmt.Sprintf(`You are the CMO. A pull request just shipped (merged) in our product.
 Write a short, upbeat, user-facing RELEASE NOTE announcing it: 2-4 sentences, plain language,
@@ -49,13 +49,14 @@ Shipped: PR #%d — %s`, prNum, oneLine(prTitle))
 	note, err := tauComplete(cmo, prompt)
 	if err != nil || strings.TrimSpace(note) == "" {
 		fmt.Fprintf(os.Stderr, "[comms] CMO draft failed for PR #%d: %v\n", prNum, err)
-		return
+		return false
 	}
 	// Lead with "**" so isMagoComment recognizes it (no self-wake on the resulting comment event).
 	body := "**📣 Release note — " + cmo.Title + "** _(mago agent)_\n\n" + strings.TrimSpace(note)
 	if _, err := gh("-R", repo, "pr", "comment", strconv.Itoa(prNum), "--body", body); err != nil {
 		fmt.Fprintf(os.Stderr, "[comms] post release note on PR #%d: %v\n", prNum, err)
-		return
+		return false
 	}
 	fmt.Fprintf(os.Stderr, "[comms] release note posted on PR #%d in %s (by %s)\n", prNum, repo, cmo.Name)
+	return true
 }

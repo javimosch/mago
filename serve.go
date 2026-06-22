@@ -119,22 +119,25 @@ func (w *eventWorker) run() {
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
-			w.comp.proposeBacklog()
-			w.comp.recordAction()
+			if w.comp.proposeBacklog() > 0 { // only count cycles that actually filed work
+				w.comp.recordAction()
+			}
 		case ev.comms:
 			if w.comp.guardBudget("release note") {
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
-			w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle)
-			w.comp.recordAction()
+			if w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle) {
+				w.comp.recordAction()
+			}
 		case ev.prRepo != "":
 			if w.comp.guardBudget("PR review") {
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
-			w.comp.reviewPR(ev.prRepo, ev.prNum)
-			w.comp.recordAction()
+			if w.comp.reviewPR(ev.prRepo, ev.prNum) {
+				w.comp.recordAction()
+			}
 		case ev.target != "":
 			if w.comp.guardBudget("tick") {
 				continue
