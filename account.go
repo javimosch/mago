@@ -177,7 +177,14 @@ func cmdRegister(args []string) error {
 		return err
 	}
 	fmt.Printf("registered %s — token saved to %s\n", email, configPath())
-	fmt.Println("next: `mago subscribe` to activate the €20/month plan")
+	// Pull the account so the trial license is cached and we can show the trial window.
+	if acc, err := fetchAccount(cfg); err == nil && acc.Trial {
+		fmt.Printf("✓ 48-hour free trial active (%s) — no card required.\n", trialRemaining(acc.TrialEnds))
+		fmt.Println("next: `mago link` your repos, then `mago serve --relay` — your agents can ship a PR now.")
+		fmt.Println("      `mago subscribe` anytime to continue past the trial (€20/month).")
+	} else {
+		fmt.Println("next: `mago subscribe` to activate the €20/month plan")
+	}
 	return nil
 }
 
@@ -298,19 +305,9 @@ func cmdAccount(args []string) error {
 		return fmt.Errorf("usage: mago account status")
 	}
 	cfg := loadConfig()
-	var out struct {
-		Email      string `json:"email"`
-		Plan       string `json:"plan"`
-		Active     bool   `json:"active"`
-		LicenseKey string `json:"license_key"`
-	}
-	if err := cfg.platformDo("GET", "/api/account", nil, true, &out); err != nil {
+	out, err := fetchAccount(cfg)
+	if err != nil {
 		return err
-	}
-	// Cache the license key so the worker can authenticate against the platform.
-	if out.LicenseKey != "" && out.LicenseKey != cfg.LicenseKey {
-		cfg.LicenseKey = out.LicenseKey
-		cfg.save()
 	}
 	status := "inactive"
 	if out.Active {
@@ -318,10 +315,49 @@ func cmdAccount(args []string) error {
 	}
 	fmt.Printf("email:   %s\n", out.Email)
 	fmt.Printf("plan:    %s (%s)\n", out.Plan, status)
+	if out.Trial && out.TrialEnds > 0 {
+		fmt.Printf("trial:   %s\n", trialRemaining(out.TrialEnds))
+	}
 	if out.LicenseKey != "" {
 		fmt.Printf("license: %s\n", out.LicenseKey)
 	} else {
 		fmt.Println("license: (none yet — subscribe to activate)")
 	}
 	return nil
+}
+
+// accountInfo mirrors the platform's /api/account response.
+type accountInfo struct {
+	Email      string `json:"email"`
+	Plan       string `json:"plan"`
+	Active     bool   `json:"active"`
+	Trial      bool   `json:"trial"`
+	TrialEnds  int64  `json:"trial_ends"`
+	LicenseKey string `json:"license_key"`
+}
+
+// fetchAccount GETs /api/account and caches the license key so the worker can authenticate.
+func fetchAccount(cfg *cliConfig) (*accountInfo, error) {
+	var out accountInfo
+	if err := cfg.platformDo("GET", "/api/account", nil, true, &out); err != nil {
+		return nil, err
+	}
+	if out.LicenseKey != "" && out.LicenseKey != cfg.LicenseKey {
+		cfg.LicenseKey = out.LicenseKey
+		cfg.save()
+	}
+	return &out, nil
+}
+
+// trialRemaining renders a human hint like "active, ~41h left" or "expired".
+func trialRemaining(ends int64) string {
+	d := time.Until(time.Unix(ends, 0))
+	if d <= 0 {
+		return "expired — run `mago subscribe` to continue"
+	}
+	h := int(d.Hours())
+	if h >= 1 {
+		return fmt.Sprintf("active, ~%dh left", h)
+	}
+	return fmt.Sprintf("active, ~%dm left", int(d.Minutes()))
 }
