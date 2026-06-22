@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "routing-tests-llm-fallback",
+      "note": "routeTask's LLM call (tauComplete) retries 3x with 2s+4s backoff on failure. In CI without an API key this totals ~6s per test call but always falls to the deterministic fallback path — making it testable without mocking. Keep routeTask test count small (4) to bound total wall time (~24s)."
+    }
+  ],
+  "next": "Reviewer merges PR #14 if it meets the bar.",
+  "state_delta": "PR #14 opened: route_test.go with 17 tests covering reviewer exclusion, implementer fallback, and planner routing",
+  "summary": "Created route_test.go with 17 tests: 13 pure-function tests for isReviewerRole (flag, name/title heuristic, false-positive guards), plannerName (empty/no-match/single/first-wins), and implementerName (empty/no-match/single); plus 4 routeTask fallback tests that exercise reviewer exclusion, all-reviewers roster fallback, implementer fallback, and first-candidate fallback — all deterministic because tauComplete always fails in CI (no API key). All tests pass (go test ./..., 24s). Committed and opened PR #14.",
+  "task_id": "13",
+  "task_status": "done",
+  "ts": "2026-06-22T20-13-48Z"
+}
