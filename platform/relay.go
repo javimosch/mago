@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -27,13 +29,15 @@ type relayMsg struct {
 
 type relayConn struct {
 	license string
+	worker  string // worker id (hostname or MAGO_WORKER_ID) — an account may run several
+	key     string // license + "\x00" + worker: identifies one worker's connection
 	repos   map[string]bool
 	ch      chan relayMsg
 }
 
 type relayHub struct {
 	mu      sync.Mutex
-	workers map[string]*relayConn // license -> connection (one worker per account in v1)
+	workers map[string]*relayConn // key (license+worker) -> connection; many workers per account
 }
 
 func newRelayHub() *relayHub { return &relayHub{workers: map[string]*relayConn{}} }
@@ -41,39 +45,48 @@ func newRelayHub() *relayHub { return &relayHub{workers: map[string]*relayConn{}
 func (h *relayHub) register(c *relayConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if old := h.workers[c.license]; old != nil {
-		close(old.ch) // a new connection for the same license replaces the old one
+	if old := h.workers[c.key]; old != nil {
+		close(old.ch) // the SAME worker reconnecting replaces its old connection
 	}
-	h.workers[c.license] = c
+	h.workers[c.key] = c
 }
 
 func (h *relayHub) unregister(c *relayConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.workers[c.license] == c { // only if not already replaced
-		delete(h.workers, c.license)
+	if h.workers[c.key] == c { // only if not already replaced
+		delete(h.workers, c.key)
 	}
 }
 
-// route delivers msg to every worker serving repo. Returns how many got it.
+// route delivers msg to exactly ONE worker serving repo, chosen stably by repo so that two workers
+// serving the same repo never both process (and collide on) the same event. Returns 1 if delivered.
 func (h *relayHub) route(repo string, msg relayMsg) int {
 	h.mu.Lock()
-	conns := make([]*relayConn, 0, len(h.workers))
+	var conns []*relayConn
 	for _, c := range h.workers {
 		if c.repos[repo] {
 			conns = append(conns, c)
 		}
 	}
 	h.mu.Unlock()
-	n := 0
-	for _, c := range conns {
-		select {
-		case c.ch <- msg:
-			n++
-		default: // worker is slow/backed up — drop; its heartbeat reconcile will catch up
-		}
+	if len(conns) == 0 {
+		return 0
 	}
-	return n
+	sort.Slice(conns, func(i, j int) bool { return conns[i].key < conns[j].key })
+	pick := conns[repoHash(repo)%uint32(len(conns))]
+	select {
+	case pick.ch <- msg:
+		return 1
+	default: // picked worker is backed up — drop; its heartbeat reconcile will catch up
+		return 0
+	}
+}
+
+func repoHash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
 }
 
 // handleWorkerStream is the worker's dial-out endpoint: GET /ws/worker?token=<license>&repos=a/b,c/d
@@ -122,11 +135,15 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 			log.Printf("relay: user %d not entitled to %v — run `mago link`; ignoring", u.ID, dropped)
 		}
 	}
-	conn := &relayConn{license: token, repos: repos, ch: make(chan relayMsg, 16)}
+	workerName := strings.TrimSpace(r.URL.Query().Get("worker"))
+	if workerName == "" {
+		workerName = "default"
+	}
+	conn := &relayConn{license: token, worker: workerName, key: token + "\x00" + workerName, repos: repos, ch: make(chan relayMsg, 16)}
 	s.hub.register(conn)
 	defer s.hub.unregister(conn)
-	log.Printf("relay: worker connected (user %d, repos=%v)", u.ID, keys(repos))
-	s.store.LogEvent("worker_connect", u.ID, "repos="+strings.Join(keys(repos), ","))
+	log.Printf("relay: worker %q connected (user %d, repos=%v)", workerName, u.ID, keys(repos))
+	s.store.LogEvent("worker_connect", u.ID, workerName+" · repos="+strings.Join(keys(repos), ","))
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -140,8 +157,8 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done(): // worker disconnected
-			log.Printf("relay: worker disconnected (user %d)", u.ID)
-			s.store.LogEvent("worker_disconnect", u.ID, "")
+			log.Printf("relay: worker %q disconnected (user %d)", workerName, u.ID)
+			s.store.LogEvent("worker_disconnect", u.ID, workerName)
 			return
 		case msg, open := <-conn.ch:
 			if !open { // replaced by a newer connection
