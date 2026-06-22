@@ -17,12 +17,22 @@ type User struct {
 	ID             int64
 	Email          string
 	PasswordHash   string
-	Plan           string // "free" | "mago"
+	Plan           string // "free" | "trial" | "mago"
 	StripeCustomer string
 	StripeSub      string
 	LicenseKey     string
+	TrialEnds      int64 // unix; >now while a no-card trial is live
 	CreatedAt      int64
 }
+
+// trialDuration is the no-card trial window granted at signup.
+const trialDuration = 48 * time.Hour
+
+// trialActive reports whether the user is within an unexpired no-card trial.
+func (u *User) trialActive() bool { return u.Plan == "trial" && u.TrialEnds > time.Now().Unix() }
+
+// entitled reports whether the worker may connect: a paid plan, or a live trial.
+func (u *User) entitled() bool { return u.Plan == "mago" || u.trialActive() }
 
 // Store is the platform's SQLite-backed persistence (schema in docs/SAAS.md). The method set
 // matches what the handlers expect; Update applies a mutation to one user row transactionally.
@@ -48,6 +58,7 @@ CREATE TABLE IF NOT EXISTS users (
   stripe_customer TEXT NOT NULL DEFAULT '',
   stripe_sub      TEXT NOT NULL DEFAULT '',
   license_key     TEXT NOT NULL DEFAULT '',
+  trial_ends      INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS stripe_events (
@@ -70,16 +81,18 @@ CREATE TABLE IF NOT EXISTS repo_grants (
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
+	// Migrate pre-trial DBs: add trial_ends if the users table predates it (ignore "duplicate column").
+	db.Exec("ALTER TABLE users ADD COLUMN trial_ends INTEGER NOT NULL DEFAULT 0")
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
 
-const userCols = "id, email, password_hash, plan, stripe_customer, stripe_sub, license_key, created_at"
+const userCols = "id, email, password_hash, plan, stripe_customer, stripe_sub, license_key, trial_ends, created_at"
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Plan, &u.StripeCustomer, &u.StripeSub, &u.LicenseKey, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Plan, &u.StripeCustomer, &u.StripeSub, &u.LicenseKey, &u.TrialEnds, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -128,8 +141,8 @@ func (s *Store) Update(id int64, fn func(*User)) error {
 	}
 	fn(u)
 	if _, err := tx.Exec(
-		"UPDATE users SET plan=?, stripe_customer=?, stripe_sub=?, license_key=? WHERE id=?",
-		u.Plan, u.StripeCustomer, u.StripeSub, u.LicenseKey, u.ID); err != nil {
+		"UPDATE users SET plan=?, stripe_customer=?, stripe_sub=?, license_key=?, trial_ends=? WHERE id=?",
+		u.Plan, u.StripeCustomer, u.StripeSub, u.LicenseKey, u.TrialEnds, u.ID); err != nil {
 		return err
 	}
 	return tx.Commit()

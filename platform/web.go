@@ -127,6 +127,7 @@ completions. There is no web panel: you (or your own agent) drive everything fro
 <h2>Pricing</h2>
 <p class=price>€20 / month.</p>
 <p class=muted>One flat plan. BYOK (your LLM key, your compute) — no per-token charges from us, no tiers.</p>
+<p><b>48-hour free trial — no card.</b> <code>mago register</code> and your agents can ship a real PR before you ever pay.</p>
 
 <p class=muted style="margin-top:3rem">mago · operated at <a href="%s">mago.intrane.fr</a> · onboarding is agent-driven, CLI-only.</p>
 <p class=muted>🤖 AI agents: start at <a href="/llms.txt">/llms.txt</a> · humans: the <a href="/operators">operator guide</a>.</p>
@@ -173,9 +174,11 @@ Without it, tau falls back to a rate-limited shared key.</li>
 <pre>curl -fsSL %s/install.sh | sh</pre>
 
 <h2>2. Account + subscription</h2>
-<pre>mago register --email you@co.com --password &lt;pw&gt;   # token -> ~/.mago/config.json (0600)
-mago subscribe                                      # prints the Stripe link; the HUMAN pays
-mago account status                                 # -> plan: mago, active: true, license_key</pre>
+<pre>mago register --email you@co.com --password &lt;pw&gt;   # account + 48h NO-CARD trial (license cached)
+mago account status                                 # -> plan: trial (active, ~Xh left), license_key
+mago subscribe                                      # after the trial: Stripe link, the HUMAN pays (€20/mo)
+mago billing                                        # manage/cancel the subscription (Stripe portal)</pre>
+<p class=muted>The 48-hour trial runs the full loop immediately — no card. Subscribe anytime to continue past it.</p>
 
 <h2>3. Connect GitHub</h2>
 <p>The human installs the mago GitHub App on their repos (one browser click). Then:</p>
@@ -218,9 +221,10 @@ const llmsText = `# mago — operator guide for AI agents
   Installs the host-matched binary (linux/darwin x amd64/arm64) to ~/.local/bin/mago.
 
 ## 2. Account + subscription (the human pays)
-    mago register --email you@co.com --password <pw>   # token -> ~/.mago/config.json (0600)
-    mago subscribe                                      # prints the Stripe checkout link; HUMAN pays
-    mago account status                                 # -> plan: mago, active: true, license_key
+    mago register --email you@co.com --password <pw>   # creates account + a 48h NO-CARD trial; license cached
+    mago account status                                 # -> plan: trial (active, ~Xh left), license_key
+    # During the trial you can run the full loop immediately. Then, to continue past 48h:
+    mago subscribe                                      # prints the Stripe checkout link; HUMAN pays (€20/mo)
     mago billing                                        # prints the Stripe portal link (manage/cancel)
 
 ## 3. Connect GitHub

@@ -89,6 +89,15 @@ func (s *server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, err.Error())
 		return
 	}
+	// Grant a no-card trial: issue the license now so the worker can connect immediately,
+	// and start the 48h clock. `mago subscribe` converts to the paid plan.
+	trialEnds := time.Now().Add(trialDuration).Unix()
+	s.store.Update(u.ID, func(uu *User) {
+		uu.Plan, uu.TrialEnds = "trial", trialEnds
+		if uu.LicenseKey == "" {
+			uu.LicenseKey = genLicense()
+		}
+	})
 	writeJSON(w, 200, map[string]string{"token": jwtSign(s.jwtSecret, u.ID, u.Email)})
 }
 
@@ -117,7 +126,8 @@ func (s *server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{
-		"email": u.Email, "plan": u.Plan, "active": u.Plan == "mago", "license_key": u.LicenseKey,
+		"email": u.Email, "plan": u.Plan, "active": u.entitled(), "license_key": u.LicenseKey,
+		"trial": u.trialActive(), "trial_ends": u.TrialEnds,
 	})
 }
 

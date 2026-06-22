@@ -83,8 +83,12 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 401, "unknown license")
 		return
 	}
-	if u.Plan != "mago" { // license-gating: lapsed subscriptions are refused
-		httpErr(w, 403, "subscription inactive")
+	if !u.entitled() { // license-gating: lapsed subscriptions / expired trials are refused
+		msg := "subscription inactive — run `mago subscribe`"
+		if u.Plan == "trial" {
+			msg = "trial expired — run `mago subscribe` to continue"
+		}
+		httpErr(w, 403, msg)
 		return
 	}
 	flusher, ok := w.(http.Flusher)
