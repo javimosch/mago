@@ -87,7 +87,14 @@ to leave running for days. Still coarse (1 cycle ≈ a few tau calls); token/cos
 
 ## Provider
 
-Agents run via **tau**. The starter personas default to **`opencode-go` / `deepseek-v4-flash`**
-(matches the documented BYOK key + tau's opencode-go default). Override per run/harness with
-`MAGO_PROVIDER` / `MAGO_MODEL` (tick.go `applyModelOverrides`) or per-agent frontmatter. Role flags:
-implementer (CTO) `implements: true`, planner `plans: true`, reviewer `reviews: true`.
+Agents run via a **harness**. Default is **tau** (`opencode-go` / `deepseek-v4-flash` — matches the
+documented BYOK key + tau's default). Override per run/harness with `MAGO_PROVIDER` / `MAGO_MODEL`
+(tick.go `applyModelOverrides`) or per-agent frontmatter. Role flags: implementer (CTO)
+`implements: true`, planner `plans: true`, reviewer `reviews: true`.
+
+**Claude Code harness** (`claude.go`): set `provider: claude` (model e.g. `sonnet`), or
+`MAGO_PROVIDER=claude MAGO_MODEL=sonnet`. Drives the local `claude` CLI in print mode
+(`-p --output-format json`); ticks run tools under `--permission-mode bypassPermissions` with the
+persona appended via `--append-system-prompt`, and `.result` is parsed as the reflection. **Auth is
+the local Claude Code subscription — no API key**, and it sidesteps opencode-go rate limits.
+`runTau`/`tauComplete` dispatch to `runClaude`/`claudeComplete` when the provider is `claude`.
