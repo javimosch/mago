@@ -7,8 +7,12 @@ worker. **CLI-only**, no web panel. Single **€20/month** plan. Full design: `d
 ## Live deployment
 
 Running at **https://mago.intrane.fr** on the **dk1** VM (`vpspoly1`) behind Traefik (TLS) →
-`localhost:9100`. Operational runbook + redeploy steps: `docs/DEPLOY.md`. Stripe is **test
-mode** (reusing AutoMaintainer's `sk_test_`); going live = swap `sk_live_` + a live price.
+`localhost:9100`. Operational runbook + redeploy steps: `docs/DEPLOY.md`. Stripe is **LIVE**
+(reuses AutoMaintainer's `sk_live_`; dedicated mago product/price/webhook). Signup grants a **48h
+no-card trial** (license issued immediately); `mago subscribe` converts to the €20/mo plan and
+`mago billing` opens the Stripe customer portal. Public surface: landing `/`, installer
+`/install.sh`, multi-arch binary `/dl/mago`, human guide `/operators`, agent guide `/llms.txt`.
+Operator metrics: `mago-platform activity` (see [metrics.md](metrics.md)).
 
 ## Endpoints (driven by the CLI, no UI)
 
@@ -16,7 +20,8 @@ mode** (reusing AutoMaintainer's `sk_test_`); going live = swap `sk_live_` + a l
 |---|---|
 | `POST /auth/signup`, `/auth/login` | accounts → JWT (HS256) |
 | `GET /api/account` | plan + license |
-| `POST /api/checkout` | Stripe Checkout link (subscription, the €20 price) |
+| `POST /api/checkout` | Stripe Checkout link (subscription, the €20 price) — `mago subscribe` |
+| `POST /api/portal` | Stripe customer-portal link (manage/cancel) — `mago billing` |
 | `GET/POST /api/installations` | list / claim GitHub App installs (`mago link`) |
 | `POST /stripe/webhook` | `checkout.session.completed`→`plan=mago`+issue license; `subscription.deleted`→`free` |
 | `GET /ws/worker?token&repos` | worker dial-out: NDJSON stream of relayed GitHub events (license-gated) |
@@ -24,9 +29,12 @@ mode** (reusing AutoMaintainer's `sk_test_`); going live = swap `sk_live_` + a l
 
 ## License & activation
 
-On first payment the Stripe webhook sets `plan=mago` and issues a license `mago_<48hex>`. The
-worker authenticates to the relay with it; an unknown license → `401`, a lapsed one (plan
-`free`) → `403`. Store is SQLite (`platform.db`); passwords are bcrypt cost 12.
+Signup issues a license `mago_<48hex>` immediately and starts a **48h trial** (`plan=trial`,
+`trial_ends`); first payment flips `plan=mago` via the Stripe webhook. The worker authenticates to
+the relay with the license; `entitled()` = `plan=mago` OR live trial. Unknown license → `401`;
+lapsed sub or expired trial → `403`. Store is SQLite (`platform.db`); passwords are bcrypt cost 12.
+Onboarding events (signup/subscribed/worker_connect/…) are recorded in an `events` table — see
+[metrics.md](metrics.md).
 
 ## The webhook relay (removes the per-worker tunnel)
 

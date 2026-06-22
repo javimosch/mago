@@ -11,6 +11,7 @@ rationale, see [`../../docs/`](../../docs/).
 | [saas-platform.md](saas-platform.md) | understand the platform: accounts, Stripe, license, GitHub App webhook relay, repo entitlement, the live deployment |
 | [cli-usage.md](cli-usage.md) | drive the `mago` / `mago-platform` CLIs (commands, config, env vars) |
 | [live-testing.md](live-testing.md) | run things for real: build, local platform, operator simulation, the live ship-code capstone |
+| [metrics.md](metrics.md) | answer "stats on mago prod/live/dk1 activity" — `mago-platform activity`, SQLite queries, health, agent throughput |
 
 **One-line mental model:** mago is a CLI platform where the operator (CEO) files GitHub issues
 and an autonomous AI agent team (CTO/CMO/Head of Product/Head of Org Engineering) ships PRs to
