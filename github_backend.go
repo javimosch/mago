@@ -16,7 +16,10 @@ import (
 //	needs_human = label mago:hitl   (the question is a comment)
 //	done        = closed issue
 //	progress / HITL question / answer = issue comments
-type githubBackend struct{ repo string }
+//
+// taskLabel (MAGO_TASK_LABEL), when set, scopes the backlog to issues carrying that label —
+// so MAGO_GH_REPO can point at a real project repo and mago only acts on opted-in issues.
+type githubBackend struct{ repo, taskLabel string }
 
 const (
 	labInProgress = "mago:in-progress"
@@ -126,6 +129,9 @@ func (gi ghIssue) toTask() *Task {
 }
 
 func (b *githubBackend) listIssues(extra ...string) ([]ghIssue, error) {
+	if b.taskLabel != "" {
+		extra = append(extra, "--label", b.taskLabel) // scope to opted-in issues
+	}
 	args := append([]string{"issue", "list", "--state", "all", "--limit", "200",
 		"--json", "number,title,state,labels"}, extra...)
 	out, err := b.gh(args...)
@@ -207,6 +213,10 @@ func (b *githubBackend) FindTask(id string) (*Task, error) { return b.loadIssue(
 func (b *githubBackend) AddTask(title, project string) (*Task, error) {
 	b.ensureLabels()
 	args := []string{"issue", "create", "--title", title, "--body", "Created via mago."}
+	if b.taskLabel != "" { // keep mago-created tasks inside the scoped backlog
+		b.gh("label", "create", b.taskLabel, "--color", "5319e7", "--force")
+		args = append(args, "--label", b.taskLabel)
+	}
 	if project != "" {
 		b.gh("label", "create", "project:"+project, "--color", "5319e7", "--force")
 		args = append(args, "--label", "project:"+project)
