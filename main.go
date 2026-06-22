@@ -32,6 +32,8 @@ func main() {
 		err = cmdStatus(os.Args[2:])
 	case "answer":
 		err = cmdAnswer(os.Args[2:])
+	case "worker":
+		err = cmdWorker(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
@@ -61,6 +63,7 @@ Usage:
                                   (--addr :8099, --secret <hmac>, --heartbeat <secs>)
   mago status [-C d]              show STATE.md, tasks, and pending HITL
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
+  mago worker doctor               validate tau, gh, and OPENCODE_API_KEY (exits 101 on failure)
   mago version | help
 
 Flags:
