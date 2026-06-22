@@ -44,12 +44,13 @@ func cmdDigest(args []string) error {
 			where, n["open"], n["in_progress"], n["blocked"], n["needs_human"], n["done"])
 	}
 
-	// PR throughput on the company repo.
+	// PR throughput on the company repo, incl. the autonomy metric: PRs mago shipped (mago/* branches).
 	if comp.ghRepo != "" {
 		since := time.Now().AddDate(0, 0, -1).UTC().Format("2006-01-02")
 		merged := ghCount(comp.ghRepo, "pr", "list", "--state", "merged", "--search", "merged:>="+since, "--json", "number", "--jq", "length")
 		open := ghCount(comp.ghRepo, "pr", "list", "--state", "open", "--json", "number", "--jq", "length")
-		fmt.Printf("\nPull requests:\n  merged (last 24h) %s · open %s\n", numOr(merged), numOr(open))
+		magoShipped := ghCount(comp.ghRepo, "pr", "list", "--state", "merged", "--search", "merged:>="+since+" head:mago/", "--json", "number", "--jq", "length")
+		fmt.Printf("\nPull requests (last 24h):\n  merged %s · open %s · shipped by mago %s\n", numOr(merged), numOr(open), numOr(magoShipped))
 	}
 
 	// Anything waiting on the human.
