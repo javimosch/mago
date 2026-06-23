@@ -43,7 +43,9 @@ MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash ./mago run cto -C myco
 # GitHub mode: set MAGO_GH_REPO=owner/repo (tasks become issues, HITL via comments)
 ```
 
-## End-to-end example
+## End-to-end examples
+
+### Local company (no GitHub)
 
 A full local run, from an empty directory to a company that opens pull requests. Each
 command is independent and idempotent — re-running is safe.
@@ -76,20 +78,57 @@ MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash ./mago run cto -C myco
 ./mago answer <task-id> "Yes, use the stdlib net/http mux" -C myco
 ```
 
-GitHub mode wires the same loop to a real repo: set `MAGO_GH_REPO=owner/repo` and tasks
-become issues, HITL happens in issue comments, and PRs open against that repo. Before a
-worker runs unattended, validate its environment:
+### GitHub-backed company
+
+```sh
+# Tasks become issues; HITL questions go in PR comments
+export MAGO_GH_REPO=owner/repo
+export MAGO_PROVIDER=opencode-go
+export MAGO_MODEL=deepseek-v4-flash
+export OPENCODE_API_KEY=sk-...
+
+./mago init myco
+./mago task add "Tighten input validation on the signup form" -C myco
+
+# Run the loop; the agent opens a PR when done
+./mago loop cto -C myco
+```
+
+GitHub mode wires the same loop to a real repo: tasks become issues, HITL happens in
+issue comments, and PRs open against that repo. Before a worker runs unattended, validate
+its environment:
 
 ```sh
 ./mago worker doctor          # checks tau, gh, and OPENCODE_API_KEY; exits 101 on any failure
 ```
 
+### Event-driven worker (production)
+
 For a long-running worker, replace the one-shot `run`/`tick` with a cadence or the
 event-driven server:
 
 ```sh
-./mago loop cto -C myco       # adaptive cadence (--base/--max/--max-ticks seconds)
-./mago serve -C myco          # GitHub webhooks wake a reconcile (--addr, --secret, --relay)
+export MAGO_GH_REPO=owner/repo
+export MAGO_VERIFY=1           # run go test before approving a PR
+export MAGO_DAILY_BUDGET=50    # cap at 50 work cycles/day
+
+./mago loop cto -C myco        # adaptive cadence (--base/--max/--max-ticks seconds)
+
+# NAT-friendly: dial out to the mago relay instead of exposing a port
+./mago serve -C myco --relay
+
+# Or listen on a local port (e.g. behind nginx / cloudflared)
+./mago serve -C myco --addr :8099 --secret <hmac-secret>
+```
+
+### Claude Code as the agent runtime
+
+```sh
+# Run agents using your local Claude subscription — no API key needed
+export MAGO_PROVIDER=claude
+export MAGO_MODEL=sonnet
+
+./mago run cto -C myco
 ```
 
 ## Troubleshooting
@@ -104,9 +143,10 @@ tick burns tokens:
   cannot call a model.
 - **`gh (GitHub CLI) on PATH` / `gh authenticated` fails** — install
   [gh](https://cli.github.com) and run `gh auth login`. Required for GitHub mode (issues,
-  comments, PRs).
+  comments, PRs). For headless servers: `export GH_TOKEN=<your-PAT>`.
 - **`OPENCODE_API_KEY set` fails** — export your provider key (BYOK). mago never ships
-  completions; the key bills you directly.
+  completions; the key bills you directly. Alternative: add it to
+  `~/.config/tau/config.json` (`{"keys": {"opencode-go": "sk-..."}}`, chmod 600).
 
 ### Formatter errors (`gofmt`)
 
@@ -153,6 +193,24 @@ MAGO_VERIFY=1 ./mago ...                       # auto-detects Go and runs build 
 MAGO_VERIFY_CMD="go vet ./... && go test ./..." ./mago ...   # or supply your own command
 ```
 
+### Agent picks up no tasks / always reports idle
+
+1. Check there are open tasks: `mago status -C myco`
+2. In GitHub mode, confirm `MAGO_GH_REPO` matches the repo that has open issues.
+3. If `MAGO_TASK_LABEL` is set, the issue must carry that label.
+4. The routing logic prefers the named agent — if no task fits the agent's role, it skips.
+   Run `mago tick -C myco` to let the router pick the right agent automatically.
+
+### Agents open PRs but they are never auto-merged
+
+Auto-merge is on by default when `MAGO_NO_MERGE` is unset. If PRs sit open:
+
+1. The repo may require branch-protection reviews — the agent's approval satisfies one
+   review, but not multiple required reviews or a passing CI check. Set `MAGO_VERIFY=1`
+   so the agent runs tests before approving.
+2. `MAGO_MERGE_UNVERIFIED` is off by default — if the repo has no detectable check
+   command, set `MAGO_MERGE_UNVERIFIED=1` to merge without a check.
+
 Docs:
 
 - [STATUS.md](docs/STATUS.md) — what's actually built vs. designed
@@ -160,6 +218,7 @@ Docs:
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — the layers, binaries, data flow, git-native model
 - [MEMORY.md](docs/MEMORY.md) — how short ticks accumulate into real progress
 - [ROADMAP.md](docs/ROADMAP.md) — v1 scope and what waits for v2
+- [CONFIGURATION.md](docs/CONFIGURATION.md) — every env var, config file, and flag that changes how mago runs
 - [AGENTS.md](AGENTS.md) — coding guidelines for working in this repo
 
 ## Pricing
