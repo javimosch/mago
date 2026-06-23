@@ -32,7 +32,17 @@ mago init ./company
 mago project add <name> --repo owner/repo
 MAGO_TASK_LABEL=mago mago serve --relay -C ./company    # worker dials out; agents wake on GitHub events
 ```
-A single project repo becomes the backlog automatically; for several, set `MAGO_GH_REPO`.
+
+**Two layouts:**
+- **Single repo** (default): point the worker at one repo — its issues are the backlog, agents work
+  that repo, and PRs close its issues directly. `mago project add owner/repo` (a lone project repo is
+  auto-adopted as the backlog) or set `MAGO_GH_REPO=owner/repo`.
+- **Multi-project** (one worker, several repos): one **backlog repo** (`MAGO_GH_REPO`) is the command
+  center where you file issues; register the others with `mago project add <name> --repo owner/repo`.
+  An issue labeled `project:<name>` (file it with `mago task add "<title>" --project <name>`) has its
+  PR opened on **that project's** repo. The worker watches all of them over one relay connection.
+  ⚠️ Proactive planning only files into the **backlog** repo — so multi-project is for **reactive**
+  dispatch; keep **proactive** single-repo (one worker per repo). See the `fleet` skill.
 
 ## Operate via GitHub
 - File work as issues; with `MAGO_TASK_LABEL=mago` the worker only acts on `mago`-labeled issues
