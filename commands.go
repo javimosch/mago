@@ -107,6 +107,11 @@ func cmdTask(args []string) error {
 	return nil
 }
 
+// projectActions is the canonical list of `mago project` sub-actions, used for
+// the unknown-action "did you mean" suggestion. Keep in sync with the switch in
+// cmdProject (TestProjectActionsSuggestThemselves guards against drift).
+var projectActions = []string{"add", "list"}
+
 func cmdProject(args []string) error {
 	dir, rest, err := parseCompanyDir(args)
 	if err != nil {
@@ -159,6 +164,13 @@ func cmdProject(args []string) error {
 		}
 		fmt.Printf("project %q ready%s%s\n", name, ifStr(repo != "", " -> "+repo, " (no repo set — pass --repo owner/repo)"), ifStr(mirror, " [mirror-issue on]", ""))
 		return nil
+	case len(pos) >= 1 && pos[0] != "add" && pos[0] != "list":
+		// Unknown action (not a valid action missing its args): point at the
+		// nearest valid sub-action instead of dumping the full usage block.
+		if s := nearestAction(pos[0], projectActions); s != "" {
+			return fmt.Errorf("unknown project action %q — did you mean %q?\nrun `mago project` for usage", pos[0], s)
+		}
+		return fmt.Errorf("unknown project action %q (valid: add, list)\nrun `mago project` for usage", pos[0])
 	}
 	return fmt.Errorf("usage:\n  mago project add <name> --repo owner/repo [--mirror] [-C dir]\n  mago project add owner/repo [-C dir]\n  mago project list [-C dir]")
 }
