@@ -48,6 +48,7 @@ Tokens (presets + `key=value`, combine freely):
 - `reactive` (proactive off) · `proactive` (default 1h) · `proactive=<secs>` · `comms=on|off`
 - `review` (you merge) · `verified` (auto-merge only green PRs) · `merge=review|verified|on`
 - `pr-cap=<n>` · `issue-cap=<n>` — per-repo backpressure / cadence control (0 = off; see below)
+- `update=auto|manual` — self-update policy (see "Worker self-update" below)
 
 ```
 mago mode proactive=3600 verified comms=on -C /root/co   # local, live
@@ -56,6 +57,20 @@ mago worker mode verified --all                           # remote: flip the who
 ```
 When `.mago/mode.json` is absent the mode is derived from the env knobs below (back-compat); once you
 set a mode, the file wins.
+
+## Worker self-update (no reship, no ssh)
+A relay worker learns the latest CLI version (a content hash) from the platform on its existing
+connection and can update itself:
+- `update=manual` (**default**) — the worker logs a one-time nudge when a newer binary is published;
+  you update it yourself (`mago serve stop` → swap binary → relaunch).
+- `update=auto` — on a new release the worker downloads `/dl/mago` for its os/arch, verifies the hash,
+  atomically swaps its own binary, and re-execs in place (same PID — a `--daemon` supervisor neither
+  double-spawns nor needs restarting). Flip it live: `mago worker mode update=auto --all`.
+
+So shipping a release to the whole fleet is: rebuild the matrix → scp the new `mago-<os>-<arch>` into
+the platform's `cli/` dir → auto workers pick it up within ~25s; manual workers nudge until updated.
+No per-box ssh. (Env seed: `MAGO_UPDATE=auto`.) The version is a sha256 of the binary, so there's no
+version-bump discipline — identical bytes never trigger an update.
 
 ## Autonomy knobs (per worker, via env — seed the default mode)
 - `MAGO_PROACTIVE=<secs>` — the planner proposes new issues from STATE.md `## Mission` on this cadence.

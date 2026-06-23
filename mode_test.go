@@ -35,6 +35,13 @@ func TestParseMode(t *testing.T) {
 	if m.PRCap != 0 || m.IssueCap != 5 {
 		t.Errorf("pr-cap=0 should clear only PRCap: %+v", m)
 	}
+	m, _ = parseMode(base, []string{"update=auto"})
+	if m.Update != "auto" {
+		t.Errorf("update=auto: %+v", m)
+	}
+	if _, err := parseMode(base, []string{"update=sometimes"}); err == nil {
+		t.Error("bad update value should error")
+	}
 }
 
 func TestLoadSaveMode(t *testing.T) {
