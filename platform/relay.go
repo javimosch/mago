@@ -10,6 +10,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -23,14 +25,16 @@ import (
 // low volume of GitHub webhooks.
 
 type relayMsg struct {
-	Event string          `json:"event"`          // GitHub X-GitHub-Event (or "ping" keepalive)
-	Body  json.RawMessage `json:"body,omitempty"` // raw webhook payload
+	Event   string          `json:"event"`             // GitHub X-GitHub-Event (or "ping" keepalive)
+	Body    json.RawMessage `json:"body,omitempty"`    // raw webhook payload
+	Version string          `json:"version,omitempty"` // latest CLI version for the worker's os/arch (self-update)
 }
 
 type relayConn struct {
 	license string
 	worker  string // worker id (hostname or MAGO_WORKER_ID) — an account may run several
 	key     string // license + "\x00" + worker: identifies one worker's connection
+	plat    string // worker os-arch (e.g. linux-amd64) — picks the binary version to advertise
 	repos   map[string]bool
 	ch      chan relayMsg
 }
@@ -191,7 +195,8 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 	if workerName == "" {
 		workerName = "default"
 	}
-	conn := &relayConn{license: token, worker: workerName, key: token + "\x00" + workerName, repos: repos, ch: make(chan relayMsg, 16)}
+	plat := platOf(r.URL.Query().Get("os"), r.URL.Query().Get("arch"))
+	conn := &relayConn{license: token, worker: workerName, key: token + "\x00" + workerName, plat: plat, repos: repos, ch: make(chan relayMsg, 16)}
 	s.hub.register(conn)
 	defer s.hub.unregister(conn)
 	log.Printf("relay: worker %q connected (user %d, repos=%v)", workerName, u.ID, keys(repos))
@@ -201,7 +206,9 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(200)
 	enc := json.NewEncoder(w)
-	enc.Encode(relayMsg{Event: "ready"})
+	// The ready/ping frames carry the latest CLI version for this worker's os/arch so it can
+	// self-update (worker side: maybeSelfUpdate). cliVersion caches per file mtime, so this is cheap.
+	enc.Encode(relayMsg{Event: "ready", Version: cliVersion(plat)})
 	flusher.Flush()
 
 	ping := time.NewTicker(25 * time.Second)
@@ -221,13 +228,67 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 			}
 			flusher.Flush()
 		case <-ping.C:
-			if enc.Encode(relayMsg{Event: "ping"}) != nil {
+			if enc.Encode(relayMsg{Event: "ping", Version: cliVersion(plat)}) != nil {
 				return
 			}
 			flusher.Flush()
 		}
 	}
 }
+
+// platOf normalizes a worker's reported os/arch to the "os-arch" binary key, defaulting to
+// linux-amd64 (what older workers that don't report get).
+func platOf(osName, arch string) string {
+	if osName == "" {
+		osName = "linux"
+	}
+	if arch == "" {
+		arch = "amd64"
+	}
+	return osName + "-" + arch
+}
+
+// cliVersion returns sha256[:12] of the published CLI binary for plat (mago-<plat> in MAGO_CLI_DIR),
+// or "" if it can't be read. Cached per file mtime so it isn't re-hashed on every ping frame.
+func cliVersion(plat string) string {
+	dir := os.Getenv("MAGO_CLI_DIR")
+	if dir == "" {
+		return ""
+	}
+	path := filepath.Join(dir, "mago-"+plat)
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	mt := fi.ModTime().UnixNano()
+	cliVerMu.Lock()
+	defer cliVerMu.Unlock()
+	if c, ok := cliVerCache[plat]; ok && c.mtime == mt {
+		return c.ver
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	ver := hex.EncodeToString(h.Sum(nil))[:12]
+	cliVerCache[plat] = cliVerEntry{mtime: mt, ver: ver}
+	return ver
+}
+
+type cliVerEntry struct {
+	mtime int64
+	ver   string
+}
+
+var (
+	cliVerMu    sync.Mutex
+	cliVerCache = map[string]cliVerEntry{}
+)
 
 // handleGithubWebhook is the single GitHub ingress: POST /webhooks/github/<install>. It
 // verifies the GitHub signature, then routes the event to the worker serving that repo.

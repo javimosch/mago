@@ -20,6 +20,7 @@ type workerMode struct {
 	Merge     string `json:"merge"`     // review (human merges) | verified (auto-merge on green) | on (auto-merge on approve)
 	PRCap     int    `json:"pr_cap"`    // backpressure: stop starting work on a repo at this many open MAGO PRs; 0 = no cap
 	IssueCap  int    `json:"issue_cap"` // backpressure: planner stops proposing once the repo has this many open issues; 0 = default (3)
+	Update    string `json:"update"`    // self-update: auto (swap binary live on a new release) | manual (default; just nudge)
 }
 
 func (c *Company) modeFile() string { return filepath.Join(c.magoDir(), "mode.json") }
@@ -35,6 +36,7 @@ func (c *Company) loadMode() workerMode {
 		Comms:     os.Getenv("MAGO_COMMS") == "1",
 		PRCap:     int(atoiSafe(os.Getenv("MAGO_PR_CAP"))),
 		IssueCap:  int(atoiSafe(os.Getenv("MAGO_ISSUE_CAP"))),
+		Update:    os.Getenv("MAGO_UPDATE"),
 	}
 	switch {
 	case os.Getenv("MAGO_NO_MERGE") == "1":
@@ -58,6 +60,14 @@ func (c *Company) modeMerge() string  { return c.loadMode().Merge }
 func (c *Company) modePRCap() int     { return c.loadMode().PRCap }
 func (c *Company) modeIssueCap() int  { return c.loadMode().IssueCap }
 
+// modeUpdate is the self-update policy, normalized: "auto" or "manual" (the default).
+func (c *Company) modeUpdate() string {
+	if c.loadMode().Update == "auto" {
+		return "auto"
+	}
+	return "manual"
+}
+
 func describeMode(m workerMode) string {
 	p := "off (reactive)"
 	if m.Proactive > 0 {
@@ -69,6 +79,9 @@ func describeMode(m workerMode) string {
 	}
 	if m.IssueCap > 0 {
 		s += fmt.Sprintf(" · issue-cap %d", m.IssueCap)
+	}
+	if m.Update == "auto" {
+		s += " · update auto"
 	}
 	return s
 }
@@ -82,7 +95,7 @@ func onOff(b bool) string {
 
 // parseMode applies preset/key=value tokens onto a base mode. Presets: reactive, proactive, review,
 // verified|auto. Pairs: proactive=<secs>, comms=on|off, merge=review|verified|on, pr-cap=<n>,
-// issue-cap=<n> (0 disables a cap).
+// issue-cap=<n> (0 disables a cap), update=auto|manual.
 func parseMode(base workerMode, tokens []string) (workerMode, error) {
 	m := base
 	for _, tok := range tokens {
@@ -106,7 +119,7 @@ func parseMode(base workerMode, tokens []string) (workerMode, error) {
 		default:
 			k, v, ok := strings.Cut(t, "=")
 			if !ok {
-				return m, fmt.Errorf("unknown mode token %q (try: reactive | proactive[=secs] | review | verified | comms=on|off | merge=review|verified|on | pr-cap=N | issue-cap=N)", t)
+				return m, fmt.Errorf("unknown mode token %q (try: reactive | proactive[=secs] | review | verified | comms=on|off | merge=review|verified|on | pr-cap=N | issue-cap=N | update=auto|manual)", t)
 			}
 			switch k {
 			case "proactive":
@@ -122,6 +135,11 @@ func parseMode(base workerMode, tokens []string) (workerMode, error) {
 				m.PRCap = int(atoiSafe(v))
 			case "issue-cap", "issues":
 				m.IssueCap = int(atoiSafe(v))
+			case "update":
+				if v != "auto" && v != "manual" {
+					return m, fmt.Errorf("update must be auto|manual, got %q", v)
+				}
+				m.Update = v
 			default:
 				return m, fmt.Errorf("unknown mode key %q", k)
 			}

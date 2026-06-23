@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -62,6 +63,8 @@ func streamRelay(ctx context.Context, w *eventWorker, cfg *cliConfig, repos []st
 	q.Set("token", cfg.LicenseKey)
 	q.Set("repos", strings.Join(repos, ","))
 	q.Set("worker", workerID()) // identifies this worker so the platform keeps several per account
+	q.Set("os", runtime.GOOS)   // so the platform can advertise the matching binary's version (self-update)
+	q.Set("arch", runtime.GOARCH)
 	u := strings.TrimRight(cfg.PlatformURL, "/") + "/ws/worker?" + q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
@@ -87,14 +90,16 @@ func streamRelay(ctx context.Context, w *eventWorker, cfg *cliConfig, repos []st
 			continue
 		}
 		var msg struct {
-			Event string          `json:"event"`
-			Body  json.RawMessage `json:"body"`
+			Event   string          `json:"event"`
+			Body    json.RawMessage `json:"body"`
+			Version string          `json:"version"`
 		}
 		if json.Unmarshal([]byte(line), &msg) != nil {
 			continue
 		}
 		switch msg.Event {
-		case "ping", "ready": // keepalive / handshake — nothing to do
+		case "ping", "ready": // keepalive / handshake — also carries the latest binary version
+			w.maybeSelfUpdate(msg.Version)
 			continue
 		case "control": // operator switched this worker's mode remotely (mago worker mode)
 			w.comp.applyControl(msg.Body)
