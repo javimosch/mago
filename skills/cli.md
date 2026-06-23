@@ -20,7 +20,7 @@ mago link --installation <id> | mago link list  claim/list GitHub App installs (
 mago init [dir]                                 scaffold .mago/, STATE.md, tasks/, workspace/, exec team
 mago task add "<title>" [--project <p>] [-C d]  add a task (GitHub issue when MAGO_GH_REPO set)
 mago project add <name> --repo owner/repo [-C d]
-mago serve [-C d] [--relay] [--heartbeat <s>]   the worker (relay = dial out; no inbound port)
+mago serve [-C d] [--relay] [--heartbeat <s>] [--until HH:MM] [--start-delay <dur>]  the worker
 mago tick [-C d]                                reconcile once (route + run agents)
 mago status [-C d]                              STATE.md, tasks, pending HITL
 mago digest [-C d]                              "what your company did": backlog, PRs (24h), HITL, budget

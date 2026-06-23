@@ -23,6 +23,8 @@ func cmdServe(args []string) error {
 	secret := os.Getenv("MAGO_WEBHOOK_SECRET")
 	heartbeat := 0
 	relay := false
+	until := ""      // --until HH:MM: stop cleanly at this wall-clock time (native scheduled stop)
+	startDelay := "" // --start-delay <dur>: wait before starting (native fleet staggering)
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
 		case "--addr":
@@ -40,6 +42,16 @@ func cmdServe(args []string) error {
 				heartbeat = atoiSafe(rest[i+1])
 				i++
 			}
+		case "--until":
+			if i+1 < len(rest) {
+				until = rest[i+1]
+				i++
+			}
+		case "--start-delay":
+			if i+1 < len(rest) {
+				startDelay = rest[i+1]
+				i++
+			}
 		case "--relay":
 			relay = true
 		}
@@ -49,6 +61,29 @@ func cmdServe(args []string) error {
 		return err
 	}
 	warnIfNoProviderKey()
+
+	// --start-delay: stagger fleet workers without an OS `sleep` wrapper.
+	if startDelay != "" {
+		d, err := time.ParseDuration(startDelay)
+		if err != nil {
+			return fmt.Errorf("--start-delay must be a duration (e.g. 15m, 900s): %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "[lifecycle] start-delay %s before serving\n", d)
+		time.Sleep(d)
+	}
+	// --until HH:MM: native scheduled stop (replaces a cron kill). Exits cleanly at the next HH:MM.
+	if until != "" {
+		d, err := untilDuration(until)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "[lifecycle] will stop at %s (in %s)\n", until, d.Round(time.Minute))
+		go func() {
+			time.Sleep(d)
+			fmt.Fprintf(os.Stderr, "[lifecycle] reached --until %s — stopping\n", until)
+			os.Exit(0)
+		}()
+	}
 
 	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 64)}
 	go w.run()
@@ -176,6 +211,21 @@ func (w *eventWorker) heartbeatLoop(every time.Duration) {
 	for range t.C {
 		w.signal(wakeEvent{reason: "heartbeat"})
 	}
+}
+
+// untilDuration returns the time from now until the next occurrence of HH:MM (today if still
+// ahead, otherwise tomorrow). Powers `mago serve --until` (native scheduled stop).
+func untilDuration(hhmm string) (time.Duration, error) {
+	t, err := time.Parse("15:04", strings.TrimSpace(hhmm))
+	if err != nil {
+		return 0, fmt.Errorf("--until must be HH:MM 24h (e.g. 09:00): %w", err)
+	}
+	now := time.Now()
+	target := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
+	if !target.After(now) {
+		target = target.Add(24 * time.Hour)
+	}
+	return time.Until(target), nil
 }
 
 // proactiveLoop ticks the planner on a cadence to propose new backlog from the mission.
