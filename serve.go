@@ -114,10 +114,9 @@ func cmdServe(args []string) error {
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
 	}
-	// MAGO_PROACTIVE=<secs>: the planner proposes new backlog from the mission on this cadence.
-	if iv := atoiSafe(os.Getenv("MAGO_PROACTIVE")); iv > 0 {
-		go w.proactiveLoop(time.Duration(iv) * time.Second)
-	}
+	// Proactive planning runs on the live mode's cadence (0 = reactive). Always started; it self-gates
+	// so the mode can be switched at runtime (mago mode / mago worker mode) without a restart.
+	go w.proactiveLoop()
 	repos := comp.repos()
 	reposStr := "none — add with `mago project add <name> --repo owner/repo`"
 	if len(repos) > 0 {
@@ -189,6 +188,9 @@ func (w *eventWorker) run() {
 				w.comp.recordAction()
 			}
 		case ev.comms:
+			if !w.comp.modeComms() { // non-code flow toggled off (live)
+				continue
+			}
 			if w.comp.guardBudget("release note") {
 				continue
 			}
@@ -251,11 +253,20 @@ func untilDuration(hhmm string) (time.Duration, error) {
 	return time.Until(target), nil
 }
 
-// proactiveLoop ticks the planner on a cadence to propose new backlog from the mission.
-func (w *eventWorker) proactiveLoop(every time.Duration) {
-	t := time.NewTicker(every)
-	for range t.C {
-		w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
+// proactiveLoop ticks the planner to propose backlog on the live mode cadence. It re-reads the mode
+// each cycle, so enabling/disabling/retuning proactive (mago mode / mago worker mode) takes effect
+// without a restart. When reactive (cadence 0) it idles, polling the mode every 30s.
+func (w *eventWorker) proactiveLoop() {
+	for {
+		secs := w.comp.modeProactive()
+		if secs <= 0 {
+			time.Sleep(30 * time.Second)
+			continue
+		}
+		time.Sleep(time.Duration(secs) * time.Second)
+		if w.comp.modeProactive() > 0 { // still proactive after the sleep?
+			w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
+		}
 	}
 }
 
@@ -353,10 +364,10 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 				prNum:  p.PullRequest.Number,
 			}, true
 		case "closed":
-			// Beyond-code loop (opt-in MAGO_COMMS=1): a merged implementer PR (mago/task-*) wakes the
-			// CMO to draft a release note. Exclude mago/news-* (the comms' own branch) so it can't loop.
-			if p.PullRequest.Merged && os.Getenv("MAGO_COMMS") == "1" &&
-				strings.HasPrefix(p.PullRequest.Head.Ref, "mago/task-") {
+			// Beyond-code loop: a merged implementer PR (mago/task-*) wakes the CMO to draft a release
+			// note. The comms toggle is checked live in the run loop (modeComms), so the wake is always
+			// emitted here; only mago/task-* branches qualify (the comms' own work isn't on those).
+			if p.PullRequest.Merged && strings.HasPrefix(p.PullRequest.Head.Ref, "mago/task-") {
 				return wakeEvent{
 					reason:  fmt.Sprintf("PR #%d merged", p.PullRequest.Number),
 					prRepo:  p.Repository.FullName,

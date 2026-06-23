@@ -22,6 +22,8 @@ mago task add "<title>" [--project <p>] [-C d]  add a task (GitHub issue when MA
 mago project add <name> --repo owner/repo [-C d]
 mago serve [-C d] [--relay] [--daemon] [--until HH:MM] [--start-delay <dur>]  the worker
 mago serve stop | status [-C d]                 control/inspect a --daemon worker
+mago mode [show | <tokens>] [-C d]              switch a LOCAL worker's mode live (no restart)
+mago worker mode <tokens> --worker <id>|--all   switch a REMOTE worker's mode over the relay
 mago tick [-C d]                                reconcile once (route + run agents)
 mago status [-C d]                              STATE.md, tasks, pending HITL
 mago digest [-C d]                              "what your company did": backlog, PRs (24h), HITL, budget
@@ -36,6 +38,8 @@ mago skills [<name>]                            these embedded operator skills (
   `OPENCODE_API_KEY` for tau; `CLAUDE_CONFIG_DIR` for Claude Code under a custom HOME.
 - Autonomy (see the `fleet` skill): `MAGO_PROACTIVE`, `MAGO_PROACTIVE_MAX`, `MAGO_COMMS`, `MAGO_NO_MERGE`,
   `MAGO_VERIFY` / `MAGO_VERIFY_CMD`, `MAGO_MERGE_UNVERIFIED`, `MAGO_DAILY_BUDGET`, `MAGO_WORKER_ID`.
+  These env vars seed the *default* mode; once set via `mago mode` / `mago worker mode` the persisted
+  `.mago/mode.json` wins and is read live each cycle (see the `fleet` skill, "Runtime mode").
 
 ## Exit codes
 `0` ok · `1` error · `80` usage/user error · `100-109` integration error (missing/unauth dependency).

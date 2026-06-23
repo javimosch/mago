@@ -9,16 +9,63 @@ import (
 func cmdWorker(args []string) error {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: mago worker <subcommand>")
-		fmt.Fprintln(os.Stderr, "  subcommands: doctor")
+		fmt.Fprintln(os.Stderr, "  subcommands: doctor, mode")
 		os.Exit(80)
 	}
 	switch args[0] {
 	case "doctor":
 		workerDoctor()
+	case "mode":
+		return cmdWorkerMode(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown worker subcommand: %s\n", args[0])
 		os.Exit(80)
 	}
+	return nil
+}
+
+// cmdWorkerMode switches a REMOTE worker's mode live over the relay (no ssh, no restart):
+//
+//	mago worker mode <reactive|proactive[=secs]|review|verified|comms=on|off …> (--worker <id> | --all)
+func cmdWorkerMode(args []string) error {
+	worker, all := "", false
+	var tokens []string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--worker", "-w":
+			if i+1 < len(args) {
+				worker = args[i+1]
+				i++
+			}
+		case "--all":
+			all = true
+		default:
+			tokens = append(tokens, args[i])
+		}
+	}
+	if len(tokens) == 0 {
+		return fmt.Errorf("usage: mago worker mode <reactive|proactive[=secs]|review|verified|comms=on|off> (--worker <id> | --all)")
+	}
+	if worker == "" && !all {
+		return fmt.Errorf("specify --worker <id> (its MAGO_WORKER_ID / hostname) or --all")
+	}
+	if _, err := parseMode(workerMode{Merge: "review"}, tokens); err != nil { // validate before sending
+		return err
+	}
+	cfg := loadConfig()
+	var out struct {
+		Updated int      `json:"updated"`
+		Workers []string `json:"workers"`
+	}
+	body := map[string]any{"worker": worker, "all": all, "tokens": tokens}
+	if err := cfg.platformDo("POST", "/api/worker/control", body, true, &out); err != nil {
+		return err
+	}
+	if out.Updated == 0 {
+		fmt.Printf("no connected worker matched (%s) — is it running with --relay?\n", ifStr(all, "--all", worker))
+		return nil
+	}
+	fmt.Printf("mode pushed live to %d worker(s): %v\n", out.Updated, out.Workers)
 	return nil
 }
 

@@ -96,6 +96,9 @@ func streamRelay(ctx context.Context, w *eventWorker, cfg *cliConfig, repos []st
 		switch msg.Event {
 		case "ping", "ready": // keepalive / handshake — nothing to do
 			continue
+		case "control": // operator switched this worker's mode remotely (mago worker mode)
+			w.comp.applyControl(msg.Body)
+			continue
 		}
 		if ev, wake := classifyEvent(msg.Event, msg.Body); wake {
 			fmt.Fprintf(os.Stderr, "[relay] %s -> %s\n", msg.Event, ev.reason)

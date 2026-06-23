@@ -90,11 +90,10 @@ func (c *Company) reviewPR(prRepo string, prNum int) bool {
 		comment = "(no comment)"
 	}
 	// Verify the PR for real — check out the branch and run build/tests — so an auto-merge is
-	// trustworthy, not just a diff the model liked. No-op unless MAGO_VERIFY / MAGO_VERIFY_CMD is set.
+	// trustworthy, not just a diff the model liked. Runs only when the merge mode is "verified".
 	vr := c.verifyPR(prRepo, prNum)
-	verifyOn := verifyEnabled()
-	noMerge := os.Getenv("MAGO_NO_MERGE") == "1"                 // never auto-merge (human merges)
-	mergeUnverified := os.Getenv("MAGO_MERGE_UNVERIFIED") == "1" // merge even when no check could run
+	merge := c.modeMerge() // live mode: review | verified | on
+	mergeUnverified := os.Getenv("MAGO_MERGE_UNVERIFIED") == "1"
 
 	approved := verdict == "approve"
 	verifyFailed := vr.ran && !vr.ok
@@ -111,15 +110,14 @@ func (c *Company) reviewPR(prRepo string, prNum int) bool {
 		logmsg = "verification FAILED — changes requested"
 	case !approved:
 		logmsg = "changes requested (not merged)"
-	case noMerge:
-		suffix = "\n\n_(approved" + ifStr(vr.ok, " + verified", "") + " — auto-merge off; merge when ready.)_"
-		logmsg = "approved — left for human merge (MAGO_NO_MERGE)"
-	case verifyOn && !vr.ok && !(!vr.ran && mergeUnverified):
-		// verification is on but nothing green to stand on (no checks found, and not opted into
-		// merging unverified) — approve but don't auto-merge.
+	case merge == "review":
+		suffix = "\n\n_(approved" + ifStr(vr.ok, " + verified", "") + " — review-only mode; merge when ready.)_"
+		logmsg = "approved — left for human merge (review mode)"
+	case merge == "verified" && !vr.ok && !(!vr.ran && mergeUnverified):
+		// verified mode but nothing green to stand on (no check ran, and not opted into merge-unverified).
 		suffix = "\n\n_(approved but not auto-merged — no passing verification; set MAGO_MERGE_UNVERIFIED=1 or merge manually.)_"
 		logmsg = "approved, unverified — not merged"
-	default:
+	default: // merge==on (LLM-approve), or merge==verified with a green check
 		doMerge = true
 	}
 	gh("-R", prRepo, "pr", "comment", n, "--body", body+suffix)
