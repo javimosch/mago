@@ -57,8 +57,11 @@ func main() {
 	case "help", "-h", "--help":
 		usage()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", cmd)
-		usage()
+		fmt.Fprintf(os.Stderr, "mago: unknown command %q\n", cmd)
+		if s := suggestCommand(cmd); s != "" {
+			fmt.Fprintf(os.Stderr, "\nDid you mean %q?\n", s)
+		}
+		fmt.Fprintln(os.Stderr, "\nRun 'mago help' to see all commands.")
 		os.Exit(80)
 	}
 	if err != nil {
