@@ -10,6 +10,7 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T06-53-13Z #21 Add `util_test.go` covering `sanitize`, `truncate`, `oneLine`, `stripFences`, `readFileOr`, and `orDefault` string/path …
 - 2026-06-23T07-17-02Z #25 Add `skills_test.go` covering `tokenize`, `parseStringArray`, and `keywordSelect` ranking/limit and fallback behavior
 - 2026-06-23T13-49-17Z #30 Emit an actionable warning when GitHub-backed mode is expected but no backlog repo is set, naming `MAGO_GH_REPO` and `ma…
+- 2026-06-23T13-52-27Z #29 Suggest the nearest valid command on unknown input ("did you mean") instead of dumping full usage in `mago`'s top-level …
 
 ## In flight
 (nothing yet)
@@ -27,3 +28,4 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T07-17-01Z [head-of-product] PR #26 opened: skills_test.go covering tokenize, parseStringArray, and keywordSelect ranking/limit/fallback
 - 2026-06-23T13-11-34Z [cto] PR #28 (mago/task-27) open: loop_test.go + behavior-preserving loop.go refactor for adaptive cadence; remote at 9b6f5bb, tests green.
 - 2026-06-23T13-49-16Z [cmo] PR #31 (mago/task-30) open: backlogRepoWarning + serve.go wiring + company_warn_test.go warn when GitHub mode expected but no backlog repo set; tests green.
+- 2026-06-23T13-52-25Z [cto] PR #32 (mago/task-29) open: 'did you mean' nearest-command suggestion on unknown input + suggest_test.go; tests green.

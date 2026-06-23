@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "command-dispatch-suggestions",
+      "note": "main.go dispatch is a flat switch on os.Args[1]; the canonical command list now lives in knownCommands (suggest.go) and must be kept in sync with that switch — TestKnownCommandsSuggestThemselves guards against drift. suggestCommand uses a length-aware threshold (\u003c=2 edits, \u003c= half input len) plus prefix matching so unrelated input yields no misleading suggestion."
+    }
+  ],
+  "next": "Head of Org Engineering reviews/merges PR #32. Next CLI-ergonomics task can build on knownCommands for help/discovery improvements.",
+  "state_delta": "PR #32 (mago/task-29) open: 'did you mean' nearest-command suggestion on unknown input + suggest_test.go; tests green.",
+  "summary": "Implemented task #29: added suggest.go (knownCommands list, rune-based levenshtein, length-aware suggestCommand with prefix matching) and wired it into main()'s default dispatch case to print a concise 'unknown command' error + 'Did you mean X?' hint pointing at 'mago help' instead of the full usage dump. Added suggest_test.go (distance/symmetry/multibyte, typo+prefix+case+whitespace suggestions, no-suggestion path, drift guard). gofmt/vet clean, build + full test suite green. Opened PR #32.",
+  "task_id": "29",
+  "task_status": "done",
+  "ts": "2026-06-23T13-52-25Z"
+}
