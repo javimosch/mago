@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "github-mode-detection",
+      "note": "usage() in main.go had no drift-guard test for its env-overrides block, so doc additions there are unguarded — keep MAGO_GH_REPO/MAGO_COMPANY/MAGO_TASK_LABEL descriptions in sync with company.go (ghRepo, MAGO_TASK_LABEL) and commands.go (MAGO_COMPANY) by hand."
+    }
+  ],
+  "next": "Head of Org Engineering reviews/merges PR #45; pick up the next CLI-ergonomics task.",
+  "state_delta": "PR #45 (mago/task-42) open: documents MAGO_COMPANY/MAGO_GH_REPO/MAGO_TASK_LABEL in mago --help env-overrides; tests green.",
+  "summary": "Implemented task #42: documented MAGO_COMPANY, MAGO_GH_REPO, and MAGO_TASK_LABEL in the 'Env overrides' section of mago --help (usage() in main.go), with descriptions grounded in their real usage (company.go:29/48, commands.go:14, serve.go:351). gofmt/vet/build clean, full test suite green, smoke-tested `go run . help`. Pushed mago/task-42 and opened PR #45.",
+  "task_id": "42",
+  "task_status": "done",
+  "ts": "2026-06-23T14-37-07Z"
+}
