@@ -26,7 +26,11 @@ func loadCompany(dir string) (*Company, error) {
 	if _, err := os.Stat(filepath.Join(abs, ".mago")); err != nil {
 		return nil, fmt.Errorf("not a mago company (no .mago/) at %s — run `mago init` first", abs)
 	}
-	c := &Company{Dir: abs, Name: filepath.Base(abs), ghRepo: os.Getenv("MAGO_GH_REPO")}
+	ghRepo := strings.TrimSpace(os.Getenv("MAGO_GH_REPO"))
+	if err := validateGHRepo(ghRepo); err != nil {
+		return nil, err
+	}
+	c := &Company{Dir: abs, Name: filepath.Base(abs), ghRepo: ghRepo}
 	// No explicit backlog repo? Adopt a single configured project repo as the task source, so
 	// `mago project add <owner/repo>` + `mago serve` enumerates that repo's issues without also
 	// requiring MAGO_GH_REPO. Ambiguous (multiple distinct project repos) -> stay local; the
@@ -50,6 +54,30 @@ func loadCompany(dir string) (*Company, error) {
 		c.tasks = &localBackend{c: c}
 	}
 	return c, nil
+}
+
+// validateGHRepo rejects a malformed MAGO_GH_REPO value early with an actionable error naming
+// the expected bare `owner/repo` form. It catches the two most common mistakes — pasting a full
+// GitHub URL or git remote (https://github.com/owner/repo, git@github.com:owner/repo.git) and
+// giving a value with no owner (a bare repo name, a leading/trailing slash, or extra path
+// segments). An empty value is valid here: it means "unset", and loadCompany handles the
+// local/auto-adopt fallback.
+func validateGHRepo(repo string) error {
+	if repo == "" {
+		return nil
+	}
+	const form = "expected the bare `owner/repo` form (e.g. acme/backlog)"
+	if strings.Contains(repo, "://") || strings.HasPrefix(repo, "git@") || strings.Contains(repo, "github.com") {
+		return fmt.Errorf("MAGO_GH_REPO=%q looks like a URL or git remote — set it to %s, not a full GitHub URL", repo, form)
+	}
+	parts := strings.Split(repo, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("MAGO_GH_REPO=%q is missing an owner or repo — %s", repo, form)
+	}
+	if strings.HasSuffix(parts[1], ".git") {
+		return fmt.Errorf("MAGO_GH_REPO=%q has a trailing .git — drop it; %s", repo, form)
+	}
+	return nil
 }
 
 func (c *Company) magoDir() string      { return filepath.Join(c.Dir, ".mago") }
