@@ -111,6 +111,10 @@ Flags:
   -C <dir>     company directory (default: cwd, or $MAGO_COMPANY)
 
 Env overrides (smoke test):
+  MAGO_COMPANY                 company directory (same as -C; default: cwd)
+  MAGO_GH_REPO                 backlog repo "owner/repo" -> use GitHub-backed mode
+                               (tasks=issues, status=labels); unset = local backend
+  MAGO_TASK_LABEL              issue label marking a task in GitHub-backed mode
   MAGO_PROVIDER, MAGO_MODEL    override the agent's tau provider/model
   MAGO_PLATFORM_URL            platform API base (default http://localhost:9100)
   MAGO_PASSWORD                non-interactive password for register/login
