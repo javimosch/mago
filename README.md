@@ -221,6 +221,234 @@ Docs:
 - [CONFIGURATION.md](docs/CONFIGURATION.md) — every env var, config file, and flag that changes how mago runs
 - [AGENTS.md](AGENTS.md) — coding guidelines for working in this repo
 
+## End-to-end examples
+
+### Local company (no GitHub)
+
+```sh
+# 1. Build
+go build -o mago .
+
+# 2. Check prerequisites
+./mago worker doctor
+#   [ok]   tau (LLM driver) on PATH
+#   [ok]   gh (GitHub CLI) on PATH
+#   [ok]   gh authenticated
+#   [ok]   OPENCODE_API_KEY set
+#   All checks passed. Worker is ready.
+
+# 3. Scaffold a company
+./mago init myco
+#   initialised company at myco/
+
+# 4. Add a task
+./mago task add "Add a /health endpoint with a test" -C myco
+#   task 1 created
+
+# 5. Set your provider and model (BYOK — your key, your bill)
+export MAGO_PROVIDER=opencode-go
+export MAGO_MODEL=deepseek-v4-flash
+export OPENCODE_API_KEY=sk-...
+
+# 6. Run one tick (brief → agent → reflect → write back)
+./mago run cto -C myco
+
+# 7. Or run on an adaptive cadence (stops after --max-ticks idle ticks)
+./mago loop cto -C myco --max-ticks 5
+
+# 8. Check what happened
+./mago status -C myco
+./mago digest -C myco
+```
+
+### GitHub-backed company
+
+```sh
+# Tasks become issues; HITL questions go in PR comments
+export MAGO_GH_REPO=owner/repo
+export MAGO_PROVIDER=opencode-go
+export MAGO_MODEL=deepseek-v4-flash
+export OPENCODE_API_KEY=sk-...
+
+./mago init myco
+./mago task add "Tighten input validation on the signup form" -C myco
+
+# Run the loop; the agent opens a PR when done
+./mago loop cto -C myco
+```
+
+### Event-driven worker (production)
+
+```sh
+# Serve receives GitHub webhooks and wakes agents automatically
+export MAGO_GH_REPO=owner/repo
+export MAGO_VERIFY=1           # run go test before approving a PR
+export MAGO_DAILY_BUDGET=50    # cap at 50 work cycles/day
+
+# NAT-friendly: dial out to the mago relay instead of exposing a port
+./mago serve -C myco --relay
+
+# Or listen on a local port (e.g. behind nginx / cloudflared)
+./mago serve -C myco --addr :8099 --secret <hmac-secret>
+```
+
+### Answer a blocked task (needs_human)
+
+```sh
+# See what needs a decision
+./mago status -C myco
+#   [needs_human] task 3: Which S3 bucket should test uploads target?
+
+./mago answer 3 "use s3://myco-test-uploads" -C myco
+#   task 3 resumed
+```
+
+### Claude Code as the agent runtime
+
+```sh
+# Run agents using your local Claude subscription — no API key needed
+export MAGO_PROVIDER=claude
+export MAGO_MODEL=sonnet
+
+./mago run cto -C myco
+```
+
+---
+
+## Troubleshooting
+
+### `tau: command not found` / `[fail] tau (LLM driver) on PATH`
+
+tau is the stateless LLM driver mago shells out to. Install it, then confirm:
+
+```sh
+which tau          # must print a path
+tau --version
+```
+
+If `mago worker doctor` still shows `[fail]`, your shell may have a stale PATH — open a
+new terminal or run `hash -r` (bash) / `rehash` (zsh).
+
+---
+
+### `[fail] gh authenticated` or `gh auth status` fails
+
+mago shells out to `gh` for every GitHub operation. Authenticate with:
+
+```sh
+gh auth login          # follow the browser OAuth flow
+gh auth status         # should print "Logged in to github.com as <you>"
+```
+
+For headless servers:
+
+```sh
+export GH_TOKEN=<your-PAT>
+```
+
+---
+
+### `[fail] OPENCODE_API_KEY set` — no API key
+
+Put the key in the environment or in `~/.config/tau/config.json`:
+
+```sh
+# Option A — environment
+export OPENCODE_API_KEY=sk-...
+
+# Option B — config file (persists across shells)
+mkdir -p ~/.config/tau
+echo '{"keys": {"opencode-go": "sk-..."}}' > ~/.config/tau/config.json
+chmod 600 ~/.config/tau/config.json
+```
+
+If you use a different provider, set the matching variable: `DEEPSEEK_API_KEY`,
+`OPENAI_API_KEY`, or switch to `MAGO_PROVIDER=claude` (no key required, uses your
+local Claude Code subscription).
+
+---
+
+### `go build` fails: `undefined` or `import cycle`
+
+mago's core module is **stdlib-only** (zero external dependencies). If you see an
+`undefined` error after a merge, check that no third-party import snuck in:
+
+```sh
+go list -m all    # must show only "mago" — no other modules
+go build -o mago .
+```
+
+If there is an external import, move that code to `platform/` or replace it with a
+stdlib equivalent.
+
+---
+
+### `gofmt` / formatter errors
+
+All Go files must be `gofmt`-formatted. The CI check fails on any diff:
+
+```sh
+gofmt -l .                  # lists files that need formatting
+gofmt -w .                  # reformat in place
+```
+
+Common cause: editors that insert trailing spaces or tabs in the wrong places. Set your
+editor to run `gofmt` on save, or use `goimports` (a superset of `gofmt`).
+
+---
+
+### `go vet` / linter errors
+
+```sh
+go vet ./...                # run the built-in linter
+```
+
+Frequent findings in this codebase:
+
+| Error | Fix |
+|---|---|
+| `printf format %s has arg of wrong type` | Match the verb to the value type (`%v` is safe for anything). |
+| `unreachable code after return` | Remove the dead code block. |
+| `possible misuse of sync.Mutex` | Don't copy a mutex by value; use a pointer receiver. |
+| `variable shadowed in for loop` | Use a named loop variable: `v := v` before the goroutine. |
+
+---
+
+### Agent picks up no tasks / always reports idle
+
+1. Check there are open tasks: `mago status -C myco`
+2. In GitHub mode, confirm `MAGO_GH_REPO` matches the repo that has open issues.
+3. If `MAGO_TASK_LABEL` is set, the issue must carry that label.
+4. The routing logic prefers the named agent — if no task fits the agent's role, it skips.
+   Run `mago tick -C myco` to let the router pick the right agent automatically.
+
+---
+
+### `error: company directory not found` or `init` problems
+
+```sh
+# Re-scaffold (safe to re-run; does not overwrite existing state)
+./mago init myco
+
+# Or point commands at the right directory
+./mago status -C /path/to/myco
+# or: export MAGO_COMPANY=/path/to/myco
+```
+
+---
+
+### Agents open PRs but they are never auto-merged
+
+Auto-merge is on by default when `MAGO_NO_MERGE` is unset. If PRs sit open:
+
+1. The repo may require branch-protection reviews — the agent's approval satisfies one
+   review, but not multiple required reviews or a passing CI check. Set `MAGO_VERIFY=1`
+   so the agent runs tests before approving.
+2. `MAGO_MERGE_UNVERIFIED` is off by default — if the repo has no detectable check
+   command, set `MAGO_MERGE_UNVERIFIED=1` to merge without a check.
+
+---
+
 ## Pricing
 
 Single plan, €20/month. BYOK — your LLM provider bills you for tokens directly.
