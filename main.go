@@ -34,6 +34,8 @@ func main() {
 		err = cmdAnswer(os.Args[2:])
 	case "digest":
 		err = cmdDigest(os.Args[2:])
+	case "skills":
+		err = cmdSkills(os.Args[2:])
 	case "register":
 		err = cmdRegister(os.Args[2:])
 	case "login":
@@ -91,6 +93,7 @@ Usage:
   mago digest [-C d]              "what your company did": backlog, PRs, HITL, autonomy budget
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
   mago worker doctor               validate tau, gh, and OPENCODE_API_KEY (exits 101 on failure)
+  mago skills [<name>]             embedded operator guide (operating, cli, fleet) — current with this binary
   mago version | help
 
 Flags:

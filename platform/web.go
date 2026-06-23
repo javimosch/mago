@@ -277,6 +277,8 @@ const llmsText = `# mago — operator guide for AI agents
     mago billing     # open the Stripe customer portal: update card, invoices, cancel
 
 ## More
+- **Authoritative, version-matched skills are embedded in your binary:** run ` + "`mago skills`" + `
+  (operating · cli · fleet) — always current with the mago you installed, works offline. This page mirrors them.
 - Human-readable guide: %s/operators
 - Site: %s
 `
