@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -63,6 +64,29 @@ const reflectionSchema = `{
   },
   "required": ["summary", "state_delta", "task_status", "next", "cadence_signal"]
 }`
+
+// knownAgentKeys is the canonical set of frontmatter keys for agent definition files.
+var knownAgentKeys = map[string]bool{
+	"name": true, "title": true, "provider": true, "model": true,
+	"reviews": true, "plans": true, "implements": true,
+}
+
+// validateAgentFrontmatter returns a clear, actionable error for unknown or invalid
+// configuration keys in an agent frontmatter block so typos surface immediately
+// instead of silently taking no effect.
+func validateAgentFrontmatter(name string, fm map[string]string) error {
+	for k := range fm {
+		if !knownAgentKeys[k] {
+			return fmt.Errorf("agent %q: unknown frontmatter key %q — valid keys: name, title, provider, model, reviews, plans, implements\n  hint: check for typos or remove the key", name, k)
+		}
+	}
+	for _, boolKey := range []string{"reviews", "plans", "implements"} {
+		if v := fm[boolKey]; v != "" && v != "true" && v != "false" {
+			return fmt.Errorf("agent %q: key %q must be \"true\" or \"false\", got %q — remove the key or correct the value", name, boolKey, v)
+		}
+	}
+	return nil
+}
 
 // parseFrontmatter splits a "--- key: value ---" header from the markdown body.
 func parseFrontmatter(content string) (map[string]string, string) {
