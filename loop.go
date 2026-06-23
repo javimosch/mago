@@ -12,7 +12,10 @@ import (
 // full reconcile (route + all agents) — an unattended company; with an agent it loops
 // just that agent. This is the POC's cheapness dial.
 func cmdLoop(args []string) error {
-	dir, rest := parseCompanyDir(args)
+	dir, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	base, maxI, maxTicks, pos := parseLoopArgs(rest)
 	comp, err := loadCompany(dir)
 	if err != nil {

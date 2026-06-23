@@ -4,12 +4,30 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 )
+
+// errClaudeTransient marks a retryable failure: claude emitted no/garbled output, an empty result, or
+// an overload/rate-limit/timeout — process-level hiccups (common under load) that a retry usually
+// clears. Auth and genuine model errors are NOT wrapped with this, so callers don't burn retries on them.
+var errClaudeTransient = errors.New("claude: transient failure (no/garbled output or overload)")
+
+func transientClaude(err error) bool { return errors.Is(err, errClaudeTransient) }
+
+func overloadish(s string) bool {
+	l := strings.ToLower(s)
+	for _, m := range []string{"overloaded", "rate limit", "rate_limit", "try again", "timeout", "timed out", "503", "529", "502", "connection reset"} {
+		if strings.Contains(l, m) {
+			return true
+		}
+	}
+	return false
+}
 
 // claude.go drives Claude Code (the `claude` CLI) as an alternative agent harness to tau. Selected
 // per-agent with `provider: claude` (model e.g. `sonnet`) or globally via MAGO_PROVIDER=claude
@@ -34,61 +52,84 @@ func claudeResult(out []byte) (string, error) {
 		Subtype string `json:"subtype"`
 	}
 	if json.Unmarshal(bytes.TrimSpace(out), &r) != nil {
-		return "", fmt.Errorf("claude: no/garbled output — is `claude` installed and logged in? " +
-			"(if mago runs under a custom HOME, set CLAUDE_CONFIG_DIR=~/.claude)")
+		// No parseable JSON at all — claude crashed / produced nothing (often overload). Transient,
+		// but keep the actionable hint for the case it's actually a missing/unauthenticated CLI.
+		return "", fmt.Errorf("%w — if persistent, check `claude` is installed and logged in "+
+			"(custom HOME? set CLAUDE_CONFIG_DIR=~/.claude)", errClaudeTransient)
 	}
 	if r.IsError || strings.TrimSpace(r.Result) == "" {
 		if strings.Contains(r.Result, "Not logged in") || strings.Contains(r.Result, "/login") {
 			return "", fmt.Errorf("claude not authenticated — run `claude /login`, or set " +
 				"CLAUDE_CONFIG_DIR to your real ~/.claude if mago runs under a custom HOME")
 		}
+		if strings.TrimSpace(r.Result) == "" || overloadish(r.Result) {
+			return "", fmt.Errorf("%w (subtype %q)", errClaudeTransient, r.Subtype)
+		}
 		return "", fmt.Errorf("claude error (%s): %s", r.Subtype, oneLine(truncate(r.Result, 200)))
 	}
 	return r.Result, nil
+}
+
+// withClaudeRetry runs do() up to maxAttempts times, retrying ONLY transient failures with
+// exponential backoff (base, 2·base, 4·base…). Auth / genuine errors return immediately.
+func withClaudeRetry(maxAttempts int, base time.Duration, do func() (string, error)) (string, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(base << (attempt - 1)) // base, 2·base, 4·base…
+		}
+		r, err := do()
+		if err == nil {
+			return r, nil
+		}
+		lastErr = err
+		if !transientClaude(err) {
+			return "", err // auth / real model error — don't waste retries
+		}
+		fmt.Fprintf(os.Stderr, "[claude] transient failure (attempt %d/%d): %v\n", attempt+1, maxAttempts, err)
+	}
+	return "", lastErr
 }
 
 // runClaude drives one tick via Claude Code: the agent persona is appended to Claude Code's system
 // prompt, the briefing is the prompt, tools run under bypassPermissions, and the final message
 // (expected to be the reflection JSON, per the briefing) is returned for the caller to parse.
 func runClaude(workspace string, a *Agent, systemPrompt, userPrompt string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "claude", "-p", userPrompt,
-		"--model", claudeModel(a),
-		"--output-format", "json",
-		"--permission-mode", "bypassPermissions",
-		"--append-system-prompt", systemPrompt)
-	cmd.Dir = workspace
-	cmd.Env = os.Environ()
-	// Claude Code refuses bypassPermissions when running as root ("...cannot be used with root/sudo
-	// privileges"). A dedicated worker box often runs as root and has explicitly opted into autonomous
-	// tool use, so signal a sandboxed context to let the agent use its tools. (Honors an explicit IS_SANDBOX.)
-	if os.Geteuid() == 0 && os.Getenv("IS_SANDBOX") == "" {
-		cmd.Env = append(cmd.Env, "IS_SANDBOX=1")
-	}
-	out, _ := cmd.Output() // claude prints the result JSON even on non-zero exit; claudeResult judges it
-	return claudeResult(out)
+	// Retry transient hiccups: a garbled/empty/overload failure means claude crashed before doing
+	// work (it prints result JSON even on a normal error exit), so re-running is safe and doesn't
+	// repeat side effects. Longer backoff than completions since a tick is heavier.
+	return withClaudeRetry(3, 3*time.Second, func() (string, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "claude", "-p", userPrompt,
+			"--model", claudeModel(a),
+			"--output-format", "json",
+			"--permission-mode", "bypassPermissions",
+			"--append-system-prompt", systemPrompt)
+		cmd.Dir = workspace
+		cmd.Env = os.Environ()
+		// Claude Code refuses bypassPermissions when running as root ("...cannot be used with root/sudo
+		// privileges"). A dedicated worker box often runs as root and has explicitly opted into autonomous
+		// tool use, so signal a sandboxed context to let the agent use its tools. (Honors explicit IS_SANDBOX.)
+		if os.Geteuid() == 0 && os.Getenv("IS_SANDBOX") == "" {
+			cmd.Env = append(cmd.Env, "IS_SANDBOX=1")
+		}
+		out, _ := cmd.Output() // claude prints the result JSON even on non-zero exit; claudeResult judges it
+		return claudeResult(out)
+	})
 }
 
 // claudeComplete is the lightweight, no-tools completion (routing, planning, review verdicts,
 // release notes). Retries on transient failures, mirroring tauComplete.
 func claudeComplete(a *Agent, prompt string) (string, error) {
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * 2 * time.Second)
-		}
+	// 4 attempts, exponential backoff (2s,4s,8s), retrying only transient failures.
+	return withClaudeRetry(4, 2*time.Second, func() (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
 		cmd := exec.CommandContext(ctx, "claude", "-p", prompt,
 			"--model", claudeModel(a), "--output-format", "json")
 		cmd.Env = os.Environ()
 		out, _ := cmd.Output() // result JSON is printed even on non-zero exit
-		cancel()
-		r, perr := claudeResult(out)
-		if perr == nil {
-			return r, nil
-		}
-		lastErr = perr
-	}
-	return "", lastErr
+		return claudeResult(out)
+	})
 }

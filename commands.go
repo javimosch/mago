@@ -8,22 +8,26 @@ import (
 )
 
 // parseCompanyDir extracts the -C <dir> flag (default cwd or $MAGO_COMPANY) and
-// returns the remaining positional args.
-func parseCompanyDir(args []string) (string, []string) {
+// returns the remaining positional args. A bare -C without a following directory
+// value is rejected so it isn't silently swallowed as a positional argument.
+func parseCompanyDir(args []string) (string, []string, error) {
 	dir := "."
 	if d := os.Getenv("MAGO_COMPANY"); d != "" {
 		dir = d
 	}
 	var rest []string
 	for i := 0; i < len(args); i++ {
-		if args[i] == "-C" && i+1 < len(args) {
+		if args[i] == "-C" {
+			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
+				return "", nil, fmt.Errorf("flag -C needs a directory value, e.g. `-C <dir>` (or set $MAGO_COMPANY)")
+			}
 			dir = args[i+1]
 			i++
 			continue
 		}
 		rest = append(rest, args[i])
 	}
-	return dir, rest
+	return dir, rest, nil
 }
 
 func cmdInit(args []string) error {
@@ -74,7 +78,10 @@ func cmdInit(args []string) error {
 }
 
 func cmdTask(args []string) error {
-	dir, rest := parseCompanyDir(args)
+	dir, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	if len(rest) < 2 || rest[0] != "add" {
 		return fmt.Errorf("usage: mago task add \"<title>\" [-C dir]")
 	}
@@ -101,7 +108,10 @@ func cmdTask(args []string) error {
 }
 
 func cmdProject(args []string) error {
-	dir, rest := parseCompanyDir(args)
+	dir, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	repo := ""
 	mirror := false
 	var pos []string
@@ -161,7 +171,10 @@ func ifStr(cond bool, a, b string) string {
 }
 
 func cmdStatus(args []string) error {
-	dir, _ := parseCompanyDir(args)
+	dir, _, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
@@ -198,7 +211,10 @@ func cmdStatus(args []string) error {
 }
 
 func cmdAnswer(args []string) error {
-	dir, rest := parseCompanyDir(args)
+	dir, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	if len(rest) < 2 {
 		return fmt.Errorf("usage: mago answer <task-id> \"<text>\" [-C dir]")
 	}
