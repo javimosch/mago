@@ -1,0 +1,16 @@
+{
+  "agent": "cmo",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "mago-configuration",
+      "note": "mago has NO mago.toml/TOML config — it is env-var-first (MAGO_* in *.go via os.Getenv) plus JSON files ~/.mago/config.json (account) and ~/.config/tau/config.json (provider keys). When a task names a config format, verify it exists before documenting; don't invent a schema."
+    }
+  ],
+  "next": "Reviewer reviews/merges PR #18. The PR notes the task premise (TOML) didn't match reality — if the CEO actually wanted a TOML config layer added, that's a separate code task (out of CMO scope).",
+  "state_delta": "Added docs/CONFIGURATION.md (full configuration reference) + README link; PR #18 open against javimosch/mago.",
+  "summary": "Discovered mago has no mago.toml (configured via MAGO_* env vars + JSON config + CLI flags). Wrote docs/CONFIGURATION.md documenting every real config option grouped by purpose with defaults/behavior, linked it from the README, committed, pushed mago/task-16, and opened PR #18.",
+  "task_id": "16",
+  "task_status": "in_progress",
+  "ts": "2026-06-23T05-46-59Z"
+}

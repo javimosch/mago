@@ -1,7 +1,8 @@
 # dog — company state
 
 ## Mission
-Make mago easier to adopt and trust. Improve docs, examples, operator/agent guides, and test coverage; sharpen developer experience and error messages. Keep the core stdlib-only and never change locked architecture (see AGENTS.md). Prefer small, well-scoped, low-risk pull requests.
+Make mago easier to adopt and trust: improve docs, examples, and test coverage; sharpen developer experience and error messages. Small, low-risk, well-scoped PRs. Do not change core behavior or locked architecture.
+
 ## Shipped
 - 2026-06-22T20-13-49Z #13 Add `route_test.go` covering reviewer exclusion, implementer fallback, and planner routing rules
 
