@@ -36,6 +36,8 @@ func main() {
 		err = cmdDigest(os.Args[2:])
 	case "skills":
 		err = cmdSkills(os.Args[2:])
+	case "mode":
+		err = cmdMode(os.Args[2:])
 	case "register":
 		err = cmdRegister(os.Args[2:])
 	case "login":
@@ -93,6 +95,8 @@ Usage:
                                    --until HH:MM = stop cleanly at that time,
                                    --start-delay <dur> = wait before serving (fleet staggering))
   mago serve stop|status [-C d]   control/inspect a --daemon worker
+  mago mode [show | <tokens>] [-C d]  switch a LOCAL worker's mode live (reactive|proactive|verified|comms=on…)
+  mago worker mode <tokens> --worker <id>|--all   switch a REMOTE worker's mode over the relay
   mago status [-C d]              show STATE.md, tasks, and pending HITL
   mago digest [-C d]              "what your company did": backlog, PRs, HITL, autonomy budget
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes

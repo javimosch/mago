@@ -34,7 +34,29 @@ repos.
   repos to parallelize — two workers on the same repo means only one receives its events.
 - Use the same account on each machine: copy `~/.mago/config.json` (holds the license), or `mago login`.
 
-## Autonomy knobs (per worker, via env)
+## Runtime mode (switch a worker WITHOUT restarting it)
+A worker's mode — proactive cadence, non-code comms, and merge policy — is read **live every cycle**
+from `.mago/mode.json`, so you can re-aim a running worker with no restart, no ssh, no env edit.
+
+- **Local** (same machine as the worker): `mago mode <tokens> -C <dir>` — writes the file; a running
+  worker picks it up within ~30s. `mago mode show -C <dir>` prints the current mode.
+- **Remote** (over the relay, to a connected `--relay` worker): `mago worker mode <tokens> --worker <id>`
+  (its `MAGO_WORKER_ID` / hostname) or `--all` for every worker on your account. The platform pushes a
+  control frame down the worker's existing relay connection; it applies + persists instantly.
+
+Tokens (presets + `key=value`, combine freely):
+- `reactive` (proactive off) · `proactive` (default 1h) · `proactive=<secs>` · `comms=on|off`
+- `review` (you merge) · `verified` (auto-merge only green PRs) · `merge=review|verified|on`
+
+```
+mago mode proactive=3600 verified comms=on -C /root/co   # local, live
+mago worker mode reactive --worker rbm21                  # remote: stop proposing, just react
+mago worker mode verified --all                           # remote: flip the whole fleet to verified autonomy
+```
+When `.mago/mode.json` is absent the mode is derived from the env knobs below (back-compat); once you
+set a mode, the file wins.
+
+## Autonomy knobs (per worker, via env — seed the default mode)
 - `MAGO_PROACTIVE=<secs>` — the planner proposes new issues from STATE.md `## Mission` on this cadence.
 - `MAGO_PROACTIVE_MAX=<n>` — max proposals per cycle (default 2; set 1 for a gentle drip).
 - `MAGO_COMMS=1` — the CMO posts a release note when a `mago/task-*` PR merges.

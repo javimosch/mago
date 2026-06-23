@@ -43,4 +43,8 @@ A single project repo becomes the backlog automatically; for several, set `MAGO_
   the human answers and work resumes.
 - Check in with `mago digest`. Status labels: `mago:in-progress`/`blocked`/`hitl`, `agent:<name>`, `project:<name>`.
 
+Re-aim a worker on the fly — reactive ↔ proactive, review ↔ verified autonomy, comms on/off — without
+restarting it: `mago mode <tokens> -C <dir>` locally, or `mago worker mode <tokens> --worker <id>|--all`
+over the relay. See the `fleet` skill ("Runtime mode").
+
 To run unattended (proactive backlog, budgets, multiple machines, scheduled stop), read the `fleet` skill.

@@ -89,6 +89,58 @@ func repoHash(s string) uint32 {
 	return h.Sum32()
 }
 
+// controlMode pushes a control frame to an account's worker(s) — a specific one by worker id, or
+// all of them — and returns the worker ids that received it. Powers `mago worker mode`.
+func (h *relayHub) controlMode(license, worker string, all bool, msg relayMsg) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var hit []string
+	for _, c := range h.workers {
+		if c.license != license {
+			continue
+		}
+		if all || c.worker == worker {
+			select {
+			case c.ch <- msg:
+				hit = append(hit, c.worker)
+			default:
+			}
+		}
+	}
+	return hit
+}
+
+// handleWorkerControl lets the operator switch a connected worker's mode live over the relay
+// (POST /api/worker/control: {worker|all, tokens}). JWT-authed; routes to the account's own workers.
+func (s *server) handleWorkerControl(w http.ResponseWriter, r *http.Request) {
+	uid, ok := s.authUID(r)
+	if !ok {
+		httpErr(w, 401, "unauthorized")
+		return
+	}
+	u := s.store.GetByID(uid)
+	if u == nil || u.LicenseKey == "" {
+		httpErr(w, 404, "no license")
+		return
+	}
+	var in struct {
+		Worker string   `json:"worker"`
+		All    bool     `json:"all"`
+		Tokens []string `json:"tokens"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if len(in.Tokens) == 0 {
+		httpErr(w, 400, "tokens required")
+		return
+	}
+	bodyB, _ := json.Marshal(map[string][]string{"tokens": in.Tokens})
+	hit := s.hub.controlMode(u.LicenseKey, in.Worker, in.All, relayMsg{Event: "control", Body: bodyB})
+	s.store.LogEvent("mode", uid, strings.Join(in.Tokens, " ")+" → "+strings.Join(hit, ","))
+	writeJSON(w, 200, map[string]any{"updated": len(hit), "workers": hit})
+}
+
 // handleWorkerStream is the worker's dial-out endpoint: GET /ws/worker?token=<license>&repos=a/b,c/d
 func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")

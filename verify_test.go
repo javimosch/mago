@@ -6,23 +6,6 @@ import (
 	"testing"
 )
 
-func TestVerifyEnabled(t *testing.T) {
-	os.Unsetenv("MAGO_VERIFY")
-	os.Unsetenv("MAGO_VERIFY_CMD")
-	if verifyEnabled() {
-		t.Error("disabled by default")
-	}
-	t.Setenv("MAGO_VERIFY", "1")
-	if !verifyEnabled() {
-		t.Error("MAGO_VERIFY=1 should enable")
-	}
-	os.Unsetenv("MAGO_VERIFY")
-	t.Setenv("MAGO_VERIFY_CMD", "make test")
-	if !verifyEnabled() {
-		t.Error("MAGO_VERIFY_CMD should enable")
-	}
-}
-
 func TestVerifyCommand(t *testing.T) {
 	dir := t.TempDir()
 

@@ -20,8 +20,10 @@ type verifyResult struct {
 	detail string // human-readable line for the review comment ("" = verification disabled)
 }
 
-func verifyEnabled() bool {
-	return os.Getenv("MAGO_VERIFY") == "1" || strings.TrimSpace(os.Getenv("MAGO_VERIFY_CMD")) != ""
+// verifyEnabled reports whether to run build/tests before merge: in "verified" merge mode, or when a
+// custom MAGO_VERIFY_CMD is set (legacy MAGO_VERIFY=1 still works via the mode's env fallback).
+func (c *Company) verifyEnabled() bool {
+	return c.modeMerge() == "verified" || strings.TrimSpace(os.Getenv("MAGO_VERIFY_CMD")) != ""
 }
 
 // verifyCommand returns the shell command + label to verify the checkout, or "" if none applies.
@@ -38,7 +40,7 @@ func verifyCommand(dir string) (cmd, label string) {
 // verifyPR checks out PR #prNum of repo and runs the verify command. Returns ran=false (no merge
 // gate) when verification is disabled or no check could be determined.
 func (c *Company) verifyPR(repo string, prNum int) verifyResult {
-	if !verifyEnabled() {
+	if !c.verifyEnabled() {
 		return verifyResult{}
 	}
 	dir := filepath.Join(c.magoDir(), "verify", sanitize(repo))
