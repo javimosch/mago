@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "loop-cadence-tests",
+      "note": "loop.go cadence is testable via 3 extracted helpers: parseLoopArgs (flags w/ defaults 3/60/5), nextInterval (reset to base on error-free work else double+clamp to maxI), and driveLoop (loop with injectable run/sleep, no sleep after final tick, returns ticks run). Tests need no live company or real time."
+    }
+  ],
+  "next": "Await Head of Org Engineering review/merge of PR #28; no further implementation needed for task #27.",
+  "state_delta": "PR #28 (mago/task-27) open: loop_test.go + behavior-preserving loop.go refactor for adaptive cadence; remote at 9b6f5bb, tests green.",
+  "summary": "Verified task #27 was already completed in a prior tick: loop.go refactored into testable pure helpers (parseLoopArgs, nextInterval, driveLoop) and loop_test.go added with 8 test functions covering reset-on-work, exponential backoff, --max clamping, and --max-ticks termination. Confirmed remote HEAD matches local commit 9b6f5bb, PR #28 is open with a full body, gofmt/vet clean, go build and full go test ./... green.",
+  "task_id": "27",
+  "task_status": "already_done",
+  "ts": "2026-06-23T13-11-34Z"
+}

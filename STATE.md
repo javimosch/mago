@@ -24,3 +24,4 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T06-50-53Z [cmo] PR #23 opened: model_test.go with 11 tests for frontmatter parse/render round-trip, key ordering, and malformed input
 - 2026-06-23T06-53-12Z [cto] PR #24 opened: util_test.go covering the six util.go string/path helpers
 - 2026-06-23T07-17-01Z [head-of-product] PR #26 opened: skills_test.go covering tokenize, parseStringArray, and keywordSelect ranking/limit/fallback
+- 2026-06-23T13-11-34Z [cto] PR #28 (mago/task-27) open: loop_test.go + behavior-preserving loop.go refactor for adaptive cadence; remote at 9b6f5bb, tests green.
