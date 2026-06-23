@@ -22,7 +22,10 @@ func (c *Company) loadAgentNames() ([]string, error) {
 
 // cmdTick reconciles the whole company once.
 func cmdTick(args []string) error {
-	dir, _ := parseCompanyDir(args)
+	dir, _, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err

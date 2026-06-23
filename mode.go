@@ -175,7 +175,10 @@ func (c *Company) applyControl(body []byte) {
 // cmdMode is the LOCAL switch: `mago mode [show | <tokens...>] [-C dir]`. A running worker picks the
 // change up live (no restart). For a remote worker use `mago worker mode … --worker <id>`.
 func cmdMode(args []string) error {
-	dir, rest := parseCompanyDir(args)
+	dir, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
