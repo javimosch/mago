@@ -180,7 +180,8 @@ func cmdRegister(args []string) error {
 	// Pull the account so the trial license is cached and we can show the trial window.
 	if acc, err := fetchAccount(cfg); err == nil && acc.Trial {
 		fmt.Printf("✓ 48-hour free trial active (%s) — no card required.\n", trialRemaining(acc.TrialEnds))
-		fmt.Println("next: `mago link --installation <id>` (entitle your repos), then `mago init ./company` and `mago serve --relay -C ./company`.")
+		fmt.Println("next: install the mago GitHub App on your repos, then `mago link --installation <id>` to entitle them.")
+		fmt.Println("      then `mago init ./company` and `mago serve --relay -C ./company` (run `mago worker doctor` first to check setup).")
 		fmt.Println("      `mago subscribe` anytime to continue past the trial (€20/month).")
 	} else {
 		fmt.Println("next: `mago subscribe` to activate the €20/month plan")
@@ -271,14 +272,16 @@ func cmdLink(args []string) error {
 		method = "POST"
 		body = map[string]int64{"installation_id": atoiSafe64(inst)}
 	} else if !list && inst == "" {
-		return fmt.Errorf("usage: mago link --installation <id>   (or: mago link list)\n" +
-			"find the id in the GitHub App install URL: .../installations/<id>")
+		list = true // bare `mago link` -> show current state + how to link (guide, don't error)
 	}
 	if err := cfg.platformDo(method, path, body, true, &out); err != nil {
 		return err
 	}
 	if len(out.Installations) == 0 {
-		fmt.Println("no installations linked yet — install the GitHub App, then `mago link --installation <id>`")
+		fmt.Printf("no GitHub App installation linked yet.\n"+
+			"  1. install the mago GitHub App on your repos (one click): %s/operators\n"+
+			"  2. then: mago link --installation <id>   (the id is in the install URL: .../installations/<id>)\n",
+			cfg.PlatformURL)
 		return nil
 	}
 	for _, in := range out.Installations {
