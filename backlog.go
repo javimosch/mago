@@ -29,9 +29,9 @@ func proactiveMaxPerCycle() int {
 // proposeBacklog asks the planner to file up to a few mission-advancing tasks, if the backlog is
 // low. Returns the number of issues filed (0 = no work done — doesn't count against the budget).
 func (c *Company) proposeBacklog() int {
-	mission := c.missionText()
-	if mission == "" {
-		fmt.Fprintln(os.Stderr, "[backlog] no mission set in STATE.md — skipping proactive planning")
+	focus := c.planningFocus() // ROADMAP.md `## Now`, else STATE.md `## Mission`
+	if focus == "" {
+		fmt.Fprintln(os.Stderr, "[backlog] no focus set (ROADMAP.md ## Now / STATE.md ## Mission) — skipping proactive planning")
 		return 0
 	}
 	tasks, err := c.tasks.ListTasks()
@@ -66,18 +66,32 @@ func (c *Company) proposeBacklog() int {
 		return 0
 	}
 
-	prompt := fmt.Sprintf(`You are the Head of Product. Propose the %d most valuable NEXT tasks to advance the mission.
-Each must be concrete, self-contained, and shippable as a single pull request. Output ONLY the task
+	northStar := c.visionNorthStar()
+	outOfScope := c.roadmapOutOfScope()
+	prompt := fmt.Sprintf(`You are the Head of Product. Propose AT MOST %d concrete tasks that advance the
+CURRENT FOCUS below — each self-contained and shippable as a single pull request. Output ONLY task
 titles, one per line — no numbering, no prose, no duplicates of work already open or shipped.
 
-MISSION:
+This is the company's roadmap focus, not a backlog to fill: propose ONLY genuinely valuable work that
+moves the focus forward. If there is nothing valuable to do right now within scope, output NOTHING
+(empty) — do not invent filler (docs/test/cleanup busywork) just to produce titles. Never propose
+anything under OUT OF SCOPE.
+
+NORTH STAR:
+%s
+
+CURRENT FOCUS (Now):
+%s
+
+OUT OF SCOPE (never propose these):
 %s
 
 ALREADY OPEN (do not duplicate):
 %s
 
 ALREADY SHIPPED (do not repeat):
-%s`, want, mission, orNone(strings.Join(openTitles, "\n")), orNone(c.shippedText()))
+%s`, want, orNone(northStar), focus, orNone(outOfScope),
+		orNone(strings.Join(openTitles, "\n")), orNone(c.shippedText()))
 
 	out, err := tauComplete(planner, prompt)
 	if err != nil {

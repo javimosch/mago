@@ -70,11 +70,21 @@ func (c *Company) reviewPR(prRepo string, prNum int) bool {
 		"Do NOT request changes for missing tests, missing docs/README, comments, style, naming, or any " +
 		"\"nice to have\" — those are NOT merge blockers. If the change is correct, scoped, and safe, APPROVE."
 
+	// Intent gate: when the company has a declared direction, add a 5th blocker for work that violates
+	// a no-touch constraint or the out-of-scope list. Kept narrow — we reject scope/direction
+	// VIOLATIONS, not "doesn't perfectly match Now" — so the rubric stays permissive on quality nits.
+	intent := ""
+	if dir := c.directionContext(); dir != "" {
+		rubric += "\n  5. It does NOT modify a no-touch area or do work listed as Out of scope below.\n" +
+			"REQUEST_CHANGES if the PR clearly works on an Out-of-scope item or edits a declared no-touch area."
+		intent = "\n\nCOMPANY DIRECTION (for criterion 5 — constraints & scope):\n" + dir
+	}
+
 	prompt := fmt.Sprintf("You are the code reviewer for pull request #%d on `%s`. Judge ONLY the diff "+
-		"below, strictly against the criteria — nothing else.\n\n%s\n\nDIFF:\n```diff\n%s\n```\n\n"+
+		"below, strictly against the criteria — nothing else.\n\n%s%s\n\nDIFF:\n```diff\n%s\n```\n\n"+
 		"Respond with ONE fenced json code block and nothing else:\n"+
 		"```json\n{\"verdict\": \"approve\" | \"request_changes\", \"comment\": \"1-2 sentences: which criteria it meets, or the specific blocking defect\"}\n```",
-		prNum, prRepo, rubric, diff)
+		prNum, prRepo, rubric, intent, diff)
 
 	out, err := tauComplete(reviewer, prompt)
 	if err != nil {

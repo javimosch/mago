@@ -357,6 +357,9 @@ func (c *Company) buildBriefing(a *Agent, t *Task) string {
 	b.WriteString("# BRIEFING\n\n")
 	b.WriteString("## Your role\n" + a.Title + "\n\n")
 	b.WriteString("## Company state (STATE.md)\n" + readFileOr(c.stateFile(), "(empty)") + "\n\n")
+	if dir := c.directionContext(); dir != "" {
+		b.WriteString("## Product direction (VISION + ROADMAP — stay within the current focus; never touch no-touch / out-of-scope areas)\n" + dir + "\n\n")
+	}
 	b.WriteString(fmt.Sprintf("## Active task #%s: %s\nstatus: %s\n\n%s\n\n", t.ID, t.Title, t.Status, t.Body))
 	clarifyMode := t.Clarify && !t.Go
 	if clarifyMode {

@@ -62,10 +62,13 @@ func cmdInit(args []string) error {
 	backfillAgentFlag(filepath.Join(agentsDir, "head-of-org-engineering.md"), "reviews", "true")
 	backfillAgentFlag(filepath.Join(agentsDir, "cto.md"), "implements", "true")
 	writeIfMissing(filepath.Join(abs, "STATE.md"), fmt.Sprintf(stateTemplate, name))
+	writeIfMissing(abs+"/VISION.md", fmt.Sprintf(visionTemplate, name))
+	writeIfMissing(abs+"/ROADMAP.md", fmt.Sprintf(roadmapTemplate, name))
 	writeIfMissing(filepath.Join(abs, ".mago", "skills", "INDEX.md"), "# Skills index\n\n")
 
 	fmt.Printf("initialized mago company %q at %s\n", name, abs)
 	fmt.Printf("  team: cto, cmo, head-of-product, head-of-org-engineering (you are the CEO)\n")
+	fmt.Printf("  set direction: edit VISION.md (north star) + ROADMAP.md (## Now) so agents work on what matters\n")
 	fmt.Printf("  next: mago task add \"<title>\" -C %s\n", abs)
 	return nil
 }
