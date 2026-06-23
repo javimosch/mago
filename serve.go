@@ -135,6 +135,8 @@ func cmdServe(args []string) error {
 	if relay {
 		fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s); relay -> platform (no inbound port)\n",
 			comp.Name, reposStr)
+		fmt.Fprintln(os.Stderr, "operate: file work as issues labeled `mago` · check in: `mago digest` · "+
+			"tune live: `mago mode <reactive|proactive|verified|...>` · report friction: `mago feedback \"...\"`")
 		runRelay(context.Background(), w, loadConfig(), repos)
 		return nil
 	}

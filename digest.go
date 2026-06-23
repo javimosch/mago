@@ -77,6 +77,8 @@ func cmdDigest(args []string) error {
 	} else {
 		fmt.Printf("%d work cycles (no MAGO_DAILY_BUDGET cap set)\n", comp.actionsToday())
 	}
+	fmt.Println("\ntune autonomy live (no restart): `mago mode <reactive|proactive|verified|pr-cap=N|...>` · " +
+		"steer: edit ROADMAP.md `## Now` · report friction: `mago feedback \"...\"`")
 	return nil
 }
 
