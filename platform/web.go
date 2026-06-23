@@ -282,6 +282,11 @@ const llmsText = `# mago — operator guide for AI agents
 - Implementers open PRs; the reviewer (Head of Org Engineering) merges. HITL questions appear as
   issue comments — the human answers and work resumes.
 
+## Feedback (self-report friction)
+    mago feedback "<what didn't click>" [--type bug|friction|feature|question]
+  As the operating agent, run this whenever a mago command fails, is unclear, or blocks you — that
+  friction is the most valuable signal for improving mago. It reaches the team as a triage item.
+
 ## Billing (human/CEO)
     mago subscribe   # start the €20/mo plan (Stripe checkout)
     mago billing     # open the Stripe customer portal: update card, invoices, cancel

@@ -111,6 +111,7 @@ func runServer(port string) {
 	mux.HandleFunc("/api/portal", s.handlePortal)                // `mago billing`: Stripe customer portal link
 	mux.HandleFunc("/api/installations", s.handleInstallations)  // `mago link`: claim/list App installs
 	mux.HandleFunc("/api/worker/control", s.handleWorkerControl) // `mago worker mode`: switch a worker live
+	mux.HandleFunc("/api/feedback", s.handleFeedback)            // `mago feedback`: operator friction/bugs/requests
 	mux.HandleFunc("/stripe/webhook", s.handleWebhook)
 	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)
 	mux.HandleFunc("/webhooks/github/", s.handleGithubWebhook) // GitHub App ingress -> relay

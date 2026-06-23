@@ -30,6 +30,7 @@ mago status [-C d]                              STATE.md, tasks, pending HITL
 mago digest [-C d]                              "what your company did": backlog, PRs (24h), HITL, budget
 mago answer <task-id> "<text>" [-C d]           answer a needs_human task
 mago skills [<name>]                            these embedded operator skills (version-matched to the binary)
+mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/bugs/requests to the mago team
 ```
 
 ## Environment

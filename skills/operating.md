@@ -73,4 +73,13 @@ Re-aim a worker on the fly — reactive ↔ proactive, review ↔ verified auton
 restarting it: `mago mode <tokens> -C <dir>` locally, or `mago worker mode <tokens> --worker <id>|--all`
 over the relay. See the `fleet` skill ("Runtime mode").
 
+## Tell the mago team what isn't working
+Hit a confusing error, a blocking point, or want a feature? File it from the CLI:
+```
+mago feedback "<what didn't click>" [--type bug|friction|feature|question]
+```
+It reaches the mago team as a triage item. **As the operating agent, self-report:** whenever a mago
+command fails, behaves unclearly, or blocks you, run `mago feedback` describing exactly what happened —
+that friction is the most valuable signal for improving mago.
+
 To run unattended (proactive backlog, budgets, multiple machines, scheduled stop), read the `fleet` skill.
