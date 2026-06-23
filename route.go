@@ -64,15 +64,15 @@ func reconcileOnce(comp *Company) (bool, error) {
 		if t.Status != "open" || t.Assignee != "" {
 			continue
 		}
-		// PR backpressure: don't start new work on a repo that already has its cap of open PRs —
+		// PR backpressure: don't start new work on a repo that already has its cap of open mago PRs —
 		// leave the task open (unassigned) until reviews/merges drain it. Caps mago's cadence so a
-		// repo on auto never piles past N open PRs.
+		// repo on auto never piles past N open mago PRs (human PRs don't count).
 		if prCap > 0 {
 			repo := comp.taskRepo(t)
 			if repo != "" {
 				full, seen := atCap[repo]
 				if !seen {
-					full = repoOpenPRs(repo) >= prCap
+					full = repoOpenMagoPRs(repo) >= prCap
 					atCap[repo] = full
 				}
 				if full {
