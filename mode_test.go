@@ -27,6 +27,14 @@ func TestParseMode(t *testing.T) {
 	if _, err := parseMode(base, []string{"merge=sometimes"}); err == nil {
 		t.Error("bad merge value should error")
 	}
+	m, _ = parseMode(base, []string{"pr-cap=10", "issue-cap=5"})
+	if m.PRCap != 10 || m.IssueCap != 5 {
+		t.Errorf("cap kv apply: %+v", m)
+	}
+	m, _ = parseMode(workerMode{PRCap: 10, IssueCap: 5, Merge: "review"}, []string{"pr-cap=0"})
+	if m.PRCap != 0 || m.IssueCap != 5 {
+		t.Errorf("pr-cap=0 should clear only PRCap: %+v", m)
+	}
 }
 
 func TestLoadSaveMode(t *testing.T) {

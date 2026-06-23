@@ -37,7 +37,8 @@ mago skills [<name>]                            these embedded operator skills (
 - Harness: `MAGO_PROVIDER` / `MAGO_MODEL` (`claude`/`sonnet`|`opus`, or `opencode-go`/`deepseek-v4-flash`);
   `OPENCODE_API_KEY` for tau; `CLAUDE_CONFIG_DIR` for Claude Code under a custom HOME.
 - Autonomy (see the `fleet` skill): `MAGO_PROACTIVE`, `MAGO_PROACTIVE_MAX`, `MAGO_COMMS`, `MAGO_NO_MERGE`,
-  `MAGO_VERIFY` / `MAGO_VERIFY_CMD`, `MAGO_MERGE_UNVERIFIED`, `MAGO_DAILY_BUDGET`, `MAGO_WORKER_ID`.
+  `MAGO_VERIFY` / `MAGO_VERIFY_CMD`, `MAGO_MERGE_UNVERIFIED`, `MAGO_DAILY_BUDGET`, `MAGO_PR_CAP`,
+  `MAGO_ISSUE_CAP`, `MAGO_WORKER_ID`.
   These env vars seed the *default* mode; once set via `mago mode` / `mago worker mode` the persisted
   `.mago/mode.json` wins and is read live each cycle (see the `fleet` skill, "Runtime mode").
 

@@ -47,12 +47,16 @@ func (c *Company) proposeBacklog() int {
 			openTitles = append(openTitles, t.Title)
 		}
 	}
-	want := proactiveBacklogCap - active
+	backlogCap := proactiveBacklogCap
+	if ic := c.modeIssueCap(); ic > 0 { // operator-set per-repo open-issue cap overrides the default
+		backlogCap = ic
+	}
+	want := backlogCap - active
 	if m := proactiveMaxPerCycle(); want > m {
 		want = m
 	}
 	if want <= 0 {
-		fmt.Fprintf(os.Stderr, "[backlog] %d active task(s) >= cap %d — not proposing\n", active, proactiveBacklogCap)
+		fmt.Fprintf(os.Stderr, "[backlog] %d active task(s) >= cap %d — not proposing\n", active, backlogCap)
 		return 0
 	}
 
