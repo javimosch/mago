@@ -45,6 +45,8 @@ func main() {
 		err = cmdSkills(os.Args[2:])
 	case "mode":
 		err = cmdMode(os.Args[2:])
+	case "feedback":
+		err = cmdFeedback(os.Args[2:])
 	case "register":
 		err = cmdRegister(os.Args[2:])
 	case "login":
@@ -112,6 +114,7 @@ Usage:
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
   mago worker doctor               validate tau, gh, and OPENCODE_API_KEY (exits 101 on failure)
   mago skills [<name>]             embedded operator guide (operating, cli, fleet) — current with this binary
+  mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/bugs/requests to the mago team
   mago version | help
 
 Flags:
