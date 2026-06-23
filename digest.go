@@ -12,7 +12,10 @@ import (
 //
 //	mago digest [-C dir]
 func cmdDigest(args []string) error {
-	dir, _ := parseCompanyDir(args)
+	dir, _, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err

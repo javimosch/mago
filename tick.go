@@ -15,7 +15,10 @@ type tickResult struct {
 
 // cmdRun executes one tick for one agent.
 func cmdRun(args []string) error {
-	dir, rest := parseCompanyDir(args)
+	dir, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	if len(rest) < 1 {
 		return fmt.Errorf("usage: mago run <agent> [-C dir]")
 	}
