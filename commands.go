@@ -75,6 +75,7 @@ func cmdInit(args []string) error {
 	fmt.Printf("  set direction: edit VISION.md (north star) + ROADMAP.md (## Now) so agents work on what matters\n")
 	fmt.Printf("  next: mago project add <name> --repo owner/repo -C %s   (or set MAGO_GH_REPO)\n", abs)
 	fmt.Printf("  then: mago serve --relay -C %s   (go live — agents act on issues labeled `mago`)\n", abs)
+	fmt.Printf("  tip:  mago worker doctor   (verify gh auth + your BYOK LLM harness before serving)\n")
 	return nil
 }
 
