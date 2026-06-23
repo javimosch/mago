@@ -16,8 +16,34 @@ func cmdLoop(args []string) error {
 	if err != nil {
 		return err
 	}
-	base, maxI, maxTicks := 3, 60, 5
-	var pos []string
+	base, maxI, maxTicks, pos := parseLoopArgs(rest)
+	comp, err := loadCompany(dir)
+	if err != nil {
+		return err
+	}
+	agent := ""
+	if len(pos) >= 1 {
+		agent = pos[0]
+	}
+
+	driveLoop(base, maxI, maxTicks,
+		func(i int) (bool, error) {
+			if agent == "" {
+				return reconcileOnce(comp)
+			}
+			res, err := runTick(comp, agent)
+			return res.worked, err
+		},
+		func(seconds int) { time.Sleep(time.Duration(seconds) * time.Second) },
+	)
+	return nil
+}
+
+// parseLoopArgs reads the loop flags (--base, --max, --max-ticks) out of rest,
+// applying the defaults (3s base, 60s max, 5 ticks), and returns the remaining
+// positional arguments (the optional agent name).
+func parseLoopArgs(rest []string) (base, maxI, maxTicks int, pos []string) {
+	base, maxI, maxTicks = 3, 60, 5
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
 		case "--base":
@@ -39,44 +65,45 @@ func cmdLoop(args []string) error {
 			pos = append(pos, rest[i])
 		}
 	}
-	comp, err := loadCompany(dir)
-	if err != nil {
-		return err
-	}
-	agent := ""
-	if len(pos) >= 1 {
-		agent = pos[0]
-	}
+	return
+}
 
+// nextInterval computes the wait before the next tick: reset to base when the tick
+// did real work without erroring, otherwise back off exponentially (double the
+// current interval) clamped to maxI.
+func nextInterval(cur, base, maxI int, worked bool, tickErr error) int {
+	if tickErr == nil && worked {
+		return base
+	}
+	next := cur * 2
+	if next > maxI {
+		next = maxI
+	}
+	return next
+}
+
+// driveLoop runs up to maxTicks ticks on the adaptive cadence. run(i) performs the
+// tick and reports whether work happened plus any error; sleep is called with the
+// computed interval (seconds) between ticks but never after the final tick. It
+// returns the number of ticks actually run (bounded by maxTicks).
+func driveLoop(base, maxI, maxTicks int, run func(i int) (bool, error), sleep func(seconds int)) int {
 	interval := base
+	ticks := 0
 	for i := 0; i < maxTicks; i++ {
-		var worked bool
-		if agent == "" {
-			worked, err = reconcileOnce(comp)
-		} else {
-			var res tickResult
-			res, err = runTick(comp, agent)
-			worked = res.worked
-		}
+		ticks++
+		worked, err := run(i)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[loop] tick %d error: %v\n", i+1, err)
 		}
-		if err == nil && worked {
-			interval = base
-		} else {
-			interval *= 2
-			if interval > maxI {
-				interval = maxI
-			}
-		}
+		interval = nextInterval(interval, base, maxI, worked, err)
 		next := "(stop)"
 		if i < maxTicks-1 {
 			next = strconv.Itoa(interval) + "s"
 		}
 		fmt.Fprintf(os.Stderr, "[loop] tick %d: worked=%v -> next in %s\n", i+1, worked, next)
 		if i < maxTicks-1 {
-			time.Sleep(time.Duration(interval) * time.Second)
+			sleep(interval)
 		}
 	}
-	return nil
+	return ticks
 }
