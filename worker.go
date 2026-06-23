@@ -6,6 +6,11 @@ import (
 	"os/exec"
 )
 
+// workerActions is the canonical list of `mago worker` sub-actions, used for the
+// unknown-action "did you mean" suggestion. Keep in sync with the switch below
+// (TestWorkerActionsSuggestThemselves guards against drift).
+var workerActions = []string{"doctor", "mode"}
+
 func cmdWorker(args []string) error {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: mago worker <subcommand>")
@@ -18,7 +23,12 @@ func cmdWorker(args []string) error {
 	case "mode":
 		return cmdWorkerMode(args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown worker subcommand: %s\n", args[0])
+		if s := nearestAction(args[0], workerActions); s != "" {
+			fmt.Fprintf(os.Stderr, "unknown worker subcommand: %s — did you mean %q?\n", args[0], s)
+		} else {
+			fmt.Fprintf(os.Stderr, "unknown worker subcommand: %s\n", args[0])
+			fmt.Fprintln(os.Stderr, "  subcommands: doctor, mode")
+		}
 		os.Exit(80)
 	}
 	return nil
