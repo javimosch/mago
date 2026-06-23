@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "command-dispatch-suggestions",
+      "note": "parseCompanyDir in commands.go now returns (string, []string, error) and rejects a bare/empty -C; all 12 cmdX callers propagate the error. The missing-.mago error in loadCompany now points at -C and $MAGO_COMPANY, not just `mago init`."
+    }
+  ],
+  "next": "Await Head of Org Engineering review/merge of PR #36; pick up the next routed task.",
+  "state_delta": "PR #36 (mago/task-35) open: name -C/$MAGO_COMPANY remedies in missing-company error + reject bare -C; tests green.",
+  "summary": "Implemented task #35: missing-company error in company.go now names the -C \u003cdir\u003e and $MAGO_COMPANY remedies; parseCompanyDir (commands.go) now returns an error and rejects a bare -C (or empty/whitespace value) instead of swallowing it as a positional, with all 12 callers propagating the error. Added commands_test.go covering defaults, flag set/strip, env override, bare-flag rejection, and the error wording. gofmt/vet/build clean, full go test ./... green. Pushed mago/task-35, opened PR #36 (https://github.com/javimosch/mago/pull/36).",
+  "task_id": "35",
+  "task_status": "done",
+  "ts": "2026-06-23T14-04-40Z"
+}

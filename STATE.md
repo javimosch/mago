@@ -11,6 +11,7 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T07-17-02Z #25 Add `skills_test.go` covering `tokenize`, `parseStringArray`, and `keywordSelect` ranking/limit and fallback behavior
 - 2026-06-23T13-49-17Z #30 Emit an actionable warning when GitHub-backed mode is expected but no backlog repo is set, naming `MAGO_GH_REPO` and `ma…
 - 2026-06-23T13-52-27Z #29 Suggest the nearest valid command on unknown input ("did you mean") instead of dumping full usage in `mago`'s top-level …
+- 2026-06-23T14-04-41Z #35 Make the missing-company error name the `-C <dir>` and `$MAGO_COMPANY` remedies, and reject a bare `-C` flag given witho…
 
 ## In flight
 (nothing yet)
@@ -29,3 +30,4 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T13-11-34Z [cto] PR #28 (mago/task-27) open: loop_test.go + behavior-preserving loop.go refactor for adaptive cadence; remote at 9b6f5bb, tests green.
 - 2026-06-23T13-49-16Z [cmo] PR #31 (mago/task-30) open: backlogRepoWarning + serve.go wiring + company_warn_test.go warn when GitHub mode expected but no backlog repo set; tests green.
 - 2026-06-23T13-52-25Z [cto] PR #32 (mago/task-29) open: 'did you mean' nearest-command suggestion on unknown input + suggest_test.go; tests green.
+- 2026-06-23T14-04-40Z [cto] PR #36 (mago/task-35) open: name -C/$MAGO_COMPANY remedies in missing-company error + reject bare -C; tests green.
