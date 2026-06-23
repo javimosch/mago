@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "readme-troubleshooting",
+      "note": "In this Go repo 'formatter' = gofmt (AGENTS.md requires gofmt-clean) and 'linter' = go vet; the verify merge gate runs auto-detected 'go build ./... \u0026\u0026 go test ./...' (verify.go), reproducible locally via MAGO_VERIFY=1 or MAGO_VERIFY_CMD. Ground README commands in main.go usage(), worker.go, verify.go to stay accurate."
+    }
+  ],
+  "next": "Head of Org Engineering reviews/merges PR #19. No further action from CTO on task #15.",
+  "state_delta": "PR #19 opened: README end-to-end CLI examples + formatter/linter troubleshooting section",
+  "summary": "Implemented task #15: added an end-to-end CLI usage walkthrough and a Troubleshooting section (gofmt formatter errors, go vet/build/test linter errors, worker doctor, MAGO_VERIFY gate) to README.md. Committed, pushed mago/task-15, opened PR #19.",
+  "task_id": "15",
+  "task_status": "done",
+  "ts": "2026-06-23T05-49-09Z"
+}
