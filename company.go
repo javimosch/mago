@@ -202,6 +202,9 @@ func (c *Company) loadAgent(name string) (*Agent, error) {
 		return nil, fmt.Errorf("agent %q not found in %s", name, c.agentsDir())
 	}
 	fm, body := parseFrontmatter(string(b))
+	if err := validateAgentFrontmatter(name, fm); err != nil {
+		return nil, err
+	}
 	return &Agent{
 		Name:       name,
 		Title:      orDefault(fm["title"], name),
@@ -212,6 +215,23 @@ func (c *Company) loadAgent(name string) (*Agent, error) {
 		Implements: fm["implements"] == "true",
 		Persona:    strings.TrimSpace(body),
 	}, nil
+}
+
+// validateProjectsConfig checks that the projects config file (when present) contains
+// valid JSON, returning a clear error that names the file and suggests how to recover.
+func (c *Company) validateProjectsConfig() error {
+	b, err := os.ReadFile(c.projectsConfigFile())
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("projects config: %w", err)
+	}
+	var raw map[string]json.RawMessage
+	if jsonErr := json.Unmarshal(b, &raw); jsonErr != nil {
+		return fmt.Errorf("projects config at %s is not valid JSON: %w\n  fix: run `mago project add <name> --repo owner/repo` to rebuild it", c.projectsConfigFile(), jsonErr)
+	}
+	return nil
 }
 
 func isPlannerRole(a *Agent) bool { return a.Plans }
