@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "command-dispatch-suggestions",
+      "note": "suggest.go (knownCommands/levenshtein/suggestCommand from PR #32) is NOT yet on master, so task-39's branch can't reuse it — used a self-contained nearestAction/actionDistance with distinct names to keep the branch compiling standalone AND avoid a duplicate-symbol merge collision if #32 lands first. Sub-action lists (projectActions in commands.go, workerActions in worker.go) live next to their dispatch switches with drift-guard tests. Only suggest on genuinely-unknown actions; a valid action missing args (e.g. `project add` w/o name) still gets the usage block."
+    }
+  ],
+  "next": "Awaiting review/merge of PR #40 by the Head of Org Engineering. No further action needed on this task.",
+  "state_delta": "PR #40 (mago/task-39) open: did-you-mean nearest sub-action for `mago project`/`mago worker` unknown subcommands; tests green.",
+  "summary": "Implemented task #39: added subaction_suggest.go with nearestAction (prefix + length-aware rune Levenshtein) and canonical projectActions/workerActions lists; wired cmdProject (commands.go) and cmdWorker (worker.go) to suggest the nearest valid sub-action on unknown input instead of dumping full usage / a bare one-liner. Added subaction_suggest_test.go (distance values/symmetry/multibyte, prefix/case/trim, no-suggestion paths, drift guards). gofmt/vet/build clean, full test suite green, smoke-tested the built binary. Pushed mago/task-39, opened PR #40.",
+  "task_id": "39",
+  "task_status": "done",
+  "ts": "2026-06-23T14-21-01Z"
+}
