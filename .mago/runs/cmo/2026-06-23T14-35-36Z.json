@@ -1,0 +1,16 @@
+{
+  "agent": "cmo",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "github-mode-detection",
+      "note": "MAGO_GH_REPO is now validated up-front in loadCompany via validateGHRepo (bare owner/repo only; rejects URLs, git remotes, missing owner, extra segments, trailing .git). Empty value stays valid = unset/local-fallback. Env value is also TrimSpace'd before use."
+    }
+  ],
+  "next": "Pick up the next CLI-ergonomics task from the backlog; #44 awaits reviewer.",
+  "state_delta": "PR #44 (mago/task-43) open: validateGHRepo rejects malformed MAGO_GH_REPO early with owner/repo error; tests green.",
+  "summary": "Implemented task #43: added validateGHRepo helper in company.go and wired it into loadCompany to reject a malformed MAGO_GH_REPO early — catching full GitHub URLs/git remotes, bare repo names, leading/trailing slashes, extra path segments, and trailing .git, with an error that echoes the bad value and names the expected owner/repo form. Empty stays valid. Trims surrounding whitespace. Added company_repo_test.go (4 tests over accept/URL/missing-owner/.git cases). gofmt/vet/build/full go test all green. Pushed mago/task-43, opened PR #44.",
+  "task_id": "43",
+  "task_status": "done",
+  "ts": "2026-06-23T14-35-36Z"
+}
