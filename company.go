@@ -235,7 +235,8 @@ func (c *Company) skillsIndex() string { return filepath.Join(c.skillsDir(), "IN
 func (c *Company) loadAgent(name string) (*Agent, error) {
 	b, err := os.ReadFile(filepath.Join(c.agentsDir(), name+".md"))
 	if err != nil {
-		return nil, fmt.Errorf("agent %q not found in %s", name, c.agentsDir())
+		names, _ := c.loadAgentNames()
+		return nil, unknownAgentError(name, c.agentsDir(), names)
 	}
 	fm, body := parseFrontmatter(string(b))
 	if err := validateAgentFrontmatter(name, fm); err != nil {
