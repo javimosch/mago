@@ -18,8 +18,9 @@ mago link --installation <id> | mago link list  claim/list GitHub App installs (
 ## Company / worker
 ```
 mago init [dir]                                 scaffold .mago/, STATE.md, tasks/, workspace/, exec team
-mago task add "<title>" [--project <p>] [-C d]  add a task (GitHub issue when MAGO_GH_REPO set)
-mago project add <name> --repo owner/repo [-C d]
+mago task add "<title>" [--project <p>] [-C d]  file an issue in the backlog repo; --project <p> tags
+                                                project:<p> so its PR lands on that project's repo
+mago project add <name> --repo owner/repo [-C d]  register a project repo (multi-project layout)
 mago serve [-C d] [--relay] [--daemon] [--until HH:MM] [--start-delay <dur>]  the worker
 mago serve stop | status [-C d]                 control/inspect a --daemon worker
 mago mode [show | <tokens>] [-C d]              switch a LOCAL worker's mode live (no restart)
@@ -33,7 +34,8 @@ mago skills [<name>]                            these embedded operator skills (
 
 ## Environment
 - `MAGO_PLATFORM_URL` (default https://mago.intrane.fr), `MAGO_COMPANY` (default `-C`), `MAGO_PASSWORD`.
-- `MAGO_GH_REPO` — GitHub-backed company repo; `MAGO_TASK_LABEL=mago` — only act on labeled issues.
+- `MAGO_GH_REPO` — the backlog/issue repo (single-repo: the one worked repo; multi-project: the command
+  center where issues are filed). `MAGO_TASK_LABEL=mago` — only act on labeled issues. See `operating`.
 - Harness: `MAGO_PROVIDER` / `MAGO_MODEL` (`claude`/`sonnet`|`opus`, or `opencode-go`/`deepseek-v4-flash`);
   `OPENCODE_API_KEY` for tau; `CLAUDE_CONFIG_DIR` for Claude Code under a custom HOME.
 - Autonomy (see the `fleet` skill): `MAGO_PROACTIVE`, `MAGO_PROACTIVE_MAX`, `MAGO_COMMS`, `MAGO_NO_MERGE`,

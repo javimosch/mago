@@ -207,7 +207,11 @@ mago link list                    # confirm entitled repos</pre>
 <pre>mago init ./company
 mago project add &lt;name&gt; --repo owner/repo      # the repo your agents work on AND watch for issues
 MAGO_TASK_LABEL=mago mago serve --relay -C ./company   # only act on issues labeled "mago"</pre>
-<p class=muted>A single project repo becomes your backlog automatically. Multiple repos? set <code>MAGO_GH_REPO</code> to pick the backlog repo.</p>
+<p class=muted><b>Single repo</b> (default): a lone project repo becomes your backlog automatically — its
+issues are the work, PRs close them directly. <b>Multi-project</b> (one worker, several repos): set
+<code>MAGO_GH_REPO</code> to the backlog/command repo, <code>mago project add</code> the others, then file
+issues there labeled <code>project:&lt;name&gt;</code> (<code>mago task add "…" --project &lt;name&gt;</code>) to
+open the PR on that project's repo. Note: proactive planning fills the backlog repo only — multi-project is for reactive dispatch.</p>
 
 <h2>5. Operate via GitHub</h2>
 <ul>
@@ -261,7 +265,13 @@ const llmsText = `# mago — operator guide for AI agents
     mago project add <name> --repo owner/repo   # the repo your agents work on AND watch for issues
     # Point at a real repo safely: only act on issues labeled "mago".
     MAGO_TASK_LABEL=mago mago serve --relay -C ./company   # worker dials out; agents wake on GitHub events
-  (Single project repo = your backlog automatically. Multiple repos? set MAGO_GH_REPO to pick one.)
+  Layouts:
+  - Single repo (default): a lone "mago project add owner/repo" is auto-adopted as the backlog — its
+    issues are the work, agents work that repo, PRs close its issues directly.
+  - Multi-project (one worker, several repos): set MAGO_GH_REPO to the backlog/command repo, then
+    "mago project add <name> --repo owner/repo" the others. File issues in the backlog repo labeled
+    project:<name> (mago task add "<title>" --project <name>) and the PR opens on THAT project's repo.
+    Caveat: proactive planning files into the backlog repo only -> multi-project is for REACTIVE dispatch.
 
 ## 5. Operate via GitHub
 - File work as issues. With MAGO_TASK_LABEL=mago the worker only takes issues labeled "mago"

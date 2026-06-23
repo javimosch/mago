@@ -74,6 +74,8 @@ version-bump discipline — identical bytes never trigger an update.
 
 ## Autonomy knobs (per worker, via env — seed the default mode)
 - `MAGO_PROACTIVE=<secs>` — the planner proposes new issues from STATE.md `## Mission` on this cadence.
+  Proposals land in the **backlog repo only** — so proactive is single-repo; for a multi-project worker
+  (one backlog + `project:` dispatch, see the `operating` skill) keep it reactive.
 - `MAGO_PROACTIVE_MAX=<n>` — max proposals per cycle (default 2; set 1 for a gentle drip).
 - `MAGO_COMMS=1` — the CMO posts a release note when a `mago/task-*` PR merges.
 - `MAGO_NO_MERGE=1` — reviewer comments but never merges (you merge). Safe default on real repos.
