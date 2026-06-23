@@ -1,0 +1,16 @@
+{
+  "agent": "cmo",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "github-mode-detection",
+      "note": "loadCompany silently falls back to localBackend when ghRepo is empty; reaching ghRepo=='' means MAGO_GH_REPO unset AND project repos != exactly 1 (a single project repo is auto-adopted), so the ambiguous warning case is always \u003e=2 repos. GitHub mode is 'expected' when serving --relay, MAGO_TASK_LABEL is set, or multiple project repos configured."
+    }
+  ],
+  "next": "Reviewer to assess PR #31; no further implementer work needed.",
+  "state_delta": "PR #31 (mago/task-30) open: backlogRepoWarning + serve.go wiring + company_warn_test.go warn when GitHub mode expected but no backlog repo set; tests green.",
+  "summary": "Implemented task #30: added Company.backlogRepoWarning (company.go) that emits an actionable [warn] line when GitHub-backed mode is expected (relay, MAGO_TASK_LABEL, or 2+ ambiguous project repos) but no backlog repo resolved, naming both MAGO_GH_REPO and `mago project add` as the fix. Wired it into cmdServe startup beside warnIfNoProviderKey (serve.go). Added company_warn_test.go (5 cases: silent-when-resolved, silent-when-local, relay, task-label, ambiguous-multi-repo). gofmt/vet/build/full test suite all green. Pushed mago/task-30, opened PR #31.",
+  "task_id": "30",
+  "task_status": "done",
+  "ts": "2026-06-23T13-49-16Z"
+}
