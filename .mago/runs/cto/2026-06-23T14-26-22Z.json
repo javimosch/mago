@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "command-dispatch-suggestions",
+      "note": "Unknown agent-name suggestion lives at the single error source (loadAgent in company.go:238) so both run and loop benefit with no per-command duplication; loadAgentNames already enumerates candidates. Used distinct symbol names (agentNameDistance/nearestAgentName/unknownAgentError) to avoid duplicate-symbol collision with the still-unmerged suggest.go (#32 levenshtein/suggestCommand) and subaction_suggest.go (#40 actionDistance/nearestAction). Existing TestLoadAgentMissingFile requires the error to keep the agent name AND agents dir — preserve both when enriching."
+    }
+  ],
+  "next": "Await review/merge of PR #41 by the Head of Org Engineering. Pick up the next CLI-ergonomics task.",
+  "state_delta": "PR #41 (mago/task-38) open: nearest-agent 'did you mean' + available-agents list on unknown agent name for run/loop; tests green.",
+  "summary": "Implemented task #38: mago run/loop now suggest the nearest valid agent and list available agents on an unknown agent name instead of a bare 'agent not found'. Added agent_suggest.go (agentNameDistance rune-wise Levenshtein, nearestAgentName with unique-prefix + length-aware threshold, unknownAgentError formatter) and routed loadAgent's not-found case through it (reusing loadAgentNames). Added agent_suggest_test.go (distance/symmetry/multibyte, prefix/case/trim/ambiguous-prefix, no-suggestion-when-far, no-agents, sorted listing, end-to-end loadAgent). gofmt/vet/build clean, full go test ./... green. Pushed mago/task-38, opened PR #41 (https://github.com/javimosch/mago/pull/41).",
+  "task_id": "38",
+  "task_status": "done",
+  "ts": "2026-06-23T14-26-22Z"
+}
