@@ -18,7 +18,10 @@ import (
 // directly, via a tunnel, or relayed by the platform) wakes it in real time instead of
 // polling. An optional --heartbeat keeps a fallback cadence so missed events still land.
 func cmdServe(args []string) error {
-	dir, rest := parseCompanyDir(args)
+	dir, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	// Lifecycle subcommands: `mago serve stop|status [-C dir]`.
 	if len(rest) > 0 {
 		switch rest[0] {

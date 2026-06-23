@@ -300,7 +300,10 @@ func atoiSafe64(s string) int64 {
 }
 
 func cmdAccount(args []string) error {
-	_, rest := parseCompanyDir(args)
+	_, rest, err := parseCompanyDir(args)
+	if err != nil {
+		return err
+	}
 	if len(rest) == 0 || rest[0] != "status" {
 		return fmt.Errorf("usage: mago account status")
 	}

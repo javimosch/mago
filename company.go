@@ -24,7 +24,8 @@ func loadCompany(dir string) (*Company, error) {
 		return nil, err
 	}
 	if _, err := os.Stat(filepath.Join(abs, ".mago")); err != nil {
-		return nil, fmt.Errorf("not a mago company (no .mago/) at %s — run `mago init` first", abs)
+		return nil, fmt.Errorf("not a mago company (no .mago/) at %s — run `mago init` here, "+
+			"or point mago at an existing company with `-C <dir>` or by setting $MAGO_COMPANY", abs)
 	}
 	c := &Company{Dir: abs, Name: filepath.Base(abs), ghRepo: os.Getenv("MAGO_GH_REPO")}
 	// No explicit backlog repo? Adopt a single configured project repo as the task source, so
