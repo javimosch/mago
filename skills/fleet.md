@@ -9,14 +9,21 @@ mago handles **timed stop** and **staggering** natively (flags below). It does N
 processes — restart-on-crash and start-on-boot are still the OS's job (cron/systemd), but that's now
 one line, not a script.
 
-## Native lifecycle flags (`mago serve`)
+## Native lifecycle (`mago serve`)
+- `--daemon` — detach a **supervisor** (per-company pidfile + `.mago/worker.log`) that keeps the worker
+  up: **restarts it on crash** (with backoff), but exits when the worker stops cleanly. Replaces nohup
+  + the keepalive cron.
+- `mago serve stop -C <dir>` / `mago serve status -C <dir>` — control/inspect a daemonized worker.
 - `--until HH:MM` — stop cleanly at the next occurrence of that 24h time (no cron kill script needed).
-- `--start-delay <dur>` — wait before serving, e.g. `15m` / `900s` (stagger fleet workers; no `sleep` wrapper).
+- `--start-delay <dur>` — wait before serving, e.g. `15m` / `900s` (stagger workers; no `sleep` wrapper).
 - `--heartbeat <secs>` — fallback reconcile cadence if a webhook is missed.
 
-So a staggered, self-stopping worker is just:
+A supervised, staggered worker that runs until 9am and **stays stopped** (the supervisor exits when
+the worker hits `--until`) is one command:
 ```
-mago serve --relay --start-delay 15m --until 09:00 -C /root/co
+mago serve --relay --daemon --start-delay 15m --until 09:00 -C /root/co
+mago serve status -C /root/co     # running (supervisor pid …)
+mago serve stop   -C /root/co     # stop early
 ```
 
 ## Multiple workers per account
@@ -40,25 +47,23 @@ repos.
   UTC midnight). A "cycle" ≈ a reconcile / review / release-note / planning round.
 - Claude Code as **root**: `IS_SANDBOX=1` is required for tool use (mago sets it automatically when euid==0).
 
-## Run a worker as a persistent service (restart-on-crash + boot)
-mago does timed-stop + staggering itself; the OS only needs to handle crash-restart and boot. A
-launcher + a cron keepalive (restarts within minutes if it dies; starts on reboot):
+## Persistent across reboots
+`--daemon` supervises (crash-restart) and `--until` handles the timed stop, so the OS only needs to
+**start it on boot**. A launcher + one `@reboot` line:
 ```
 # /root/co/run.sh
 #!/usr/bin/env bash
 export MAGO_PLATFORM_URL=https://mago.intrane.fr MAGO_GH_REPO=owner/repo MAGO_TASK_LABEL=mago
 export MAGO_PROVIDER=claude MAGO_MODEL=sonnet
 export MAGO_PROACTIVE=3600 MAGO_NO_MERGE=1 MAGO_DAILY_BUDGET=20
-exec mago serve --relay --start-delay 15m --until 09:00 -C /root/co   # stagger + stop are native now
+exec mago serve --relay --daemon --start-delay 15m --until 09:00 -C /root/co
 
-# crontab -e
-*/3 * * * * pgrep -f "serve --relay -C /root/co" >/dev/null || /root/co/run.sh >> /root/co/worker.log 2>&1
-@reboot /root/co/run.sh >> /root/co/worker.log 2>&1
+# crontab -e   (boot only — no keepalive/stop scripts needed)
+@reboot /root/co/run.sh >> /root/co/boot.log 2>&1
 ```
-That's it — no separate stop script, no `sleep` wrapper. The worker stops itself at 09:00; the `*/3`
-line only restarts it if it actually crashed (a real supervisor like systemd works too). NOTE: with a
-keepalive, the worker will be relaunched after its `--until` stop — drop the `*/3` line (keep just
-`@reboot`) if you want it to stay stopped after 09:00.
+No keepalive loop, no stop script, no `sleep` wrapper — the daemon supervises and self-stops.
+(Prefer systemd? Run the **foreground** `mago serve --relay --until 09:00 …` as a unit with
+`Restart=on-failure`; skip `--daemon` and let systemd supervise.)
 
 ## Check in
 - Per company: `mago digest -C <company>` — backlog, PRs (24h), **shipped by mago**, HITL, budget usage.
