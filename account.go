@@ -180,7 +180,7 @@ func cmdRegister(args []string) error {
 	// Pull the account so the trial license is cached and we can show the trial window.
 	if acc, err := fetchAccount(cfg); err == nil && acc.Trial {
 		fmt.Printf("✓ 48-hour free trial active (%s) — no card required.\n", trialRemaining(acc.TrialEnds))
-		fmt.Println("next: `mago link` your repos, then `mago serve --relay` — your agents can ship a PR now.")
+		fmt.Println("next: `mago link --installation <id>` (entitle your repos), then `mago init ./company` and `mago serve --relay -C ./company`.")
 		fmt.Println("      `mago subscribe` anytime to continue past the trial (€20/month).")
 	} else {
 		fmt.Println("next: `mago subscribe` to activate the €20/month plan")
@@ -285,6 +285,9 @@ func cmdLink(args []string) error {
 		fmt.Printf("installation %d (%s): %s\n", in.ID, orDefault(in.GithubLogin, "?"), strings.Join(in.Repos, ", "))
 	}
 	fmt.Printf("entitled repos: %s\n", strings.Join(out.Repos, ", "))
+	if len(out.Repos) > 0 {
+		fmt.Println("next: `mago init ./company`, then `mago serve --relay -C ./company` — agents act on issues labeled `mago`.")
+	}
 	return nil
 }
 

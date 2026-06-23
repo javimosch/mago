@@ -73,7 +73,8 @@ func cmdInit(args []string) error {
 	fmt.Printf("initialized mago company %q at %s\n", name, abs)
 	fmt.Printf("  team: cto, cmo, head-of-product, head-of-org-engineering (you are the CEO)\n")
 	fmt.Printf("  set direction: edit VISION.md (north star) + ROADMAP.md (## Now) so agents work on what matters\n")
-	fmt.Printf("  next: mago task add \"<title>\" -C %s\n", abs)
+	fmt.Printf("  next: mago project add <name> --repo owner/repo -C %s   (or set MAGO_GH_REPO)\n", abs)
+	fmt.Printf("  then: mago serve --relay -C %s   (go live — agents act on issues labeled `mago`)\n", abs)
 	return nil
 }
 
