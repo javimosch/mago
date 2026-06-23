@@ -364,6 +364,12 @@ func (b *githubBackend) PendingHITL() ([]string, error) {
 	return out, nil
 }
 
+// repoOpenPRs counts OPEN pull requests on a repo, or -1 if the query fails — so a transient gh
+// error reads as "below any cap" and never blocks work. Powers the per-repo PR cap (modePRCap).
+func repoOpenPRs(repo string) int {
+	return ghCount(repo, "pr", "list", "--state", "open", "--json", "number", "--jq", "length")
+}
+
 // prShippedForTask reports whether an open or merged PR exists for this task's branch
 // on the project repo — used to verify an implementer actually shipped before "done".
 // Fails open (returns true) if it can't check, so transient errors never block a tick.

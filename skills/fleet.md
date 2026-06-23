@@ -47,6 +47,7 @@ from `.mago/mode.json`, so you can re-aim a running worker with no restart, no s
 Tokens (presets + `key=value`, combine freely):
 - `reactive` (proactive off) · `proactive` (default 1h) · `proactive=<secs>` · `comms=on|off`
 - `review` (you merge) · `verified` (auto-merge only green PRs) · `merge=review|verified|on`
+- `pr-cap=<n>` · `issue-cap=<n>` — per-repo backpressure / cadence control (0 = off; see below)
 
 ```
 mago mode proactive=3600 verified comms=on -C /root/co   # local, live
@@ -67,6 +68,12 @@ set a mode, the file wins.
 - `MAGO_MERGE_UNVERIFIED=1` — allow auto-merge when a repo has no detectable check.
 - `MAGO_DAILY_BUDGET=<n>` — cap autonomous work cycles per UTC day (worker pauses when hit; resets at
   UTC midnight). A "cycle" ≈ a reconcile / review / release-note / planning round.
+- `MAGO_PR_CAP=<n>` / `MAGO_ISSUE_CAP=<n>` — **per-repo cadence caps** (also `mago mode pr-cap=/issue-cap=`,
+  live-switchable). `pr-cap`: once a repo has N **open PRs**, the worker stops starting new
+  implementation on it (open tasks wait, unassigned) until reviews/merges drain it back below N —
+  so a repo on auto never piles past N open PRs. `issue-cap`: the proactive planner stops proposing
+  once the repo has N open issues (overrides the built-in default of 3). Both `0` = off. The drains
+  (review/merge) always run, so caps throttle *new* work without freezing the repo.
 - Claude Code as **root**: `IS_SANDBOX=1` is required for tool use (mago sets it automatically when euid==0).
 
 ## Persistent across reboots

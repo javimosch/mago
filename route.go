@@ -52,6 +52,8 @@ func reconcileOnce(comp *Company) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	prCap := comp.modePRCap()  // open-PR backpressure per repo (0 = off)
+	atCap := map[string]bool{} // memoize the gh count per repo within this reconcile
 	for _, t := range tasks {
 		// mago:go on a still-in-clarification task — promote it (drop planning state) so it
 		// routes fresh to an implementer.
@@ -61,6 +63,23 @@ func reconcileOnce(comp *Company) (bool, error) {
 		}
 		if t.Status != "open" || t.Assignee != "" {
 			continue
+		}
+		// PR backpressure: don't start new work on a repo that already has its cap of open PRs —
+		// leave the task open (unassigned) until reviews/merges drain it. Caps mago's cadence so a
+		// repo on auto never piles past N open PRs.
+		if prCap > 0 {
+			repo := comp.taskRepo(t)
+			if repo != "" {
+				full, seen := atCap[repo]
+				if !seen {
+					full = repoOpenPRs(repo) >= prCap
+					atCap[repo] = full
+				}
+				if full {
+					fmt.Fprintf(os.Stderr, "[route] task #%s: %s at PR cap (%d) — holding\n", t.ID, repo, prCap)
+					continue
+				}
+			}
 		}
 		owner := ""
 		if t.Clarify && !t.Go { // clarification phase -> the planner (head-of-product), not the implement router

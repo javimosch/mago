@@ -18,6 +18,8 @@ type workerMode struct {
 	Proactive int    `json:"proactive"` // planner propose cadence in secs; 0 = reactive (off)
 	Comms     bool   `json:"comms"`     // CMO release note on PR merge (non-code flow)
 	Merge     string `json:"merge"`     // review (human merges) | verified (auto-merge on green) | on (auto-merge on approve)
+	PRCap     int    `json:"pr_cap"`    // backpressure: stop starting work on a repo at this many OPEN PRs; 0 = no cap
+	IssueCap  int    `json:"issue_cap"` // backpressure: planner stops proposing once the repo has this many open issues; 0 = default (3)
 }
 
 func (c *Company) modeFile() string { return filepath.Join(c.magoDir(), "mode.json") }
@@ -28,7 +30,12 @@ func (c *Company) loadMode() workerMode {
 	if b, err := os.ReadFile(c.modeFile()); err == nil && json.Unmarshal(b, &m) == nil && m.Merge != "" {
 		return m
 	}
-	m = workerMode{Proactive: int(atoiSafe(os.Getenv("MAGO_PROACTIVE"))), Comms: os.Getenv("MAGO_COMMS") == "1"}
+	m = workerMode{
+		Proactive: int(atoiSafe(os.Getenv("MAGO_PROACTIVE"))),
+		Comms:     os.Getenv("MAGO_COMMS") == "1",
+		PRCap:     int(atoiSafe(os.Getenv("MAGO_PR_CAP"))),
+		IssueCap:  int(atoiSafe(os.Getenv("MAGO_ISSUE_CAP"))),
+	}
 	switch {
 	case os.Getenv("MAGO_NO_MERGE") == "1":
 		m.Merge = "review"
@@ -48,13 +55,22 @@ func (c *Company) saveMode(m workerMode) error {
 func (c *Company) modeProactive() int { return c.loadMode().Proactive }
 func (c *Company) modeComms() bool    { return c.loadMode().Comms }
 func (c *Company) modeMerge() string  { return c.loadMode().Merge }
+func (c *Company) modePRCap() int     { return c.loadMode().PRCap }
+func (c *Company) modeIssueCap() int  { return c.loadMode().IssueCap }
 
 func describeMode(m workerMode) string {
 	p := "off (reactive)"
 	if m.Proactive > 0 {
 		p = fmt.Sprintf("every %ds", m.Proactive)
 	}
-	return fmt.Sprintf("proactive %s · comms %s · merge %s", p, onOff(m.Comms), m.Merge)
+	s := fmt.Sprintf("proactive %s · comms %s · merge %s", p, onOff(m.Comms), m.Merge)
+	if m.PRCap > 0 {
+		s += fmt.Sprintf(" · pr-cap %d", m.PRCap)
+	}
+	if m.IssueCap > 0 {
+		s += fmt.Sprintf(" · issue-cap %d", m.IssueCap)
+	}
+	return s
 }
 
 func onOff(b bool) string {
@@ -65,7 +81,8 @@ func onOff(b bool) string {
 }
 
 // parseMode applies preset/key=value tokens onto a base mode. Presets: reactive, proactive, review,
-// verified|auto. Pairs: proactive=<secs>, comms=on|off, merge=review|verified|on.
+// verified|auto. Pairs: proactive=<secs>, comms=on|off, merge=review|verified|on, pr-cap=<n>,
+// issue-cap=<n> (0 disables a cap).
 func parseMode(base workerMode, tokens []string) (workerMode, error) {
 	m := base
 	for _, tok := range tokens {
@@ -89,7 +106,7 @@ func parseMode(base workerMode, tokens []string) (workerMode, error) {
 		default:
 			k, v, ok := strings.Cut(t, "=")
 			if !ok {
-				return m, fmt.Errorf("unknown mode token %q (try: reactive | proactive[=secs] | review | verified | comms=on|off | merge=review|verified|on)", t)
+				return m, fmt.Errorf("unknown mode token %q (try: reactive | proactive[=secs] | review | verified | comms=on|off | merge=review|verified|on | pr-cap=N | issue-cap=N)", t)
 			}
 			switch k {
 			case "proactive":
@@ -101,6 +118,10 @@ func parseMode(base workerMode, tokens []string) (workerMode, error) {
 					return m, fmt.Errorf("merge must be review|verified|on, got %q", v)
 				}
 				m.Merge = v
+			case "pr-cap", "prs":
+				m.PRCap = int(atoiSafe(v))
+			case "issue-cap", "issues":
+				m.IssueCap = int(atoiSafe(v))
 			default:
 				return m, fmt.Errorf("unknown mode key %q", k)
 			}
