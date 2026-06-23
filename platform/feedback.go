@@ -50,19 +50,11 @@ func (s *server) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		title := "[feedback:" + in.Type + "] " + clip(in.Message, 70)
 		body := fmt.Sprintf("Reported by operator **%s** via `mago feedback`.\n\n- type: `%s`\n- mago: `%s` (%s)\n\n---\n\n%s",
 			who, in.Type, orStr(in.Version, "?"), orStr(in.OS, "?"), in.Message)
-		var res struct {
-			HTMLURL string `json:"html_url"`
-			Number  int    `json:"number"`
-		}
-		if err := ghAPI("POST", "/repos/"+repo+"/issues", map[string]any{"title": title, "body": body}, &res); err != nil {
+		// File as the App (no operator PAT). Label `feedback` only, never `mago` — triage, not auto-impl.
+		if url, err := appCreateIssue(repo, title, body, []string{"feedback"}); err != nil {
 			log.Printf("feedback: issue create failed on %s: %v", repo, err)
 		} else {
-			issueURL = res.HTMLURL
-			// Best-effort label (separate call so a missing label never blocks issue creation).
-			if res.Number > 0 {
-				ghAPI("POST", fmt.Sprintf("/repos/%s/issues/%d/labels", repo, res.Number),
-					map[string]any{"labels": []string{"feedback"}}, nil)
-			}
+			issueURL = url
 		}
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "issue_url": issueURL})
