@@ -1,0 +1,16 @@
+{
+  "agent": "cmo",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "frontmatter-helpers",
+      "note": "parseFrontmatter/renderFrontmatter in model.go are pure functions backing all agent+task file persistence (company.go, backend.go, commands.go, writeback.go). Key invariants: renderFrontmatter only emits keys present in BOTH the map and the order slice; parseFrontmatter splits on first colon, strips surrounding quotes, skips colon-less lines, and returns empty map + unchanged content for malformed/missing-delimiter input. A parse-\u003erender cycle with a stable order slice is byte-for-byte stable."
+    }
+  ],
+  "next": "Reviewer to review/merge PR #23. No further implementer action needed.",
+  "state_delta": "PR #23 opened: model_test.go with 11 tests for frontmatter parse/render round-trip, key ordering, and malformed input",
+  "summary": "Wrote model_test.go (11 tests) covering parseFrontmatter/renderFrontmatter round-tripping, frontmatter key ordering, value parsing edge cases, body-newline handling, and malformed/missing-delimiter input. gofmt-clean, vet-clean, go build + full go test suite all pass. Committed, pushed mago/task-22, opened PR #23.",
+  "task_id": "22",
+  "task_status": "done",
+  "ts": "2026-06-23T06-50-53Z"
+}
