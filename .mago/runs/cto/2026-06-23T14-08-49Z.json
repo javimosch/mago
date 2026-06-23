@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "working",
+  "lessons": [
+    {
+      "skill": "command-dispatch-suggestions",
+      "note": "Per-command help lives in commandHelp (help.go), keyed by the same names as main()'s dispatch switch; help_test.go's dispatchCommands list guards drift (knownCommands from suggest.go/PR #32 is not on this branch yet, so the test is self-contained). main() intercepts -h/--help BEFORE the switch, so commands never see help as a positional."
+    }
+  ],
+  "next": "Reviewer (Head of Org Engineering) reviews/merges PR #37. When suggest.go (PR #32) and help.go both land, consider unifying their command lists into a single source of truth.",
+  "state_delta": "PR #37 (mago/task-34) open: per-command --help focused usage via help.go (commandHelp + wantsHelp) wired into main(); help_test.go added; tests green.",
+  "summary": "Implemented task #34: added help.go (commandHelp map of focused per-command usage for all 19 dispatched commands + wantsHelp helper) and wired main() to intercept -h/--help for any known command, printing that command's synopsis/flags to stdout and exiting 0 instead of a one-line bad-args error or the global usage dump. Added help_test.go (wantsHelp positives/negatives, every-command-has-help drift guard, no-stray-entries). gofmt/vet/build clean, full go test ./... green, smoke-tested mago task --help and serve -h. Opened PR #37.",
+  "task_id": "34",
+  "task_status": "done",
+  "ts": "2026-06-23T14-08-49Z"
+}
