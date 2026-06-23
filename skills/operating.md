@@ -54,6 +54,12 @@ The planner proposes only work that advances `## Now` (and may propose nothing i
 in-scope work — no filler); the implementer brief carries the focus + no-touch; the reviewer rejects
 out-of-scope / no-touch edits. If ROADMAP.md is absent the focus falls back to STATE.md `## Mission`.
 
+**Outcome loop (auto-advance):** when the focus is achieved (work shipped, backlog drained) the planner
+signals completion and mago rotates the roadmap on its own — archives `## Now` into `## Done`
+(timestamped), then `Now ← Next ← Later`. So you set `Next`/`Later` once and the company advances
+through them without you editing `Now` each time. It won't advance while work is in flight, and holds
+(asking you to set `Next`) if there's nothing queued.
+
 ## Operate via GitHub
 - File work as issues; with `MAGO_TASK_LABEL=mago` the worker only acts on `mago`-labeled issues
   (safe on a real repo; labeling an existing issue picks it up).

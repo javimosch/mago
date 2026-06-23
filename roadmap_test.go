@@ -65,3 +65,35 @@ func TestPlanningFocusFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestAdvanceRoadmap(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	os.WriteFile(c.roadmapFile(), []byte(
+		"# co — ROADMAP\n\n> intro\n\n## Now\nShip caps.\n\n## Next\nClose the loop.\n\n## Later\nMulti-agent.\n\n## Out of scope\nrewrites\n"), 0o644)
+
+	if !c.advanceRoadmap() {
+		t.Fatal("advanceRoadmap should succeed when Next is set")
+	}
+	if got := c.roadmapNow(); got != "Close the loop." {
+		t.Errorf("Now should be the old Next, got %q", got)
+	}
+	if got := c.roadmapNext(); got != "Multi-agent." {
+		t.Errorf("Next should be the old Later, got %q", got)
+	}
+	raw := c.roadmapRaw()
+	if !strings.Contains(raw, "## Done") || !strings.Contains(raw, "Ship caps.") {
+		t.Errorf("old Now should be archived under ## Done:\n%s", raw)
+	}
+	if !strings.Contains(raw, "rewrites") || !strings.Contains(raw, "> intro") {
+		t.Errorf("unmanaged sections/preamble must be preserved:\n%s", raw)
+	}
+
+	// No Next to promote -> should not advance.
+	os.WriteFile(c.roadmapFile(), []byte("## Now\nA.\n\n## Next\n(none yet)\n"), 0o644)
+	if c.advanceRoadmap() {
+		t.Error("should not advance when Next is a placeholder")
+	}
+}
