@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "worker-doctor-provider-aware",
+      "note": "checkClaudeAuth runs a real `claude -p ping --output-format json` probe — safe because unauthenticated claude returns fast (no LLM call), but when claude IS on PATH and logged in it will make a tiny API call. For unit tests, avoid testing checkClaudeAuth directly; instead expose a pure providerCheckNames() selection function and test that. The transientClaude() helper (claude.go) is reusable from worker.go since they're in the same package."
+    }
+  ],
+  "next": "Head of Org Engineering reviews and merges PR #48.",
+  "state_delta": "PR #48 (mago/task-47) open: provider-aware worker doctor; claude checks claude+auth, tau checks tau+OPENCODE_API_KEY; tests green.",
+  "summary": "Implemented task #47: made `mago worker doctor` provider-aware. Added `providerCheckNames(provider)` (pure selection function for tests), updated `workerDoctor()` to read MAGO_PROVIDER and dispatch to claude-specific checks (checkClaudeOnPath + checkClaudeAuth via print-mode probe + claudeResult auth detection) or tau/OPENCODE checks (unchanged). Added worker_test.go with 7 tests covering selection logic, labels, and OPENCODE_API_KEY pass/fail. Updated mago --help and mago worker --help descriptions. gofmt/vet/build clean, full go test ./... green. Pushed mago/task-47, opened PR #48.",
+  "task_id": "47",
+  "task_status": "done",
+  "ts": "2026-06-23T22-56-51Z"
+}
