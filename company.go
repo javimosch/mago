@@ -116,6 +116,42 @@ func (c *Company) taskRepo(t *Task) string {
 	return c.ghRepo
 }
 
+// backlogRepoWarning returns an actionable, operator-facing warning when GitHub-backed task
+// mode appears to be expected but no backlog repo resolved — so mago silently falls back to the
+// local-file backend and a served/relayed worker would never see any GitHub issues. Returns ""
+// when a backlog repo is set (GitHub mode is active) or when GitHub mode is clearly not intended.
+//
+// Reaching here with c.ghRepo == "" means MAGO_GH_REPO was unset AND the project list did not
+// resolve to a single repo (loadCompany auto-adopts exactly one) — i.e. zero project repos, or
+// two-plus that are ambiguous. GitHub mode is treated as "expected" when the worker is relaying
+// (relay only carries GitHub events), when a scoped-backlog label is set (MAGO_TASK_LABEL), or
+// when multiple project repos are configured but none was picked as the backlog.
+func (c *Company) backlogRepoWarning(relay bool) string {
+	if c.ghRepo != "" {
+		return "" // a backlog repo is resolved; GitHub-backed mode is active
+	}
+	seen := map[string]bool{}
+	for _, r := range c.loadProjects() {
+		if r != "" {
+			seen[r] = true
+		}
+	}
+	nRepos := len(seen)
+
+	switch {
+	case nRepos >= 2:
+		return fmt.Sprintf("[warn] %d project repos are configured but MAGO_GH_REPO is unset — mago "+
+			"can't tell which holds the backlog, so it is using the local-file backend, not GitHub. "+
+			"Set MAGO_GH_REPO=owner/repo to pick the backlog repo (issues = tasks), or keep a single "+
+			"project (mago project add) so it is adopted automatically.", nRepos)
+	case relay || strings.TrimSpace(os.Getenv("MAGO_TASK_LABEL")) != "":
+		return "[warn] GitHub-backed mode is expected but no backlog repo is set — mago is using the " +
+			"local-file backend, so this worker will not see any GitHub issues. Point it at a repo with " +
+			"MAGO_GH_REPO=owner/repo, or register one with `mago project add <name> --repo owner/repo`."
+	}
+	return ""
+}
+
 // repos returns every GitHub repo this company touches (the company repo + project repos),
 // deduped — i.e. the repos a worker should receive relayed webhooks for.
 func (c *Company) repos() []string {

@@ -84,6 +84,9 @@ func cmdServe(args []string) error {
 		return daemonizeWorker(comp, stripArg(args, "--daemon"))
 	}
 	warnIfNoProviderKey()
+	if msg := comp.backlogRepoWarning(relay); msg != "" {
+		fmt.Fprintln(os.Stderr, msg)
+	}
 
 	// --start-delay: stagger fleet workers without an OS `sleep` wrapper.
 	if startDelay != "" {
