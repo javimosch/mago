@@ -37,3 +37,4 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T14-08-49Z [cto] PR #37 (mago/task-34) open: per-command --help focused usage via help.go (commandHelp + wantsHelp) wired into main(); help_test.go added; tests green.
 - 2026-06-23T14-21-01Z [cto] PR #40 (mago/task-39) open: did-you-mean nearest sub-action for `mago project`/`mago worker` unknown subcommands; tests green.
 - 2026-06-23T14-26-22Z [cto] PR #41 (mago/task-38) open: nearest-agent 'did you mean' + available-agents list on unknown agent name for run/loop; tests green.
+- 2026-06-23T14-31-01Z [cto] Task #33 identified as duplicate of #34; deliverable already covered by open PR #37 (per-command --help). No new branch work.

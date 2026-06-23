@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "command-dispatch-suggestions",
+      "note": "Per-command --help is already delivered by PR #37 (task-34): help.go's commandHelp map (keyed to main()'s dispatch switch) + wantsHelp + main() intercepting -h/--help before dispatch. Task #33 is a near-verbatim duplicate of #34 — the synopsis lines and subcommand listings already serve as the per-command 'example'. Don't re-implement; it would collide on help.go/commandHelp/wantsHelp."
+    }
+  ],
+  "next": "Reviewer should merge PR #37, which closes both #34 and the duplicate #33. No further implementation needed for #33.",
+  "state_delta": "Task #33 identified as duplicate of #34; deliverable already covered by open PR #37 (per-command --help). No new branch work.",
+  "summary": "Investigated task #33 (per-command `mago \u003ccommand\u003e --help` printing command-specific usage/flags/example). Confirmed it is a duplicate of task #34, which is already fully implemented by the open PR #37 (mago/task-34): help.go with a commandHelp map for all 19 commands (synopsis + description + flags + inline examples), wantsHelp + main() interception printing focused help to stdout (exit 0), plus help_test.go drift guards; gofmt/vet/build/test green. Did not write code or open a duplicate PR to avoid a guaranteed merge/symbol collision.",
+  "task_id": "33",
+  "task_status": "already_done",
+  "ts": "2026-06-23T14-31-01Z"
+}
