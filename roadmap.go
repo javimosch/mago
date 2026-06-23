@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -81,6 +82,101 @@ func (c *Company) directionContext() string {
 	add("Constraints / no-touch", c.visionConstraints())
 	add("Out of scope — never work or propose these", c.roadmapOutOfScope())
 	return strings.TrimSpace(b.String())
+}
+
+// --- outcome loop: auto-advance Now -> Next when the focus is achieved ---
+
+// mdBlock is one `## <Header>` section with its raw body (for order-preserving rewrites of ROADMAP.md).
+type mdBlock struct {
+	Header string
+	Body   string
+}
+
+// splitBlocks parses markdown into the preamble (everything before the first `## `) and ordered
+// `## ` sections, preserving any sections we don't manage so a rewrite never drops the CEO's content.
+func splitBlocks(md string) (string, []mdBlock) {
+	var preamble []string
+	var blocks []mdBlock
+	cur := -1
+	for _, ln := range strings.Split(md, "\n") {
+		if t := strings.TrimSpace(ln); strings.HasPrefix(t, "## ") {
+			blocks = append(blocks, mdBlock{Header: strings.TrimSpace(t[3:])})
+			cur = len(blocks) - 1
+			continue
+		}
+		if cur < 0 {
+			preamble = append(preamble, ln)
+		} else {
+			blocks[cur].Body += ln + "\n"
+		}
+	}
+	return strings.TrimRight(strings.Join(preamble, "\n"), "\n"), blocks
+}
+
+func renderBlocks(preamble string, blocks []mdBlock) string {
+	var b strings.Builder
+	if preamble != "" {
+		b.WriteString(preamble + "\n")
+	}
+	for _, bl := range blocks {
+		b.WriteString("\n## " + bl.Header + "\n")
+		if body := strings.Trim(bl.Body, "\n"); body != "" {
+			b.WriteString(body + "\n")
+		}
+	}
+	return b.String()
+}
+
+// advanceRoadmap rotates the roadmap when the current focus is done: archive `Now` into `## Done`
+// (newest first, one-lined + timestamped), then Now <- Next, Next <- Later, Later <- (none yet).
+// It only advances when there is a real `Next` to promote; returns whether it advanced. Other
+// sections (Out of scope, North-star prose, custom) are preserved in place.
+func (c *Company) advanceRoadmap() bool {
+	raw := c.roadmapRaw()
+	if raw == "" {
+		return false
+	}
+	pre, blocks := splitBlocks(raw)
+	idx := func(name string) int {
+		for i, b := range blocks {
+			if strings.EqualFold(b.Header, name) {
+				return i
+			}
+		}
+		return -1
+	}
+	ni, xi, li := idx("Now"), idx("Next"), idx("Later")
+	if ni < 0 || xi < 0 {
+		return false
+	}
+	oldNow := strings.TrimSpace(blocks[ni].Body)
+	nextBody := strings.TrimSpace(blocks[xi].Body)
+	if isPlaceholder(nextBody) {
+		return false // nothing to advance to — hold and wait for the CEO to set Next
+	}
+	blocks[ni].Body = "\n" + nextBody + "\n" // Now <- Next
+	if li >= 0 {
+		if laterBody := strings.TrimSpace(blocks[li].Body); !isPlaceholder(laterBody) {
+			blocks[xi].Body = "\n" + laterBody + "\n" // Next <- Later
+			blocks[li].Body = "\n(none yet)\n"
+		} else {
+			blocks[xi].Body = "\n(none yet)\n"
+		}
+	} else {
+		blocks[xi].Body = "\n(none yet)\n"
+	}
+	// Archive the completed focus into ## Done (newest first), creating the section if absent.
+	entry := "- " + nowStamp() + " — " + oneLine(oldNow)
+	if di := idx("Done"); di >= 0 {
+		if old := strings.Trim(blocks[di].Body, "\n"); old != "" {
+			blocks[di].Body = "\n" + entry + "\n" + old + "\n"
+		} else {
+			blocks[di].Body = "\n" + entry + "\n"
+		}
+	} else {
+		blocks = append(blocks, mdBlock{Header: "Done", Body: "\n" + entry + "\n"})
+	}
+	return os.WriteFile(c.roadmapFile(), []byte(renderBlocks(pre, blocks)), 0o644) == nil
 }
 
 const visionTemplate = `# %s — VISION

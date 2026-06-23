@@ -77,6 +77,10 @@ moves the focus forward. If there is nothing valuable to do right now within sco
 (empty) — do not invent filler (docs/test/cleanup busywork) just to produce titles. Never propose
 anything under OUT OF SCOPE.
 
+If — and ONLY if — the CURRENT FOCUS is substantially ACHIEVED (the shipped work already covers it and
+no valuable work remains within it), output exactly one line and nothing else:
+FOCUS_COMPLETE
+
 NORTH STAR:
 %s
 
@@ -96,6 +100,23 @@ ALREADY SHIPPED (do not repeat):
 	out, err := tauComplete(planner, prompt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[backlog] planner failed: %v\n", err)
+		return 0
+	}
+
+	// Outcome loop: the planner judged the current focus achieved. Advance Now<-Next only when the
+	// backlog is also fully drained (no active work) and we're roadmap-driven — conservative, so an
+	// in-flight focus is never rotated out from under work.
+	if strings.Contains(strings.ToUpper(out), "FOCUS_COMPLETE") {
+		switch {
+		case active > 0:
+			fmt.Fprintf(os.Stderr, "[backlog] focus complete but %d task(s) still active — holding\n", active)
+		case isPlaceholder(c.roadmapNow()):
+			break // mission-mode (no roadmap Now) — nothing to advance
+		case c.advanceRoadmap():
+			fmt.Fprintf(os.Stderr, "[backlog] focus complete -> advanced ROADMAP Now<-Next: %s\n", oneLine(c.roadmapNow()))
+		default:
+			fmt.Fprintln(os.Stderr, "[backlog] focus complete but no Next set — add ROADMAP.md ## Next to advance")
+		}
 		return 0
 	}
 
