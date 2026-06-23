@@ -50,6 +50,7 @@ Docs:
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — the layers, binaries, data flow, git-native model
 - [MEMORY.md](docs/MEMORY.md) — how short ticks accumulate into real progress
 - [ROADMAP.md](docs/ROADMAP.md) — v1 scope and what waits for v2
+- [CONFIGURATION.md](docs/CONFIGURATION.md) — every env var, config file, and flag that changes how mago runs
 - [AGENTS.md](AGENTS.md) — coding guidelines for working in this repo
 
 ## Pricing
