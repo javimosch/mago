@@ -26,6 +26,8 @@ mago serve stop | status [-C d]                 control/inspect a --daemon worke
 mago mode [show | <tokens>] [-C d]              switch a LOCAL worker's mode live (no restart)
 mago worker mode <tokens> --worker <id>|--all   switch a REMOTE worker's mode over the relay
 mago tick [-C d]                                reconcile once (route + run agents)
+mago run <agent> [-C d]                         run ONE tick for one agent (brief -> harness -> write back)
+mago loop <agent> [-C d] [--base/--max/--max-ticks <s>]  run ticks on an adaptive cadence
 mago status [-C d]                              STATE.md, tasks, pending HITL
 mago digest [-C d]                              "what your company did": backlog, PRs (24h), HITL, budget
 mago answer <task-id> "<text>" [-C d]           answer a needs_human task

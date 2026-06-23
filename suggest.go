@@ -7,8 +7,8 @@ import "strings"
 // Keep in sync with the dispatch switch in main().
 var knownCommands = []string{
 	"init", "task", "project", "run", "loop", "tick", "serve", "status",
-	"answer", "digest", "skills", "mode", "register", "login", "subscribe",
-	"billing", "account", "link", "worker", "version", "help",
+	"answer", "digest", "skills", "mode", "feedback", "register", "login",
+	"subscribe", "billing", "account", "link", "worker", "version", "help",
 }
 
 // levenshtein returns the edit distance between a and b (insertions, deletions,
