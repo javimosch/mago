@@ -37,6 +37,9 @@ func main() {
 		case "stop":
 			fail(cmdStop())
 			return
+		case "restart": // stop the actual port listener (not just the pidfile pid) + start daemonized
+			fail(cmdRestart(os.Args[2:]))
+			return
 		case "status":
 			fail(cmdStatus())
 			return

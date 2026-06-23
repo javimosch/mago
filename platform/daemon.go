@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // daemon.go gives mago-platform a start/stop/status lifecycle. Under hotify the app runs in the
@@ -95,6 +96,86 @@ func cmdStatus() error {
 	}
 	fmt.Printf("running (pid %d)\n", pid)
 	return nil
+}
+
+// cmdRestart stops whatever is serving and starts a fresh daemonized server. Unlike stop+start it
+// frees the port by killing the actual LISTENER — not just the pidfile pid — so a stale server
+// started outside the pidfile path (a manual nohup, an old deploy) can't keep holding the port while
+// the "new" process silently fails to bind. After it returns, the pidfile is correct so stop/status
+// work again.
+func cmdRestart(args []string) error {
+	port, _ := parseStartFlags(args)
+	// Terminate the pidfile process if any.
+	if pid, alive := readPid(); alive {
+		syscall.Kill(pid, syscall.SIGTERM)
+	}
+	os.Remove(pidFile())
+	// Free the port: SIGTERM the listener (whoever it is), waiting up to ~5s for it to exit.
+	var owner int
+	for i := 0; i < 50; i++ {
+		if owner = pidOnPort(port); owner == 0 {
+			break
+		}
+		syscall.Kill(owner, syscall.SIGTERM)
+		time.Sleep(100 * time.Millisecond)
+	}
+	if owner = pidOnPort(port); owner != 0 { // stubborn — escalate
+		fmt.Printf("port %s still held by pid %d — SIGKILL\n", port, owner)
+		syscall.Kill(owner, syscall.SIGKILL)
+		time.Sleep(300 * time.Millisecond)
+	}
+	if owner = pidOnPort(port); owner != 0 {
+		return fmt.Errorf("port %s still held by pid %d after SIGKILL — restart aborted", port, owner)
+	}
+	return cmdStart([]string{"--daemon", "--port", port})
+}
+
+// pidOnPort returns the PID LISTENING on the given TCP port (v4 or v6), or 0. Pure-Go via /proc so
+// it needs no ss/lsof/fuser on the host.
+func pidOnPort(port string) int {
+	p, err := strconv.Atoi(port)
+	if err != nil || p <= 0 {
+		return 0
+	}
+	inode := listenInode(p)
+	if inode == "" {
+		return 0
+	}
+	want := "socket:[" + inode + "]"
+	fds, _ := filepath.Glob("/proc/[0-9]*/fd/*")
+	for _, fd := range fds {
+		if link, err := os.Readlink(fd); err == nil && link == want {
+			if parts := strings.Split(fd, "/"); len(parts) >= 3 {
+				if pid, err := strconv.Atoi(parts[2]); err == nil {
+					return pid
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// listenInode scans /proc/net/tcp{,6} for the socket inode in LISTEN state on the given port.
+func listenInode(port int) string {
+	suffix := fmt.Sprintf(":%04X", port) // local_address column ends with :PORT (uppercase hex)
+	for _, f := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(b), "\n")
+		for _, line := range lines[1:] { // skip the header row
+			fields := strings.Fields(line)
+			// 1=local_address (HEXIP:HEXPORT), 3=state (0A=LISTEN), 9=inode
+			if len(fields) < 10 || fields[3] != "0A" {
+				continue
+			}
+			if strings.HasSuffix(fields[1], suffix) {
+				return fields[9]
+			}
+		}
+	}
+	return ""
 }
 
 // readPid returns the pidfile's pid and whether that process is alive.
