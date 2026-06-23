@@ -18,7 +18,7 @@ type workerMode struct {
 	Proactive int    `json:"proactive"` // planner propose cadence in secs; 0 = reactive (off)
 	Comms     bool   `json:"comms"`     // CMO release note on PR merge (non-code flow)
 	Merge     string `json:"merge"`     // review (human merges) | verified (auto-merge on green) | on (auto-merge on approve)
-	PRCap     int    `json:"pr_cap"`    // backpressure: stop starting work on a repo at this many OPEN PRs; 0 = no cap
+	PRCap     int    `json:"pr_cap"`    // backpressure: stop starting work on a repo at this many open MAGO PRs; 0 = no cap
 	IssueCap  int    `json:"issue_cap"` // backpressure: planner stops proposing once the repo has this many open issues; 0 = default (3)
 }
 

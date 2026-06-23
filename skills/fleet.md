@@ -69,9 +69,10 @@ set a mode, the file wins.
 - `MAGO_DAILY_BUDGET=<n>` — cap autonomous work cycles per UTC day (worker pauses when hit; resets at
   UTC midnight). A "cycle" ≈ a reconcile / review / release-note / planning round.
 - `MAGO_PR_CAP=<n>` / `MAGO_ISSUE_CAP=<n>` — **per-repo cadence caps** (also `mago mode pr-cap=/issue-cap=`,
-  live-switchable). `pr-cap`: once a repo has N **open PRs**, the worker stops starting new
-  implementation on it (open tasks wait, unassigned) until reviews/merges drain it back below N —
-  so a repo on auto never piles past N open PRs. `issue-cap`: the proactive planner stops proposing
+  live-switchable). `pr-cap`: once a repo has N **open mago PRs** (on `mago/` branches — unrelated
+  human PRs don't count), the worker stops starting new implementation on it (open tasks wait,
+  unassigned) until reviews/merges drain it back below N — so a repo on auto never piles past N open
+  mago PRs. `issue-cap`: the proactive planner stops proposing
   once the repo has N open issues (overrides the built-in default of 3). Both `0` = off. The drains
   (review/merge) always run, so caps throttle *new* work without freezing the repo.
 - Claude Code as **root**: `IS_SANDBOX=1` is required for tool use (mago sets it automatically when euid==0).

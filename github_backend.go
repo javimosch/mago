@@ -364,10 +364,27 @@ func (b *githubBackend) PendingHITL() ([]string, error) {
 	return out, nil
 }
 
-// repoOpenPRs counts OPEN pull requests on a repo, or -1 if the query fails — so a transient gh
-// error reads as "below any cap" and never blocks work. Powers the per-repo PR cap (modePRCap).
-func repoOpenPRs(repo string) int {
-	return ghCount(repo, "pr", "list", "--state", "open", "--json", "number", "--jq", "length")
+// repoOpenMagoPRs counts mago's OWN open pull requests on a repo — those on `mago/` branches, so
+// unrelated human PRs never throttle the worker. Returns -1 if the query fails, which reads as
+// "below any cap" so a transient gh error never blocks work. Powers the per-repo PR cap (modePRCap).
+func repoOpenMagoPRs(repo string) int {
+	out, err := gh("-R", repo, "pr", "list", "--state", "open", "--limit", "200", "--json", "headRefName")
+	if err != nil {
+		return -1
+	}
+	var prs []struct {
+		HeadRefName string `json:"headRefName"`
+	}
+	if json.Unmarshal([]byte(out), &prs) != nil {
+		return -1
+	}
+	n := 0
+	for _, p := range prs {
+		if strings.HasPrefix(p.HeadRefName, "mago/") {
+			n++
+		}
+	}
+	return n
 }
 
 // prShippedForTask reports whether an open or merged PR exists for this task's branch
