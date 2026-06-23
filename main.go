@@ -12,8 +12,15 @@ func main() {
 		usage()
 		os.Exit(0)
 	}
+	cmd := os.Args[1]
+	// A known command given -h/--help prints its focused usage and exits, so a
+	// mistyped invocation gets that command's synopsis rather than a one-line error.
+	if h, ok := commandHelp[cmd]; ok && wantsHelp(os.Args[2:]) {
+		fmt.Print(h)
+		os.Exit(0)
+	}
 	var err error
-	switch cmd := os.Args[1]; cmd {
+	switch cmd {
 	case "init":
 		err = cmdInit(os.Args[2:])
 	case "task":
