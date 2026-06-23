@@ -7,3 +7,4 @@ platform/.env
 *.db
 *.db-wal
 *.db-shm
+/dist/
