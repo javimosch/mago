@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "util-helpers-tests",
+      "note": "util.go helpers: truncate uses byte-length + byte-slicing (s[:n]) so multibyte chars can split — test with ASCII; orDefault preserves internal/surrounding spacing of a non-blank value (only trims for the emptiness check); readFileOr returns def for both missing AND blank-after-trim files; stripFences drops the entire first line of a fence and a trailing ``` only."
+    }
+  ],
+  "next": "Reviewer (Head of Org Engineering) to review and merge PR #24; pick up next proposed task.",
+  "state_delta": "PR #24 opened: util_test.go covering the six util.go string/path helpers",
+  "summary": "Added util_test.go with table-driven tests covering sanitize, truncate, oneLine, stripFences, readFileOr, and orDefault including edge cases (empty input, whitespace handling, non-ascii, zero-limit truncate, missing/blank files, fence stripping with and without closing fence). gofmt/vet clean, full go test ./... green. Committed, pushed mago/task-21, opened PR #24.",
+  "task_id": "21",
+  "task_status": "done",
+  "ts": "2026-06-23T06-53-12Z"
+}
