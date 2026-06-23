@@ -44,6 +44,16 @@ MAGO_TASK_LABEL=mago mago serve --relay -C ./company    # worker dials out; agen
   ⚠️ Proactive planning only files into the **backlog** repo — so multi-project is for **reactive**
   dispatch; keep **proactive** single-repo (one worker per repo). See the `fleet` skill.
 
+## Set direction (so agents work on what matters, not filler)
+`mago init` scaffolds two steering files in the company dir — edit them so autonomous work advances
+the product instead of producing busywork:
+- **VISION.md** — stable: `## North star`, `## Product`, `## Constraints` (no-touch / locked areas).
+  Agents read it for intent; they never rewrite it.
+- **ROADMAP.md** — steerable: `## Now` (the current focus), `## Next`, `## Later`, `## Out of scope`.
+The planner proposes only work that advances `## Now` (and may propose nothing if there's no valuable
+in-scope work — no filler); the implementer brief carries the focus + no-touch; the reviewer rejects
+out-of-scope / no-touch edits. If ROADMAP.md is absent the focus falls back to STATE.md `## Mission`.
+
 ## Operate via GitHub
 - File work as issues; with `MAGO_TASK_LABEL=mago` the worker only acts on `mago`-labeled issues
   (safe on a real repo; labeling an existing issue picks it up).
