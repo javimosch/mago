@@ -30,16 +30,6 @@ func agentNameDistance(a, b string) int {
 	return prev[len(rb)]
 }
 
-func min3(a, b, c int) int {
-	if b < a {
-		a = b
-	}
-	if c < a {
-		a = c
-	}
-	return a
-}
-
 // nearestAgentName returns the candidate closest to input, or "" when nothing is
 // close enough to suggest. A case-insensitive prefix match wins outright;
 // otherwise the best candidate must be within a length-aware threshold (at most
