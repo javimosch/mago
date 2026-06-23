@@ -1,0 +1,16 @@
+{
+  "agent": "head-of-product",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "skills-retrieval-tests",
+      "note": "skills.go helpers are pure: tokenize keeps only \u003e=4-rune lowercased [a-z0-9] tokens (so 'api'/'the' drop) and dedups via a map; parseStringArray returns nil (not empty) on no-brackets/malformed/non-string-elements but a non-nil empty slice for '[]'; keywordSelect ranks by overlapping-token count desc and returns nil when nothing overlaps. No mocking needed — keyword fallback path is fully deterministic, unlike the LLM selector."
+    }
+  ],
+  "next": "Reviewer to review/merge PR #26. Head of Product can propose the next well-scoped test/docs task.",
+  "state_delta": "PR #26 opened: skills_test.go covering tokenize, parseStringArray, and keywordSelect ranking/limit/fallback",
+  "summary": "Implemented task #25: added skills_test.go with table-driven tests for tokenize (lowercasing, \u003e=4-rune filter, non-alnum splitting, dedup, boundary), parseStringArray (happy path, fence stripping, prose extraction, and all nil failure modes), and keywordSelect (overlap ranking, top-K limit, no-match fallback, short-token exclusion). gofmt-clean, go vet clean, all tests pass. Committed, pushed mago/task-25, opened PR #26.",
+  "task_id": "25",
+  "task_status": "done",
+  "ts": "2026-06-23T07-17-01Z"
+}
