@@ -19,14 +19,29 @@ import (
 // polling. An optional --heartbeat keeps a fallback cadence so missed events still land.
 func cmdServe(args []string) error {
 	dir, rest := parseCompanyDir(args)
+	// Lifecycle subcommands: `mago serve stop|status [-C dir]`.
+	if len(rest) > 0 {
+		switch rest[0] {
+		case "stop":
+			return workerStop(dir)
+		case "status":
+			return workerStatus(dir)
+		}
+	}
 	addr := ":8099"
 	secret := os.Getenv("MAGO_WEBHOOK_SECRET")
 	heartbeat := 0
 	relay := false
-	until := ""      // --until HH:MM: stop cleanly at this wall-clock time (native scheduled stop)
-	startDelay := "" // --start-delay <dur>: wait before starting (native fleet staggering)
+	daemon := false    // --daemon: detach a supervisor (pidfile/log; restarts on crash)
+	supervise := false // --supervise: internal mode run by the daemon's supervisor
+	until := ""        // --until HH:MM: stop cleanly at this wall-clock time (native scheduled stop)
+	startDelay := ""   // --start-delay <dur>: wait before starting (native fleet staggering)
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
+		case "--daemon", "-d":
+			daemon = true
+		case "--supervise":
+			supervise = true
 		case "--addr":
 			if i+1 < len(rest) {
 				addr = rest[i+1]
@@ -56,9 +71,17 @@ func cmdServe(args []string) error {
 			relay = true
 		}
 	}
+	// --supervise (internal): the detached supervisor — keep a worker running, restart on crash.
+	if supervise {
+		return superviseWorker(stripArg(stripArg(args, "--supervise"), "--daemon"))
+	}
 	comp, err := loadCompany(dir)
 	if err != nil {
 		return err
+	}
+	// --daemon: detach a supervisor (pidfile + log) and return; the worker runs in the background.
+	if daemon {
+		return daemonizeWorker(comp, stripArg(args, "--daemon"))
 	}
 	warnIfNoProviderKey()
 
