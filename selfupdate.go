@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -117,11 +119,34 @@ func selfUpdate(latest string) (string, error) {
 		os.Remove(tmp)
 		return "", err
 	}
+	// Sanity-probe: the downloaded binary must actually run before we swap it in. A truncated/corrupt
+	// download can pass the hash check when a partial publish was hashed-and-served self-consistently
+	// (this is what bricked rbm21). Running `version` catches it BEFORE replacing the live binary.
+	if err := probeBinary(tmp); err != nil {
+		os.Remove(tmp)
+		return "", fmt.Errorf("downloaded binary rejected: %w", err)
+	}
 	if err := os.Rename(tmp, exe); err != nil {
 		os.Remove(tmp)
 		return "", err
 	}
 	return exe, nil
+}
+
+// probeBinary verifies a downloaded mago binary actually executes — `mago version` must run and print
+// something. A truncated/corrupt file fails to exec or prints nothing, so this rejects it before it
+// can replace the live binary (the belt-and-suspenders behind the hash check).
+func probeBinary(path string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, path, "version").Output()
+	if err != nil {
+		return fmt.Errorf("`version` self-probe failed to run: %w", err)
+	}
+	if strings.TrimSpace(string(out)) == "" {
+		return fmt.Errorf("`version` self-probe produced no output")
+	}
+	return nil
 }
 
 // downloadFile streams url to path (truncating any existing file).
