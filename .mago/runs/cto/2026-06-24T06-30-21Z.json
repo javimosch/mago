@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "command-dispatch-suggestions",
+      "note": "cmdTask previously used a single `len(rest)\u003c2 || rest[0]!='add'` guard; splitting into three conditions (no action, unknown action, missing title) is required to isolate the case where nearestAction can give a useful suggestion. taskActions lives in commands.go next to its dispatch logic, per the established pattern."
+    }
+  ],
+  "next": "Head of Org Engineering reviews and merges PR #50.",
+  "state_delta": "PR #50 (mago/task-49) open: 'did you mean' for mago task unknown sub-actions; tests green.",
+  "summary": "Added 'did you mean' suggestions for `mago task` unknown sub-actions. Added `taskActions = []string{\"add\"}` in commands.go, refactored `cmdTask` to distinguish no-sub-action / unknown-sub-action / missing-title cases, and wired `nearestAction` for the unknown case. Added `TestNearestActionTask` (6 cases) and `TestTaskActionsSuggestThemselves` (drift guard) in subaction_suggest_test.go. gofmt/vet/build/test all green. Pushed mago/task-49 and opened PR #50.",
+  "task_id": "49",
+  "task_status": "done",
+  "ts": "2026-06-24T06-30-21Z"
+}

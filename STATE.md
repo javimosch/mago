@@ -18,6 +18,7 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T14-35-37Z #43 Reject a malformed `MAGO_GH_REPO` early with an actionable error naming the expected `owner/repo` form (catch full URLs …
 - 2026-06-23T14-37-08Z #42 Document `MAGO_GH_REPO` and `MAGO_COMPANY` in `mago --help`'s env-overrides section so the GitHub-backed mode toggle is …
 - 2026-06-23T22-56-52Z #47 make `mago worker doctor` provider-aware (check the configured harness, not always OPENCODE_API_KEY)
+- 2026-06-24T06-30-22Z #49 Extend "did you mean" suggestions to `mago task` unknown sub-actions, matching the coverage already shipped for `mago pr…
 
 ## In flight
 (nothing yet)
@@ -44,3 +45,4 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T14-35-36Z [cmo] PR #44 (mago/task-43) open: validateGHRepo rejects malformed MAGO_GH_REPO early with owner/repo error; tests green.
 - 2026-06-23T14-37-07Z [cto] PR #45 (mago/task-42) open: documents MAGO_COMPANY/MAGO_GH_REPO/MAGO_TASK_LABEL in mago --help env-overrides; tests green.
 - 2026-06-23T22-56-51Z [cto] PR #48 (mago/task-47) open: provider-aware worker doctor; claude checks claude+auth, tau checks tau+OPENCODE_API_KEY; tests green.
+- 2026-06-24T06-30-21Z [cto] PR #50 (mago/task-49) open: 'did you mean' for mago task unknown sub-actions; tests green.
