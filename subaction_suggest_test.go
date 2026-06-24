@@ -74,6 +74,25 @@ func TestNearestActionWorker(t *testing.T) {
 	}
 }
 
+func TestNearestActionTask(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"aad", "add"}, // typo (transposition)
+		{"ad", "add"},  // prefix of valid
+		{"ADD", "add"}, // case-insensitive
+		{"list", ""},   // unrelated -> no suggestion
+		{"remove", ""}, // unrelated -> no suggestion
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := nearestAction(c.in, taskActions); got != c.want {
+			t.Errorf("nearestAction(%q, taskActions)=%q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // Drift guards: every canonical action must suggest itself, so the lists used
 // for "did you mean" stay aligned with the dispatch switches.
 func TestProjectActionsSuggestThemselves(t *testing.T) {
@@ -88,6 +107,14 @@ func TestWorkerActionsSuggestThemselves(t *testing.T) {
 	for _, a := range workerActions {
 		if got := nearestAction(a, workerActions); got != a {
 			t.Errorf("worker action %q suggested %q", a, got)
+		}
+	}
+}
+
+func TestTaskActionsSuggestThemselves(t *testing.T) {
+	for _, a := range taskActions {
+		if got := nearestAction(a, taskActions); got != a {
+			t.Errorf("task action %q suggested %q", a, got)
 		}
 	}
 }
