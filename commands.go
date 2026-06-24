@@ -79,12 +79,26 @@ func cmdInit(args []string) error {
 	return nil
 }
 
+// taskActions is the canonical list of `mago task` sub-actions, used for the
+// unknown-action "did you mean" suggestion. Keep in sync with the if-block in
+// cmdTask (TestTaskActionsSuggestThemselves guards against drift).
+var taskActions = []string{"add"}
+
 func cmdTask(args []string) error {
 	dir, rest, err := parseCompanyDir(args)
 	if err != nil {
 		return err
 	}
-	if len(rest) < 2 || rest[0] != "add" {
+	if len(rest) == 0 {
+		return fmt.Errorf("usage: mago task add \"<title>\" [-C dir]")
+	}
+	if rest[0] != "add" {
+		if s := nearestAction(rest[0], taskActions); s != "" {
+			return fmt.Errorf("unknown task action %q — did you mean %q?\nrun `mago task --help` for usage", rest[0], s)
+		}
+		return fmt.Errorf("unknown task action %q (valid: add)\nrun `mago task --help` for usage", rest[0])
+	}
+	if len(rest) < 2 {
 		return fmt.Errorf("usage: mago task add \"<title>\" [-C dir]")
 	}
 	project := ""
