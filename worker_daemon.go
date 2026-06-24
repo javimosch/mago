@@ -111,17 +111,77 @@ func workerStop(dir string) error {
 	if err != nil {
 		return err
 	}
-	pid, alive := readWorkerPid(c)
-	if !alive {
-		os.Remove(workerPidFile(c))
+	_, hadPidfile := readWorkerPid(c)
+	os.Remove(workerPidFile(c))
+	// A pidfile tracks only ONE supervisor; duplicates can accumulate (e.g. re-runs) and then fight
+	// silently on the relay. So kill EVERY `mago serve … -C <this dir>` process — supervisors first
+	// (so they can't respawn their worker), then any remaining workers.
+	killed := killCompanyWorkers(c.Dir)
+	if killed == 0 && !hadPidfile {
 		return fmt.Errorf("no worker running for %q", c.Name)
 	}
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		return err
-	}
-	os.Remove(workerPidFile(c))
-	fmt.Printf("mago worker stopped for %q (pid %d)\n", c.Name, pid)
+	fmt.Printf("mago worker stopped for %q (%d process(es))\n", c.Name, killed)
 	return nil
+}
+
+// killCompanyWorkers SIGKILLs all `mago serve … -C <absDir>` processes (supervisors then workers),
+// excluding this process and any `serve stop` invocation. Linux /proc-based; returns the count killed.
+func killCompanyWorkers(absDir string) int {
+	ents, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0 // not Linux / no /proc — the pidfile path handled what it could
+	}
+	self := os.Getpid()
+	var supers, workers []int
+	for _, e := range ents {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid == self {
+			continue
+		}
+		b, err := os.ReadFile("/proc/" + e.Name() + "/cmdline")
+		if err != nil {
+			continue
+		}
+		args := strings.Split(strings.TrimRight(string(b), "\x00"), "\x00")
+		match, isSup := classifyServeProc(args, absDir)
+		if !match {
+			continue
+		}
+		if isSup {
+			supers = append(supers, pid)
+		} else {
+			workers = append(workers, pid)
+		}
+	}
+	for _, p := range supers { // kill supervisors first so they can't restart their child
+		syscall.Kill(p, syscall.SIGKILL)
+	}
+	for _, p := range workers {
+		syscall.Kill(p, syscall.SIGKILL)
+	}
+	return len(supers) + len(workers)
+}
+
+// classifyServeProc reports whether a process's argv is a `mago serve … -C <absDir>` worker/supervisor
+// for exactly absDir (not a prefix — so co-am never matches co-ampanel), and whether it's the
+// supervisor. A `serve stop` invocation is never matched (so `stop` can't target itself).
+func classifyServeProc(args []string, absDir string) (match, supervisor bool) {
+	var isServe, isStop, hasDir bool
+	for i, a := range args {
+		switch a {
+		case "serve":
+			isServe = true
+		case "stop":
+			isStop = true
+		case "--supervise":
+			supervisor = true
+		case "-C":
+			if i+1 < len(args) && args[i+1] == absDir {
+				hasDir = true
+			}
+		}
+	}
+	return isServe && !isStop && hasDir, supervisor
 }
 
 func workerStatus(dir string) error {
