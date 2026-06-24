@@ -123,7 +123,7 @@ Claim a GitHub App installation (entitles your repos).
 	"worker": `mago worker <subcommand>
 
   mago worker mode <tokens> --worker <id>|--all   switch a REMOTE worker's mode
-  mago worker doctor                              validate tau, gh, OPENCODE_API_KEY
+  mago worker doctor                              validate gh auth and the configured LLM harness (tau or claude, per MAGO_PROVIDER)
 
 Mode tokens: reactive | proactive[=secs] | review | verified | comms=on|off.
 `,

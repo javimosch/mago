@@ -112,7 +112,7 @@ Usage:
   mago status [-C d]              show STATE.md, tasks, and pending HITL
   mago digest [-C d]              "what your company did": backlog, PRs, HITL, autonomy budget
   mago answer <id> "<text>" [-C d]  answer a needs_human task so it resumes
-  mago worker doctor               validate tau, gh, and OPENCODE_API_KEY (exits 101 on failure)
+  mago worker doctor               validate gh auth and the configured LLM harness (tau or claude per MAGO_PROVIDER; exits 101 on failure)
   mago skills [<name>]             embedded operator guide (operating, cli, fleet) — current with this binary
   mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/bugs/requests to the mago team
   mago version | help
