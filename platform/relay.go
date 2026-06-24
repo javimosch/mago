@@ -31,12 +31,13 @@ type relayMsg struct {
 }
 
 type relayConn struct {
-	license string
-	worker  string // worker id (hostname or MAGO_WORKER_ID) — an account may run several
-	key     string // license + "\x00" + worker: identifies one worker's connection
-	plat    string // worker os-arch (e.g. linux-amd64) — picks the binary version to advertise
-	repos   map[string]bool
-	ch      chan relayMsg
+	license     string
+	worker      string // worker id (hostname or MAGO_WORKER_ID) — an account may run several
+	key         string // license + "\x00" + worker: identifies one worker's connection
+	plat        string // worker os-arch (e.g. linux-amd64) — picks the binary version to advertise
+	repos       map[string]bool
+	ch          chan relayMsg
+	connectedAt time.Time // to detect collision churn (two workers sharing an id evicting each other)
 }
 
 type relayHub struct {
@@ -46,13 +47,18 @@ type relayHub struct {
 
 func newRelayHub() *relayHub { return &relayHub{workers: map[string]*relayConn{}} }
 
-func (h *relayHub) register(c *relayConn) {
+// register adds a connection, displacing any prior one for the same key (the SAME worker reconnecting
+// replaces its old connection). Returns the displaced conn (or nil) so the caller can detect the
+// pathological case: two DIFFERENT workers sharing one MAGO_WORKER_ID, which evict each other forever.
+func (h *relayHub) register(c *relayConn) *relayConn {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if old := h.workers[c.key]; old != nil {
-		close(old.ch) // the SAME worker reconnecting replaces its old connection
+	old := h.workers[c.key]
+	if old != nil {
+		close(old.ch)
 	}
 	h.workers[c.key] = c
+	return old
 }
 
 func (h *relayHub) unregister(c *relayConn) {
@@ -196,8 +202,13 @@ func (s *server) handleWorkerStream(w http.ResponseWriter, r *http.Request) {
 		workerName = "default"
 	}
 	plat := platOf(r.URL.Query().Get("os"), r.URL.Query().Get("arch"))
-	conn := &relayConn{license: token, worker: workerName, key: token + "\x00" + workerName, plat: plat, repos: repos, ch: make(chan relayMsg, 16)}
-	s.hub.register(conn)
+	conn := &relayConn{license: token, worker: workerName, key: token + "\x00" + workerName, plat: plat, repos: repos, ch: make(chan relayMsg, 16), connectedAt: time.Now()}
+	if old := s.hub.register(conn); old != nil && time.Since(old.connectedAt) < 45*time.Second {
+		// The just-displaced connection was very short-lived -> two workers are sharing this
+		// MAGO_WORKER_ID and evicting each other on a loop. Surface it loudly instead of churning silently.
+		log.Printf("relay: WARNING worker-id %q (user %d) re-registered after only %s — likely TWO workers sharing MAGO_WORKER_ID; they will churn. Give each a distinct id.", workerName, u.ID, time.Since(old.connectedAt).Round(time.Second))
+		s.store.LogEvent("worker_collision", u.ID, workerName+" — duplicate MAGO_WORKER_ID (two workers sharing one id churn on the relay; set a distinct MAGO_WORKER_ID per worker)")
+	}
 	defer s.hub.unregister(conn)
 	log.Printf("relay: worker %q connected (user %d, repos=%v)", workerName, u.ID, keys(repos))
 	s.store.LogEvent("worker_connect", u.ID, workerName+" · repos="+strings.Join(keys(repos), ","))
