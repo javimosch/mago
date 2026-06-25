@@ -68,6 +68,7 @@ func (c *Company) proposeBacklog() int {
 
 	northStar := c.visionNorthStar()
 	outOfScope := c.roadmapOutOfScope()
+	usage := c.usageContext() // real adoption signal from the relay (empty if none / offline)
 	prompt := fmt.Sprintf(`You are the Head of Product. Propose AT MOST %d concrete tasks that advance the
 CURRENT FOCUS below — each self-contained and shippable as a single pull request. Output ONLY task
 titles, one per line — no numbering, no prose, no duplicates of work already open or shipped.
@@ -76,6 +77,10 @@ This is the company's roadmap focus, not a backlog to fill: propose ONLY genuine
 moves the focus forward. If there is nothing valuable to do right now within scope, output NOTHING
 (empty) — do not invent filler (docs/test/cleanup busywork) just to produce titles. Never propose
 anything under OUT OF SCOPE.
+
+If there is REAL OPERATOR ACTIVITY below (people filing issues / asking questions / PRs flowing on the
+repos you serve), let it steer you: prioritize work that responds to that real demand over speculative
+roadmap items. No activity shown = no live demand signal; just follow the focus.
 
 If — and ONLY if — the CURRENT FOCUS is substantially ACHIEVED (the shipped work already covers it and
 no valuable work remains within it), output exactly one line and nothing else:
@@ -87,6 +92,9 @@ NORTH STAR:
 CURRENT FOCUS (Now):
 %s
 
+REAL OPERATOR ACTIVITY:
+%s
+
 OUT OF SCOPE (never propose these):
 %s
 
@@ -94,7 +102,7 @@ ALREADY OPEN (do not duplicate):
 %s
 
 ALREADY SHIPPED (do not repeat):
-%s`, want, orNone(northStar), focus, orNone(outOfScope),
+%s`, want, orNone(northStar), focus, orNone(usage), orNone(outOfScope),
 		orNone(strings.Join(openTitles, "\n")), orNone(c.shippedText()))
 
 	out, err := tauComplete(planner, prompt)
