@@ -121,11 +121,36 @@ type AccountUsage struct {
 }
 
 // AccountForRepo returns the mago account entitled to a repo (0 if none) — used to attribute a
-// relayed GitHub event to the operator whose worker is acting on it.
+// relayed GitHub event to the operator whose worker is acting on it. Mirrors EntitledRepos' two
+// sources: direct repo_grants, then claimed GitHub App installations (whose repos_json lists the repo
+// — the real-user path, since App-entitled repos never land in repo_grants).
 func (s *Store) AccountForRepo(repo string) int64 {
 	var id int64
-	s.db.QueryRow("SELECT account_id FROM repo_grants WHERE repo = ? LIMIT 1", repo).Scan(&id)
-	return id
+	if s.db.QueryRow("SELECT account_id FROM repo_grants WHERE repo = ? LIMIT 1", repo).Scan(&id) == nil && id != 0 {
+		return id
+	}
+	rows, err := s.db.Query("SELECT account_id, repos_json FROM installations WHERE account_id != 0")
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var acct int64
+		var raw string
+		if rows.Scan(&acct, &raw) != nil {
+			continue
+		}
+		var repos []string
+		if json.Unmarshal([]byte(raw), &repos) != nil {
+			continue
+		}
+		for _, r := range repos {
+			if r == repo {
+				return acct
+			}
+		}
+	}
+	return 0
 }
 
 // RecordGHEvent logs one relayed GitHub event for usage aggregation (best-effort; never blocks).

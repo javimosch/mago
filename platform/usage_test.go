@@ -20,6 +20,12 @@ func TestUsageAggregation(t *testing.T) {
 	if got := st.AccountForRepo("x/y"); got != 0 {
 		t.Errorf("unowned repo should resolve to 0, got %d", got)
 	}
+	// GitHub App path: account 2 owns an installation whose repos_json lists org/app-repo (the
+	// real-user entitlement path — such repos never land in repo_grants).
+	st.db.Exec("INSERT INTO installations (installation_id, account_id, repos_json, updated_at) VALUES (99, 2, '[\"org/app-repo\"]', 0)")
+	if got := st.AccountForRepo("org/app-repo"); got != 2 {
+		t.Errorf("App-installation repo should resolve to account 2, got %d", got)
+	}
 
 	for _, e := range []struct{ repo, event, action string }{
 		{"a/b", "issues", "opened"},
