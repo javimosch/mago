@@ -69,6 +69,9 @@ func (c *Company) proposeBacklog() int {
 	northStar := c.visionNorthStar()
 	outOfScope := c.roadmapOutOfScope()
 	usage := c.usageContext() // real adoption signal from the relay (empty if none / offline)
+	if usage != "" {
+		fmt.Fprintf(os.Stderr, "[backlog] demand signal: %s\n", usage)
+	}
 	prompt := fmt.Sprintf(`You are the Head of Product. Propose AT MOST %d concrete tasks that advance the
 CURRENT FOCUS below — each self-contained and shippable as a single pull request. Output ONLY task
 titles, one per line — no numbering, no prose, no duplicates of work already open or shipped.
