@@ -24,7 +24,7 @@ func (s *server) handleLanding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, landingHTML, s.appURL, s.appURL, s.appURL)
+	fmt.Fprintf(w, landingHTML, foundingBanner(s.store.FoundingSlotsLeft()), s.appURL, s.appURL, s.appURL)
 }
 
 // handleInstall serves a POSIX sh installer that pulls the binary from this host.
@@ -104,11 +104,7 @@ const css = `<style>
 const landingHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>mago — autonomous agents that run your company</title>` + css + `</head><body>
-<div class=banner>
-  <div class=flag>🏁 Founding operators — first 10 only</div>
-  <div class=sub>Run your autonomous company <b>free during beta</b>, with a direct line to the founder. Shape the product that runs your company.</div>
-  <code>curl -fsSL mago.intrane.fr/install.sh | sh</code>
-</div>
+%s
 <h1>mago</h1>
 <p class=tag>Cheap autonomous AI agent teams that ship code over GitHub. <b>BYOK · CLI-only · €20/month.</b></p>
 <p><span class=pill>no dashboard</span><span class=pill>BYOK — your key</span><span class=pill>Claude Code or tau</span><span class=pill>GitHub-native</span><span class=pill>agent-driven</span></p>

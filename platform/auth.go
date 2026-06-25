@@ -89,16 +89,26 @@ func (s *server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, err.Error())
 		return
 	}
-	// Grant a no-card trial: issue the license now so the worker can connect immediately,
-	// and start the 48h clock. `mago subscribe` converts to the paid plan.
-	trialEnds := time.Now().Add(trialDuration).Unix()
+	// First 10 REAL external operators get founding status — entitled, no expiry (free during beta).
+	// Our own test/dogfood/founder accounts are excluded so they don't burn the slots. Everyone else
+	// gets the no-card 48h trial; `mago subscribe` converts to the paid plan. License issued now so
+	// the worker can connect immediately.
+	plan, trialEnds := "trial", time.Now().Add(trialDuration).Unix()
+	founding := !isInternalEmail(email) && s.store.FoundingCount() < foundingCap
+	if founding {
+		plan, trialEnds = "founding", 0
+	}
 	s.store.Update(u.ID, func(uu *User) {
-		uu.Plan, uu.TrialEnds = "trial", trialEnds
+		uu.Plan, uu.TrialEnds = plan, trialEnds
 		if uu.LicenseKey == "" {
 			uu.LicenseKey = genLicense()
 		}
 	})
-	s.store.LogEvent("signup", u.ID, "48h trial")
+	detail := "48h trial"
+	if founding {
+		detail = "FOUNDING operator — free during beta"
+	}
+	s.store.LogEvent("signup", u.ID, detail)
 	writeJSON(w, 200, map[string]string{"token": jwtSign(s.jwtSecret, u.ID, u.Email)})
 }
 

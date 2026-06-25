@@ -177,13 +177,21 @@ func cmdRegister(args []string) error {
 		return err
 	}
 	fmt.Printf("registered %s — token saved to %s\n", email, configPath())
-	// Pull the account so the trial license is cached and we can show the trial window.
-	if acc, err := fetchAccount(cfg); err == nil && acc.Trial {
-		fmt.Printf("✓ 48-hour free trial active (%s) — no card required.\n", trialRemaining(acc.TrialEnds))
+	// Pull the account so the license is cached, and tailor the next step to the plan granted.
+	acc, accErr := fetchAccount(cfg)
+	onboard := func() {
 		fmt.Println("next: install the mago GitHub App on your repos, then `mago link --installation <id>` to entitle them.")
 		fmt.Println("      then `mago init ./company` and `mago serve --relay -C ./company` (run `mago worker doctor` first to check setup).")
+	}
+	switch {
+	case accErr == nil && acc.Plan == "founding":
+		fmt.Println("🏁 You're a FOUNDING operator — free during beta, with a direct line to the founder.")
+		onboard()
+	case accErr == nil && acc.Trial:
+		fmt.Printf("✓ 48-hour free trial active (%s) — no card required.\n", trialRemaining(acc.TrialEnds))
+		onboard()
 		fmt.Println("      `mago subscribe` anytime to continue past the trial (€20/month).")
-	} else {
+	default:
 		fmt.Println("next: `mago subscribe` to activate the €20/month plan")
 	}
 	return nil

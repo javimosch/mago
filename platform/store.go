@@ -32,7 +32,9 @@ const trialDuration = 48 * time.Hour
 func (u *User) trialActive() bool { return u.Plan == "trial" && u.TrialEnds > time.Now().Unix() }
 
 // entitled reports whether the worker may connect: a paid plan, or a live trial.
-func (u *User) entitled() bool { return u.Plan == "mago" || u.trialActive() }
+func (u *User) entitled() bool {
+	return u.Plan == "mago" || u.Plan == "founding" || u.trialActive()
+}
 
 // Store is the platform's SQLite-backed persistence (schema in docs/SAAS.md). The method set
 // matches what the handlers expect; Update applies a mutation to one user row transactionally.
