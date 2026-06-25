@@ -55,6 +55,70 @@ func TestProviderCheckNames_Tau(t *testing.T) {
 	}
 }
 
+// TestCmdWorker_NoArgs_ReturnsUserError verifies that `mago worker` (no subcommand)
+// returns a *cliErr with code 80 (user-input error) instead of calling os.Exit directly.
+func TestCmdWorker_NoArgs_ReturnsUserError(t *testing.T) {
+	err := cmdWorker(nil)
+	if err == nil {
+		t.Fatal("cmdWorker with no args should return an error")
+	}
+	ce, ok := err.(*cliErr)
+	if !ok {
+		t.Fatalf("expected *cliErr, got %T: %v", err, err)
+	}
+	if ce.code != 80 {
+		t.Errorf("exit code = %d, want 80 (user-input error per AGENTS.md)", ce.code)
+	}
+	if !strings.Contains(err.Error(), "worker") {
+		t.Errorf("error %q should mention 'worker'", err.Error())
+	}
+}
+
+// TestCmdWorker_UnknownSubcommand_ReturnsUserError verifies that `mago worker <unknown>`
+// returns a *cliErr with code 80 and names the bad subcommand.
+func TestCmdWorker_UnknownSubcommand_ReturnsUserError(t *testing.T) {
+	err := cmdWorker([]string{"badcmd"})
+	if err == nil {
+		t.Fatal("cmdWorker with unknown subcommand should return an error")
+	}
+	ce, ok := err.(*cliErr)
+	if !ok {
+		t.Fatalf("expected *cliErr, got %T: %v", err, err)
+	}
+	if ce.code != 80 {
+		t.Errorf("exit code = %d, want 80", ce.code)
+	}
+	if !strings.Contains(err.Error(), "badcmd") {
+		t.Errorf("error %q should name the bad subcommand", err.Error())
+	}
+}
+
+// TestCmdWorker_TypoSuggestsNearestSubcommand verifies the "did you mean" path also
+// returns a *cliErr (not os.Exit) and names the suggestion in the message.
+func TestCmdWorker_TypoSuggestsNearestSubcommand(t *testing.T) {
+	err := cmdWorker([]string{"dctor"}) // typo of "doctor"
+	if err == nil {
+		t.Fatal("cmdWorker with typo should return an error")
+	}
+	if _, ok := err.(*cliErr); !ok {
+		t.Fatalf("expected *cliErr, got %T", err)
+	}
+	if !strings.Contains(err.Error(), "doctor") {
+		t.Errorf("error %q should suggest 'doctor'", err.Error())
+	}
+}
+
+// TestCLIErrType verifies the cliErr type carries its code and message correctly.
+func TestCLIErrType(t *testing.T) {
+	e := &cliErr{80, "user input error"}
+	if e.Error() != "user input error" {
+		t.Errorf("Error() = %q, want %q", e.Error(), "user input error")
+	}
+	if e.code != 80 {
+		t.Errorf("code = %d, want 80", e.code)
+	}
+}
+
 // TestCheckClaudeOnPath_Label verifies the label is always set regardless of PATH.
 func TestCheckClaudeOnPath_Label(t *testing.T) {
 	c := checkClaudeOnPath()
