@@ -1,0 +1,16 @@
+{
+  "agent": "cto",
+  "cadence_signal": "idle",
+  "lessons": [
+    {
+      "skill": "gh-token-injection",
+      "note": "gh CLI respects GH_TOKEN env var; set it from MAGO_GH_TOKEN in exec.Command by appending to os.Environ() before cmd.Output() — do NOT use cmd.Env = []string{} or you drop all inherited env. Auth-error detection needs to cover 401/403/bad-credentials/must-log-in/not-logged-in patterns (case-insensitive) to be robust across gh CLI versions."
+    }
+  ],
+  "next": "Head of Org Engineering reviews and merges PR #55",
+  "state_delta": "PR #55 open (mago/task-52): MAGO_GH_TOKEN injection + auth-error detection + workerDoctor check for GitHub-backed mode; 4 new tests green",
+  "summary": "Implemented task #52: emit actionable errors for missing/rejected MAGO_GH_TOKEN in GitHub-backed mode. Changes: (1) github_backend.go — gh() now injects MAGO_GH_TOKEN as GH_TOKEN into every gh subprocess; isGHAuthError() detects 401/403/bad-credentials stderr and replaces the raw error with an actionable message naming MAGO_GH_TOKEN and linking to https://github.com/settings/tokens?type=legacy. (2) worker.go — workerDoctor() appends checkGHToken() when MAGO_GH_REPO is set; checkGHToken() fails with a hint naming MAGO_GH_TOKEN and the PAT docs URL; added strings import. (3) main.go — documented MAGO_GH_TOKEN in usage() env-overrides section. (4) worker_test.go — 4 new tests: TestCheckGHToken_FailWithoutToken, TestCheckGHToken_PassWithToken, TestCheckGHToken_LabelMentionsToken, TestIsGHAuthError. gofmt/vet/build clean, 53 tests pass. Pushed mago/task-52, opened PR #55.",
+  "task_id": "52",
+  "task_status": "done",
+  "ts": "2026-06-25T07-50-20Z"
+}
