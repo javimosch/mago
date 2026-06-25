@@ -81,11 +81,20 @@ func (c *Company) prepProjectWorkspace(t *Task, repo string) (string, error) {
 	return ws, nil
 }
 
-// pushState publishes the company's state in GitHub mode: runtime exhaust (STATE.md +
+// stateSyncEnabled reports whether the company should publish its state INTO the GitHub repo. This is
+// OPT-IN (MAGO_STATE_SYNC=1) and off by default: when operating label-scoped on a user's PROJECT repo
+// (the common case), mago must NOT push its own STATE.md / agent-defs into that repo — doing so created
+// stray `mago-state`/`main` branches and polluted the repo. State always lives locally in the company
+// dir regardless; this only controls the extra cross-machine sync, which a mago-owned company opts into.
+func (c *Company) stateSyncEnabled() bool {
+	return c.ghRepo != "" && os.Getenv("MAGO_STATE_SYNC") == "1"
+}
+
+// pushState publishes the company's state when MAGO_STATE_SYNC=1: runtime exhaust (STATE.md +
 // .mago/runs|skills|memory|inbox) to the mago-state branch, and agent DEFINITIONS
-// (.mago/agents + config + projects) to main. No-op outside GitHub mode.
+// (.mago/agents + config + projects) to main. No-op otherwise — state stays local to the company dir.
 func (c *Company) pushState(msg string) {
-	if c.ghRepo == "" {
+	if !c.stateSyncEnabled() {
 		return
 	}
 	if err := c.ensureStateRepo(); err != nil {
