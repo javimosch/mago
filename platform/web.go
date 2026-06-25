@@ -95,11 +95,20 @@ const css = `<style>
   a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
   .price{font-weight:700} ol,ul{padding-left:1.3rem} .muted{color:var(--mut);font-size:.92rem}
   .pill{display:inline-block;background:var(--code);color:var(--acc);border-radius:999px;padding:.15rem .7rem;font-size:.85rem;margin-right:.4rem}
+  .banner{background:linear-gradient(135deg,#5319e7,#7c3aed);color:#fff;border-radius:14px;padding:1.1rem 1.3rem;margin:0 0 1.6rem;box-shadow:0 6px 24px rgba(83,25,231,.25)}
+  .banner .flag{font-size:1.05rem;font-weight:700;letter-spacing:.01em}
+  .banner .sub{opacity:.93;margin:.25rem 0 .65rem;font-size:.98rem}
+  .banner code{background:rgba(255,255,255,.16);color:#fff;padding:.25rem .55rem;border-radius:6px;font-size:.92rem}
 </style>`
 
 const landingHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>mago — autonomous agents that run your company</title>` + css + `</head><body>
+<div class=banner>
+  <div class=flag>🏁 Founding operators — first 10 only</div>
+  <div class=sub>Run your autonomous company <b>free during beta</b>, with a direct line to the founder. Shape the product that runs your company.</div>
+  <code>curl -fsSL mago.intrane.fr/install.sh | sh</code>
+</div>
 <h1>mago</h1>
 <p class=tag>Cheap autonomous AI agent teams that ship code over GitHub. <b>BYOK · CLI-only · €20/month.</b></p>
 <p><span class=pill>no dashboard</span><span class=pill>BYOK — your key</span><span class=pill>Claude Code or tau</span><span class=pill>GitHub-native</span><span class=pill>agent-driven</span></p>
