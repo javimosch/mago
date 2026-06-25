@@ -19,6 +19,7 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T14-37-08Z #42 Document `MAGO_GH_REPO` and `MAGO_COMPANY` in `mago --help`'s env-overrides section so the GitHub-backed mode toggle is …
 - 2026-06-23T22-56-52Z #47 make `mago worker doctor` provider-aware (check the configured harness, not always OPENCODE_API_KEY)
 - 2026-06-24T06-30-22Z #49 Extend "did you mean" suggestions to `mago task` unknown sub-actions, matching the coverage already shipped for `mago pr…
+- 2026-06-25T07-45-11Z #53 Ensure all CLI error paths exit with a non-zero status code so scripts and CI can detect `mago` failures reliably
 
 ## In flight
 (nothing yet)
@@ -46,3 +47,4 @@ Make mago easier to adopt and trust: improve docs, examples, and test coverage; 
 - 2026-06-23T14-37-07Z [cto] PR #45 (mago/task-42) open: documents MAGO_COMPANY/MAGO_GH_REPO/MAGO_TASK_LABEL in mago --help env-overrides; tests green.
 - 2026-06-23T22-56-51Z [cto] PR #48 (mago/task-47) open: provider-aware worker doctor; claude checks claude+auth, tau checks tau+OPENCODE_API_KEY; tests green.
 - 2026-06-24T06-30-21Z [cto] PR #50 (mago/task-49) open: 'did you mean' for mago task unknown sub-actions; tests green.
+- 2026-06-25T07-45-10Z [cmo] PR #54 open (mago/task-53): cliErr type + cmdWorker returns errors instead of os.Exit; tests green
