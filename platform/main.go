@@ -46,6 +46,9 @@ func main() {
 		case "activity": // onboarding observability: signups, subs, worker connects
 			fail(cmdActivity(os.Args[2:]))
 			return
+		case "usage": // adoption depth: relayed GitHub activity per account
+			fail(cmdUsage(os.Args[2:]))
+			return
 		case "setup-github": // create the GitHub App via the manifest flow (one browser click)
 			fail(cmdSetupGithub(os.Args[2:]))
 			return
@@ -112,6 +115,7 @@ func runServer(port string) {
 	mux.HandleFunc("/api/installations", s.handleInstallations)  // `mago link`: claim/list App installs
 	mux.HandleFunc("/api/worker/control", s.handleWorkerControl) // `mago worker mode`: switch a worker live
 	mux.HandleFunc("/api/feedback", s.handleFeedback)            // `mago feedback`: operator friction/bugs/requests
+	mux.HandleFunc("/api/usage", s.handleUsage)                  // adoption-depth feed (planner sense() input)
 	mux.HandleFunc("/stripe/webhook", s.handleWebhook)
 	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)
 	mux.HandleFunc("/webhooks/github/", s.handleGithubWebhook) // GitHub App ingress -> relay

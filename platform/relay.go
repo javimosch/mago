@@ -323,6 +323,7 @@ func (s *server) handleGithubWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var p struct {
+		Action     string `json:"action"`
 		Repository struct {
 			FullName string `json:"full_name"`
 		} `json:"repository"`
@@ -333,6 +334,11 @@ func (s *server) handleGithubWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n := s.hub.route(p.Repository.FullName, relayMsg{Event: event, Body: body})
+	// Aggregate relay usage: a relayed GitHub event = the operator's repo activity that mago is acting
+	// on, which is real adoption depth (issues filed, PRs flowing, comments) — the demand signal.
+	if acct := s.store.AccountForRepo(p.Repository.FullName); acct != 0 {
+		s.store.RecordGHEvent(acct, p.Repository.FullName, event, p.Action)
+	}
 	log.Printf("relay: github %s on %s -> %d worker(s)", event, p.Repository.FullName, n)
 	w.WriteHeader(200)
 }

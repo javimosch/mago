@@ -83,7 +83,16 @@ CREATE TABLE IF NOT EXISTS repo_grants (
   account_id INTEGER NOT NULL,                -- mago user id entitled to the repo
   repo       TEXT NOT NULL,                   -- owner/repo
   PRIMARY KEY (account_id, repo)
-);`
+);
+CREATE TABLE IF NOT EXISTS gh_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts         INTEGER NOT NULL,
+  account_id INTEGER NOT NULL DEFAULT 0,      -- owning mago account (resolved from the repo)
+  repo       TEXT NOT NULL,                   -- owner/repo
+  event      TEXT NOT NULL,                   -- X-GitHub-Event: issues | pull_request | issue_comment | ...
+  action     TEXT NOT NULL DEFAULT ''         -- payload action: opened | closed | labeled | ...
+);
+CREATE INDEX IF NOT EXISTS idx_gh_events_acct_ts ON gh_events (account_id, ts);`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
@@ -94,6 +103,109 @@ CREATE TABLE IF NOT EXISTS repo_grants (
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// --- relay usage aggregation: the operator's repo activity that mago acts on = real adoption depth ---
+
+// AccountUsage is a per-account rollup of relayed GitHub activity over a window.
+type AccountUsage struct {
+	AccountID int64    `json:"account_id"`
+	Email     string   `json:"email"`
+	Plan      string   `json:"plan"`
+	Repos     []string `json:"repos"`    // distinct repos active in the window
+	Total     int      `json:"total"`    // all relayed events
+	Issues    int      `json:"issues"`   // `issues` events (work filed / labeled)
+	PRs       int      `json:"prs"`      // `pull_request` events (deliverables flowing)
+	Comments  int      `json:"comments"` // `issue_comment` events (operator interaction / HITL)
+	Other     int      `json:"other"`    // any other relayed event
+	LastTs    int64    `json:"last_ts"`  // most recent event (0 = none)
+}
+
+// AccountForRepo returns the mago account entitled to a repo (0 if none) — used to attribute a
+// relayed GitHub event to the operator whose worker is acting on it.
+func (s *Store) AccountForRepo(repo string) int64 {
+	var id int64
+	s.db.QueryRow("SELECT account_id FROM repo_grants WHERE repo = ? LIMIT 1", repo).Scan(&id)
+	return id
+}
+
+// RecordGHEvent logs one relayed GitHub event for usage aggregation (best-effort; never blocks).
+func (s *Store) RecordGHEvent(accountID int64, repo, event, action string) {
+	s.db.Exec("INSERT INTO gh_events (ts, account_id, repo, event, action) VALUES (?, ?, ?, ?, ?)",
+		time.Now().Unix(), accountID, repo, event, action)
+}
+
+// UsageForAccount rolls up an account's relayed activity over the last `days`.
+func (s *Store) UsageForAccount(accountID int64, days int) AccountUsage {
+	if days <= 0 {
+		days = 7
+	}
+	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix()
+	u := AccountUsage{AccountID: accountID}
+	if usr := s.GetByID(accountID); usr != nil {
+		u.Email, u.Plan = usr.Email, usr.Plan
+	}
+	if rows, err := s.db.Query("SELECT event, COUNT(*), MAX(ts) FROM gh_events WHERE account_id=? AND ts>=? GROUP BY event", accountID, since); err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var ev string
+			var c int
+			var mx int64
+			if rows.Scan(&ev, &c, &mx) != nil {
+				continue
+			}
+			u.Total += c
+			if mx > u.LastTs {
+				u.LastTs = mx
+			}
+			switch ev {
+			case "issues":
+				u.Issues += c
+			case "pull_request":
+				u.PRs += c
+			case "issue_comment":
+				u.Comments += c
+			default:
+				u.Other += c
+			}
+		}
+	}
+	if rows, err := s.db.Query("SELECT DISTINCT repo FROM gh_events WHERE account_id=? AND ts>=? ORDER BY repo", accountID, since); err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var r string
+			if rows.Scan(&r) == nil {
+				u.Repos = append(u.Repos, r)
+			}
+		}
+	}
+	return u
+}
+
+// UsageByAccount returns each account with relayed activity over the window, most-active first —
+// the operator's "who is actually using mago" view.
+func (s *Store) UsageByAccount(days int) []AccountUsage {
+	if days <= 0 {
+		days = 7
+	}
+	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix()
+	rows, err := s.db.Query("SELECT account_id FROM gh_events WHERE ts>=? GROUP BY account_id ORDER BY COUNT(*) DESC", since)
+	if err != nil {
+		return nil
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	out := make([]AccountUsage, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, s.UsageForAccount(id, days))
+	}
+	return out
+}
 
 const userCols = "id, email, password_hash, plan, stripe_customer, stripe_sub, license_key, trial_ends, created_at"
 
