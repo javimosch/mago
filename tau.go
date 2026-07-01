@@ -146,9 +146,26 @@ func extractFinalContent(lines []string) (string, error) {
 	return "", fmt.Errorf("no output from tau")
 }
 
+// stripDSML strips leading DSML/tool-call markup emitted by some models (e.g. DeepSeek).
+// DSML blocks open with <｜｜DSML｜｜; everything before the first '{' is dropped so
+// parseReflection sees a clean JSON object.
+func stripDSML(s string) string {
+	if !strings.Contains(s, "<｜｜DSML｜｜") {
+		return s
+	}
+	if i := strings.Index(s, "{"); i >= 0 {
+		return s[i:]
+	}
+	return s
+}
+
 // parseReflection extracts the reflection from tau's output, tolerating prose
 // around it. Tries the last fenced ```json block first, then fallbacks.
 func parseReflection(content string) (*Reflection, error) {
+	content = stripDSML(content)
+	if !strings.Contains(content, "{") {
+		return nil, fmt.Errorf("could not parse reflection JSON: no JSON object in output: %s", truncate(content, 300))
+	}
 	for _, cand := range jsonCandidates(content) {
 		var r Reflection
 		if json.Unmarshal([]byte(cand), &r) == nil && r.Summary != "" {
