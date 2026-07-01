@@ -1,0 +1,118 @@
+package main
+
+import (
+	"strings"
+	"testing"
+)
+
+// reflJSON is a minimal valid reflection for parse tests.
+const reflJSON = `{"summary":"did work","state_delta":"thing changed","task_status":"done","lessons":[],"next":"next step","cadence_signal":"idle"}`
+
+func TestStripDSML_NoMarkup(t *testing.T) {
+	input := reflJSON
+	got := stripDSML(input)
+	if got != input {
+		t.Errorf("stripDSML modified clean input: got %q", got)
+	}
+}
+
+func TestStripDSML_PureMarkupNoBrace(t *testing.T) {
+	input := "<｜｜DSML｜｜tool_calls> name=bash command=ls (no json here)"
+	got := stripDSML(input)
+	// No '{' — should return original (parseReflection will catch it)
+	if got != input {
+		t.Errorf("stripDSML(%q) = %q, want original (no brace)", input, got)
+	}
+}
+
+func TestStripDSML_MarkupThenJSON(t *testing.T) {
+	input := "<｜｜DSML｜｜tool_calls> name=bash\n" + reflJSON
+	got := stripDSML(input)
+	if got != reflJSON {
+		t.Errorf("stripDSML did not strip markup prefix:\ngot:  %q\nwant: %q", got, reflJSON)
+	}
+}
+
+func TestParseReflection_Clean(t *testing.T) {
+	r, err := parseReflection("```json\n" + reflJSON + "\n```")
+	if err != nil {
+		t.Fatalf("parseReflection clean: unexpected error: %v", err)
+	}
+	if r.Summary != "did work" {
+		t.Errorf("got summary %q, want %q", r.Summary, "did work")
+	}
+}
+
+func TestParseReflection_DSMLWrappingJSON(t *testing.T) {
+	input := "<｜｜DSML｜｜tool_calls> name=bash\n" + reflJSON
+	r, err := parseReflection(input)
+	if err != nil {
+		t.Fatalf("parseReflection with DSML wrapper: unexpected error: %v", err)
+	}
+	if r.Summary != "did work" {
+		t.Errorf("got summary %q, want %q", r.Summary, "did work")
+	}
+}
+
+func TestParseReflection_NoBrace(t *testing.T) {
+	input := "<｜｜DSML｜｜tool_calls> name=bash command=ls (no reflection json here)"
+	_, err := parseReflection(input)
+	if err == nil {
+		t.Fatal("parseReflection: expected error for output with no JSON object, got nil")
+	}
+	if !strings.Contains(err.Error(), "no JSON object") {
+		t.Errorf("error should mention 'no JSON object', got: %v", err)
+	}
+}
+
+func TestParseReflection_EmptyContent(t *testing.T) {
+	_, err := parseReflection("")
+	if err == nil {
+		t.Fatal("parseReflection: expected error for empty content, got nil")
+	}
+}
+
+func TestJsonCandidates_NoContent(t *testing.T) {
+	// jsonCandidates on a string with no braces should return slice entries that all fail to parse.
+	cands := jsonCandidates("no json here at all")
+	for _, c := range cands {
+		if strings.Contains(c, "{") {
+			t.Errorf("jsonCandidates returned a candidate with '{' from brace-free input: %q", c)
+		}
+	}
+}
+
+func TestExtractFinalContent_DoneLine(t *testing.T) {
+	lines := []string{
+		`{"chunk":"hello"}`,
+		`{"done":true,"content":"final-content"}`,
+	}
+	got, err := extractFinalContent(lines)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "final-content" {
+		t.Errorf("got %q, want %q", got, "final-content")
+	}
+}
+
+func TestExtractFinalContent_FallbackChunks(t *testing.T) {
+	lines := []string{
+		`{"chunk":"hel"}`,
+		`{"chunk":"lo"}`,
+	}
+	got, err := extractFinalContent(lines)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("got %q, want %q", got, "hello")
+	}
+}
+
+func TestExtractFinalContent_Empty(t *testing.T) {
+	_, err := extractFinalContent(nil)
+	if err == nil {
+		t.Fatal("expected error for empty lines, got nil")
+	}
+}
