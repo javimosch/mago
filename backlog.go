@@ -140,7 +140,8 @@ ALREADY SHIPPED (do not repeat):
 		if title == "" || duplicateTitle(title, openTitles) {
 			continue
 		}
-		t, err := c.tasks.AddTask(title, "")
+		project := extractProjectName(title, c.loadProjectConfs())
+		t, err := c.tasks.AddTask(title, project)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[backlog] file %q: %v\n", title, err)
 			continue
@@ -265,4 +266,27 @@ func orNone(s string) string {
 		return "(none)"
 	}
 	return s
+}
+
+// extractProjectName checks if a task title starts with a project name prefix (e.g., "supercli:
+// unit tests...") and returns the project name if it's configured, or "" if not. This ensures
+// multi-project missions file tasks to their intended repos instead of defaulting to the
+// worker's bound repo.
+func extractProjectName(title string, projects map[string]projConf) string {
+	// Split on the first colon to check if the prefix is a project name.
+	parts := strings.SplitN(title, ":", 2)
+	if len(parts) != 2 {
+		return "" // No colon, no project prefix.
+	}
+	prefix := strings.TrimSpace(parts[0])
+	if prefix == "" {
+		return "" // Empty prefix (e.g., ": something") is not a project name.
+	}
+	// Check if the prefix (case-insensitive) matches a configured project.
+	for name := range projects {
+		if strings.EqualFold(name, prefix) {
+			return name
+		}
+	}
+	return "" // Prefix doesn't match any project, use the default repo.
 }
