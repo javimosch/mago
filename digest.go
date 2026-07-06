@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -47,8 +48,25 @@ func cmdDigest(args []string) error {
 			where, n["open"], n["in_progress"], n["blocked"], n["needs_human"], n["done"])
 	}
 
-	// PR throughput on the company repo, incl. the autonomy metric: PRs mago shipped (mago/* branches).
-	if comp.ghRepo != "" {
+	// PR throughput: grouped by project for multi-project companies, else by company repo only.
+	// The autonomy metric (shipped by mago) only applies to the company repo.
+	projects := comp.loadProjectConfs()
+	if len(projects) > 0 {
+		since := time.Now().AddDate(0, 0, -1).UTC().Format("2006-01-02")
+		fmt.Println("\nPull requests (last 24h):")
+		for _, name := range sortedProjectNames(projects) {
+			conf := projects[name]
+			merged := ghCount(conf.Repo, "pr", "list", "--state", "merged", "--search", "merged:>="+since, "--json", "number", "--jq", "length")
+			open := ghCount(conf.Repo, "pr", "list", "--state", "open", "--json", "number", "--jq", "length")
+			fmt.Printf("  %s: merged %s · open %s\n", name, numOr(merged), numOr(open))
+		}
+		// Autonomy metric for company repo only (where tasks are filed and shipped via mago/* branches).
+		if comp.ghRepo != "" {
+			magoShipped := ghCount(comp.ghRepo, "pr", "list", "--state", "merged", "--search", "merged:>="+since+" head:mago/", "--json", "number", "--jq", "length")
+			fmt.Printf("  shipped by mago: %s (on %s)\n", numOr(magoShipped), comp.ghRepo)
+		}
+	} else if comp.ghRepo != "" {
+		// Single-project company: show company repo stats with autonomy metric.
 		since := time.Now().AddDate(0, 0, -1).UTC().Format("2006-01-02")
 		merged := ghCount(comp.ghRepo, "pr", "list", "--state", "merged", "--search", "merged:>="+since, "--json", "number", "--jq", "length")
 		open := ghCount(comp.ghRepo, "pr", "list", "--state", "open", "--json", "number", "--jq", "length")
@@ -103,4 +121,14 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// sortedProjectNames returns the project names sorted alphabetically for consistent digest output.
+func sortedProjectNames(projects map[string]projConf) []string {
+	var names []string
+	for name := range projects {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
