@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type tickResult struct {
@@ -148,11 +149,17 @@ var providerKeyEnv = map[string]string{
 // warnIfNoProviderKey alerts (BYOK) when no API key is configured for the resolved tau provider
 // — neither in the env nor in ~/.config/tau/config.json. Without one, tau falls back to a
 // rate-limited keyless/builtin path, which is what caused the throttling during batch runs.
+// Also warns when a "flash" model variant is configured, since those often emit DSML tool-call
+// markup instead of the required reflection JSON.
 func warnIfNoProviderKey() {
 	prov := os.Getenv("MAGO_PROVIDER") // the override operators actually use (e.g. opencode-go)
 	keyEnv, ok := providerKeyEnv[prov]
 	if !ok {
 		return
+	}
+	if m := os.Getenv("MAGO_MODEL"); strings.Contains(m, "flash") {
+		fmt.Fprintf(os.Stderr, "[warn] model %q is a flash variant — these can emit DSML tool-call markup "+
+			"instead of reflection JSON. Consider using a more reliable model (e.g. deepseek-v4).\n", m)
 	}
 	if os.Getenv(keyEnv) != "" || tauConfigHasKey(prov) {
 		return // key provided via env or the tau config file
