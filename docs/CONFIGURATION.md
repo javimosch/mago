@@ -84,6 +84,7 @@ When `MAGO_PROVIDER=claude`, mago authenticates via your local Claude Code subsc
 | `MAGO_COMPANY` | current working directory | Default company directory when `-C <dir>` is not passed. |
 | `MAGO_GH_REPO` | *(unset — local mode)* | `owner/repo` of the backlog repo. In GitHub mode, tasks become **issues**, PRs are opened against the repo, and human-in-the-loop happens in **comments**. Required when a company has multiple distinct project repos and the backlog repo is ambiguous. |
 | `MAGO_TASK_LABEL` | *(unset)* | Scope the backlog to issues carrying this label. Lets `MAGO_GH_REPO` point at a real project repo while mago only acts on opted-in issues. |
+| `MAGO_STATE_SYNC` | *(off)* | Set to `1` to push the company's state into `MAGO_GH_REPO`: runtime exhaust (STATE.md, `.mago/runs\|skills\|memory\|inbox`) to a `mago-state` branch, and agent definitions (`.mago/agents`, config, projects) to `main`. Off by default so mago doesn't pollute a user's project repo with its own branches — state always lives locally in the company dir regardless. Only meaningful when `MAGO_GH_REPO` is set. |
 
 ---
 
@@ -94,6 +95,8 @@ When `MAGO_PROVIDER=claude`, mago authenticates via your local Claude Code subsc
 | `MAGO_DAILY_BUDGET` | `0` (unlimited) | Max work cycles per day. Usage persists in `.mago/usage.json` and resets daily. |
 | `MAGO_PROACTIVE` | *(unset — off)* | Seconds between proactive-planning cycles. When set, the planner proposes new backlog from the company mission on this cadence. |
 | `MAGO_PROACTIVE_MAX` | `2` | Max new issues filed per planning cycle. Set to `1` for a slower drip. |
+| `MAGO_PR_CAP` | `0` (no cap) | Backpressure: stop starting new work on a repo once it has this many open `mago/task-*` PRs. Overridable live via `mago mode` / `.mago/mode.json` without a restart. |
+| `MAGO_ISSUE_CAP` | `0` (falls back to a default of 3) | Backpressure: the planner stops proposing new backlog once the repo has this many open issues. Overridable live via `mago mode` / `.mago/mode.json` without a restart. |
 
 ---
 
