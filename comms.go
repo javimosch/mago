@@ -12,6 +12,18 @@ import (
 // a user-facing release note and posts it on the PR — proving the company does more than ship code.
 // It's terminal (a mago comment, not a new PR), so it can't loop.
 
+// agentComplete dispatches to the agent's configured harness (claude, pi, tau, etc).
+func agentComplete(a *Agent, prompt string) (string, error) {
+	switch a.Provider {
+	case "claude":
+		return claudeComplete(a, prompt)
+	case "pi":
+		return piComplete(a, prompt)
+	default:
+		return tauComplete(a, prompt)
+	}
+}
+
 // marketingAgent returns the CMO-style agent: the one that neither implements, plans, nor reviews
 // (i.e. owns marketing/comms). Returns nil if the roster has no such role.
 func (c *Company) marketingAgent() *Agent {
@@ -46,7 +58,8 @@ no code/jargon, no headers — just the announcement text. Reply with ONLY the n
 
 Shipped: PR #%d — %s`, prNum, oneLine(prTitle))
 
-	note, err := tauComplete(cmo, prompt)
+	// Dispatch to the CMO's configured harness (claude, tau, pi, etc).
+	note, err := agentComplete(cmo, prompt)
 	if err != nil || strings.TrimSpace(note) == "" {
 		fmt.Fprintf(os.Stderr, "[comms] CMO draft failed for PR #%d: %v\n", prNum, err)
 		return false
