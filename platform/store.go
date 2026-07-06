@@ -308,6 +308,10 @@ type Event struct {
 // LogEvent records an onboarding event (best-effort; never blocks the request path).
 func (s *Store) LogEvent(kind string, uid int64, detail string) {
 	s.db.Exec("INSERT INTO events (ts, kind, user_id, detail) VALUES (?, ?, ?, ?)", time.Now().Unix(), kind, uid, detail)
+	// Send Telegram notification for high-signal events if configured.
+	var email string
+	s.db.QueryRow("SELECT COALESCE(email, '') FROM users WHERE id = ?", uid).Scan(&email)
+	notifyOnEvent(kind, uid, email, detail)
 }
 
 // RecentEvents returns the newest events first, resolving the account email when known.
