@@ -106,14 +106,31 @@ func (c *Company) reviewPR(prRepo string, prNum int) bool {
 	mergeUnverified := os.Getenv("MAGO_MERGE_UNVERIFIED") == "1"
 
 	approved := verdict == "approve"
-	verifyFailed := vr.ran && !vr.ok
 
 	body := "**Review — " + reviewer.Title + ":** " + comment
 	if vr.detail != "" {
 		body += "\n\n**Verification:** " + vr.detail
 	}
 
-	suffix, doMerge, logmsg := "", false, ""
+	suffix, doMerge, logmsg := decideMerge(approved, vr, merge, mergeUnverified)
+	gh("-R", prRepo, "pr", "comment", n, "--body", body+suffix)
+	if doMerge {
+		if mout, merr := gh("-R", prRepo, "pr", "merge", n, "--squash", "--delete-branch"); merr != nil {
+			fmt.Fprintf(os.Stderr, "[review] merge PR #%d failed: %v %s\n", prNum, merr, strings.TrimSpace(mout))
+		} else {
+			fmt.Fprintf(os.Stderr, "[review] PR #%d approved%s and merged\n", prNum, ifStr(vr.ok, " + verified", ""))
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "[review] PR #%d: %s\n", prNum, logmsg)
+	}
+	return true
+}
+
+// decideMerge applies the merge-decision rules given a review verdict, verification result, and the
+// company's live merge mode (review | verified | on). Split out from reviewPR so the branching can be
+// unit-tested without a real GitHub PR or model call.
+func decideMerge(approved bool, vr verifyResult, merge string, mergeUnverified bool) (suffix string, doMerge bool, logmsg string) {
+	verifyFailed := vr.ran && !vr.ok
 	switch {
 	case verifyFailed: // build/tests failed — a real blocker the diff-only review can't see
 		suffix = "\n\n_Changes requested: automated verification failed._"
@@ -130,17 +147,7 @@ func (c *Company) reviewPR(prRepo string, prNum int) bool {
 	default: // merge==on (LLM-approve), or merge==verified with a green check
 		doMerge = true
 	}
-	gh("-R", prRepo, "pr", "comment", n, "--body", body+suffix)
-	if doMerge {
-		if mout, merr := gh("-R", prRepo, "pr", "merge", n, "--squash", "--delete-branch"); merr != nil {
-			fmt.Fprintf(os.Stderr, "[review] merge PR #%d failed: %v %s\n", prNum, merr, strings.TrimSpace(mout))
-		} else {
-			fmt.Fprintf(os.Stderr, "[review] PR #%d approved%s and merged\n", prNum, ifStr(vr.ok, " + verified", ""))
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "[review] PR #%d: %s\n", prNum, logmsg)
-	}
-	return true
+	return suffix, doMerge, logmsg
 }
 
 func parseVerdict(s string) (string, string) {
