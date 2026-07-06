@@ -59,3 +59,35 @@ func TestDuplicateTitle(t *testing.T) {
 		t.Error("distinct title should not be a duplicate")
 	}
 }
+
+func TestExtractProjectName(t *testing.T) {
+	projects := map[string]projConf{
+		"supercli": {Repo: "javimosch/supercli"},
+		"machin":   {Repo: "javimosch/machin"},
+		"mago":     {Repo: "javimosch/mago"},
+	}
+	cases := []struct {
+		title, want string
+	}{
+		// With project prefix
+		{"supercli: unit tests for mcp-manager.js (npm test)", "supercli"},
+		{"SUPERCLI: unit tests (case-insensitive)", "supercli"},
+		{"machin: GET /api/repos endpoint", "machin"},
+
+		// Without project prefix or no colon
+		{"Add a --color flag", ""},
+		{"Something: unrelated: has colons", ""},
+		{"Write tests for greet()", ""},
+
+		// Edge cases
+		{": something", ""},                            // empty prefix
+		{"unknown: something", ""},                    // prefix not in projects
+		{"supercli :has space after colon", "supercli"}, // space is trimmed
+	}
+	for _, c := range cases {
+		got := extractProjectName(c.title, projects)
+		if got != c.want {
+			t.Errorf("extractProjectName(%q) = %q, want %q", c.title, got, c.want)
+		}
+	}
+}
