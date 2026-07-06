@@ -92,8 +92,9 @@ func withClaudeRetry(maxAttempts int, base time.Duration, do func() (string, err
 }
 
 // runClaude drives one tick via Claude Code: the agent persona is appended to Claude Code's system
-// prompt, the briefing is the prompt, tools run under bypassPermissions, and the final message
-// (expected to be the reflection JSON, per the briefing) is returned for the caller to parse.
+// prompt, the briefing is the prompt (piped via stdin to avoid CLI length limits), tools run under
+// bypassPermissions, and the final message (expected to be the reflection JSON, per the briefing) is
+// returned for the caller to parse.
 func runClaude(workspace string, a *Agent, systemPrompt, userPrompt string) (string, error) {
 	// Retry transient hiccups: a garbled/empty/overload failure means claude crashed before doing
 	// work (it prints result JSON even on a normal error exit), so re-running is safe and doesn't
@@ -101,7 +102,7 @@ func runClaude(workspace string, a *Agent, systemPrompt, userPrompt string) (str
 	return withClaudeRetry(3, 3*time.Second, func() (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "claude", "-p", userPrompt,
+		cmd := exec.CommandContext(ctx, "claude",
 			"--model", claudeModel(a),
 			"--output-format", "json",
 			"--permission-mode", "bypassPermissions",
@@ -114,6 +115,14 @@ func runClaude(workspace string, a *Agent, systemPrompt, userPrompt string) (str
 		if os.Geteuid() == 0 && os.Getenv("IS_SANDBOX") == "" {
 			cmd.Env = append(cmd.Env, "IS_SANDBOX=1")
 		}
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return "", err
+		}
+		if _, err := stdin.Write([]byte(userPrompt)); err != nil {
+			return "", err
+		}
+		stdin.Close()
 		out, _ := cmd.Output() // claude prints the result JSON even on non-zero exit; claudeResult judges it
 		return claudeResult(out)
 	})
@@ -126,9 +135,17 @@ func claudeComplete(a *Agent, prompt string) (string, error) {
 	return withClaudeRetry(4, 2*time.Second, func() (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "claude", "-p", prompt,
+		cmd := exec.CommandContext(ctx, "claude",
 			"--model", claudeModel(a), "--output-format", "json")
 		cmd.Env = os.Environ()
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return "", err
+		}
+		if _, err := stdin.Write([]byte(prompt)); err != nil {
+			return "", err
+		}
+		stdin.Close()
 		out, _ := cmd.Output() // result JSON is printed even on non-zero exit
 		return claudeResult(out)
 	})
