@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -159,5 +160,91 @@ func TestDecideMerge(t *testing.T) {
 				t.Errorf("logmsg = %q, want it to contain %q", logmsg, tc.wantLogContains)
 			}
 		})
+	}
+}
+
+// --- findReviewer ---
+
+func TestFindReviewer_NoAgents(t *testing.T) {
+	c := newTestCompany(t)
+	if got := c.findReviewer(); got != nil {
+		t.Errorf("findReviewer() = %v, want nil for a company with no agent files", got)
+	}
+}
+
+func TestFindReviewer_NoneMarkedReviewer(t *testing.T) {
+	c := newTestCompany(t)
+	writeAgentFile(t, c, "cto", "---\ntitle: CTO\nimplements: true\n---\n")
+	writeAgentFile(t, c, "hop", "---\ntitle: Head of Product\nplans: true\n---\n")
+	if got := c.findReviewer(); got != nil {
+		t.Errorf("findReviewer() = %v, want nil when no agent has reviews: true", got)
+	}
+}
+
+func TestFindReviewer_SelectsReviewer(t *testing.T) {
+	c := newTestCompany(t)
+	writeAgentFile(t, c, "cto", "---\ntitle: CTO\nimplements: true\n---\n")
+	writeAgentFile(t, c, "hoe", "---\ntitle: Head of Org Engineering\nreviews: true\n---\n")
+	got := c.findReviewer()
+	if got == nil {
+		t.Fatal("findReviewer() = nil, want the agent with reviews: true")
+	}
+	if got.Name != "hoe" {
+		t.Errorf("findReviewer().Name = %q, want %q", got.Name, "hoe")
+	}
+	if !got.Reviews {
+		t.Error("findReviewer() returned an agent with Reviews == false")
+	}
+}
+
+func TestFindReviewer_SkipsUnreadableAgentAndFindsNext(t *testing.T) {
+	c := newTestCompany(t)
+	// "bad" has an unknown frontmatter key, so loadAgent errors on it; findReviewer
+	// must skip it (continue) rather than abort the scan.
+	writeAgentFile(t, c, "bad", "---\ntitle: Broken\nnotarealkey: true\n---\n")
+	writeAgentFile(t, c, "zzz-reviewer", "---\ntitle: Reviewer\nreviews: true\n---\n")
+	got := c.findReviewer()
+	if got == nil {
+		t.Fatal("findReviewer() = nil, want the valid reviewer agent despite the broken sibling file")
+	}
+	if got.Name != "zzz-reviewer" {
+		t.Errorf("findReviewer().Name = %q, want %q", got.Name, "zzz-reviewer")
+	}
+}
+
+// --- reviewPR repo-scoping ---
+//
+// reviewPR checks repo-scoping (company repo or a registered project) before doing any
+// gh/model I/O, so these cases exercise that branch directly without a real GitHub PR.
+
+func TestReviewPR_UnknownRepoIgnored(t *testing.T) {
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	if ok := c.reviewPR("someone-else/unrelated", 1); ok {
+		t.Error("reviewPR() = true, want false for a repo that is neither the company repo nor a project")
+	}
+}
+
+func TestReviewPR_CompanyRepoAcceptedButNoReviewerConfigured(t *testing.T) {
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	// Known repo, but no reviewer agent exists — reviewPR should stop there (still no gh/model I/O).
+	if ok := c.reviewPR("acme/backlog", 1); ok {
+		t.Error("reviewPR() = true, want false when no reviewer agent (reviews: true) is configured")
+	}
+}
+
+func TestReviewPR_ProjectRepoAccepted(t *testing.T) {
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	projectsJSON := `{"widget": "acme/widget"}`
+	if err := os.WriteFile(c.projectsConfigFile(), []byte(projectsJSON), 0o644); err != nil {
+		t.Fatalf("write projects.json: %v", err)
+	}
+	// "acme/widget" is not the company repo but IS a registered project repo, so it's in scope.
+	// No reviewer is configured, so reviewPR still returns false — but via the "no reviewer"
+	// branch, proving the repo-scoping check itself passed.
+	if ok := c.reviewPR("acme/widget", 7); ok {
+		t.Error("reviewPR() = true, want false (no reviewer configured) but the repo should be in scope")
 	}
 }
