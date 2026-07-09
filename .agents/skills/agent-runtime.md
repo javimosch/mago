@@ -113,6 +113,24 @@ the local Claude Code subscription — no API key**, and it sidesteps opencode-g
 `CLAUDE_CONFIG_DIR=~/.claude` so claude finds its auth — otherwise every call is "Not logged in"
 (the harness now returns that as an actionable error).
 
+**Devin harness** (`debri.go`): set `provider: debri` (model e.g. `SWE-1.6`), or
+`MAGO_PROVIDER=debri MAGO_MODEL=SWE-1.6`. Drives devin (a separate agentic coding CLI) through
+[debri](https://github.com/javimosch/debri), a small Go wrapper that runs devin in a fresh tmux
+session per call and detects completion via devin's own process exit. **Auth is the local devin
+login (`devin auth login`) — no API key.** Requires **debri v1.1.0+** (earlier builds could
+collide tmux session names under concurrent calls, silently report a crashed/killed session as a
+success, and lacked process-exit completion detection) and `tmux` on PATH. Devin has no separate
+system-prompt flag, so the persona and the tick briefing are combined into one prompt file passed
+via `debri --file`; ticks run under `--permission-mode dangerous` (same posture as `claude`'s
+`bypassPermissions`), completions under `--permission-mode auto` (read-only — devin has no true
+no-tools mode). `runTau`/`tauComplete`/`agentComplete` dispatch to `runDebri`/`debriComplete` when
+the provider is `debri`. **Cost note:** each call spins up a fresh tmux+devin session — heavier
+per-invocation than tau/pi/claude. Best for implementer-style ticks (the overhead is amortized over
+real coding work); avoid it for routing/planning/review agents that make many small completion
+calls. Full bootstrap (installing/authenticating devin, getting debri, verifying with `debri
+probe`): see the `a2a-skill` repo's `.agents/skills/a2a-debri-runbook/SKILL.md` — the auth/install
+steps are harness-agnostic (mago vs a2a-skill just call the same debri binary differently).
+
 **Event delivery:** the worker's wake channel is buffered (64) and `signal()` drops *coalescable*
 recurring wakes (heartbeat/proactive) once it's half full, so a long blocking tick (e.g. a multi-
 minute `runClaude` with no streaming) can't let cadence wakes starve one-shot events like a

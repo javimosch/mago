@@ -52,8 +52,10 @@ only for this human-applied label, never mago's own labels).
 
 Env: `MAGO_COMPANY` (default `-C`), `MAGO_GH_REPO` (GitHub-backed company), `MAGO_PLATFORM_URL`
 (default `http://localhost:9100`), `MAGO_PASSWORD`, `MAGO_PROVIDER`/`MAGO_MODEL` (override the
-agents' provider/model — `opencode-go`/`deepseek-v4-flash` for tau, or **`claude`/`sonnet`** to run
-agents on Claude Code (local subscription, no API key — see agent-runtime.md "Claude Code harness")).
+agents' provider/model — `opencode-go`/`deepseek-v4-flash` for tau, **`claude`/`sonnet`** to run
+agents on Claude Code (local subscription, no API key — see agent-runtime.md "Claude Code harness"),
+or **`debri`/`SWE-1.6`** to run agents on devin via debri (local devin login, no API key — see
+agent-runtime.md "Devin harness"; requires debri v1.1.0+ and tmux)).
 **BYOK provider key:** put it in `~/.config/tau/config.json` (`{"keys": {"opencode-go": "sk-..."}}`,
 chmod 600) — used automatically (tau#30). Or export `OPENCODE_API_KEY` (`DEEPSEEK_API_KEY`/
 `OPENAI_API_KEY`). Without either, tau uses a rate-limited keyless path; `mago serve` warns.

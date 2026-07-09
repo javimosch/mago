@@ -23,6 +23,9 @@ func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string
 	if a.Provider == "claude" { // Claude Code harness (local subscription; no API key)
 		return runClaude(workspace, a, systemPrompt, userPrompt)
 	}
+	if a.Provider == "debri" { // devin harness via debri (local devin login; no API key)
+		return runDebri(workspace, a, systemPrompt, userPrompt)
+	}
 	args := []string{
 		"-p",
 		"--provider", a.Provider,
@@ -72,6 +75,9 @@ func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string
 func tauComplete(a *Agent, prompt string) (string, error) {
 	if a.Provider == "claude" { // Claude Code harness
 		return claudeComplete(a, prompt)
+	}
+	if a.Provider == "debri" { // devin harness via debri
+		return debriComplete(a, prompt)
 	}
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
