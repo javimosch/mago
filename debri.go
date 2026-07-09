@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,7 +33,22 @@ import (
 // avoid it for routing/planning agents that make many small completion calls.
 
 const debriStableTimeoutTick = "600000" // 10min safety cap; process-exit detection is the real signal
-const debriStableTimeoutComplete = "120000"
+
+// debriStableTimeoutComplete: 150s, not the more obvious 60-90s. Caught live: under
+// --permission-mode auto, devin can take noticeably longer to actually exit its process after
+// printing its final reply than it does under --permission-mode dangerous, so a short cap makes
+// the SLOWER stable-timeout fallback win the race against process-exit detection — and that
+// fallback path captures the pane on a fixed poll cadence, which can pick up trailing terminal
+// noise (observed: a shell prompt line) appended after devin's real response. Give process-exit
+// enough headroom to win first in the normal case; debriCompleteContextTimeout below is the hard
+// backstop if it still doesn't.
+const debriStableTimeoutComplete = "150000"
+
+// debriCompleteContextTimeout bounds debriComplete's whole process — was previously unbounded
+// (unlike tauComplete/claudeComplete, which both use a 3-minute context), so a wedged devin call
+// could hang mago forever. Set above debriStableTimeoutComplete so the safety cap inside debri
+// itself is what normally fires, not this outer kill.
+const debriCompleteContextTimeout = 3 * time.Minute
 
 // debriModel returns --model, or "" to let devin use its own default/adaptive model when unset.
 func debriModel(a *Agent) string {
@@ -41,8 +57,22 @@ func debriModel(a *Agent) string {
 
 // combineDebriPrompt merges the persona/contract and the tick briefing into the single prompt
 // devin receives — devin has no separate system-prompt concept.
+// debriReflectionReminder reinforces the fenced-json reflection requirement at the very end of
+// the combined prompt. tau/pi/claude keep it as a genuinely separate system-role message the
+// model attends to independently of the user turn; devin gets one flat prompt, and the
+// instruction otherwise sits only in the systemPrompt half (persona + operating contract), well
+// before the actual task briefing. Caught live: across three fresh tasks spanning trivial (write
+// one file) to real (implement + verify a small script, correctly), devin/SWE-1.6 consistently
+// did the actual work right but never closed with a parseable reflection on the first pass — a
+// prompt-recency issue, not a devin/debri capability gap. A short, direct reminder positioned
+// last (where a model's attention is freshest right before it starts generating) is the standard
+// mitigation.
+const debriReflectionReminder = "\n\n---\n\nBefore you finish: end your reply with your " +
+	"reflection as ONE fenced ```json code block (the exact schema is above) and nothing after it. " +
+	"This is required even for a small or already-complete task."
+
 func combineDebriPrompt(systemPrompt, userPrompt string) string {
-	return systemPrompt + "\n\n---\n\n" + userPrompt
+	return systemPrompt + "\n\n---\n\n" + userPrompt + debriReflectionReminder
 }
 
 // writeDebriPromptFile writes prompt to a temp file for debri's --file flag, returning the path
@@ -117,11 +147,19 @@ func runDebri(workspace string, a *Agent, systemPrompt, userPrompt string) (stri
 }
 
 // debriComplete is a lightweight one-shot call (routing, planning, review verdicts, release
-// notes), mirroring tauComplete/claudeComplete. devin has no true no-tools mode, so
-// --permission-mode auto (auto-approves read-only tools only, never edits) keeps a "just answer"
-// call from making file changes, and a shorter stable-timeout keeps it from ballooning into a
-// full tick. Simple retry on any failure (debri has no rich transient/auth classification like
-// claude.go's, so — mirroring tauComplete — every failure gets the same bounded retry).
+// notes, tick.go's reflection recovery), mirroring tauComplete/claudeComplete. Two safety layers,
+// because devin has no true no-tools mode (unlike tau/pi's --no-tools): --permission-mode auto
+// (auto-approves read-only tools only, never edits) blocks writes outright, AND the call runs in
+// a dedicated, ephemeral scratch directory rather than mago's own ambient cwd. Without the scratch
+// dir, devin still has live tool access and WILL explore/verify the filesystem it's sitting in —
+// caught live: a recovery-call prompt referencing a task's workspace (as plain text, since these
+// prompts were designed for tau/claude's true no-tools reasoning) led devin to `ls` mago's own
+// source directory (the process cwd), not find the file being asked about, and try to write it
+// there — rejected by --permission-mode auto, so no damage, but real wasted tool-call turns and a
+// gap this scratch dir closes for good (nothing meaningful there for it to find or touch either
+// way). A shorter stable-timeout keeps it from ballooning into a full tick. Simple retry on any
+// failure (debri has no rich transient/auth classification like claude.go's, so — mirroring
+// tauComplete — every failure gets the same bounded retry).
 func debriComplete(a *Agent, prompt string) (string, error) {
 	promptFile, cleanup, err := writeDebriPromptFile(prompt)
 	if err != nil {
@@ -129,7 +167,14 @@ func debriComplete(a *Agent, prompt string) (string, error) {
 	}
 	defer cleanup()
 
+	scratchDir, err := os.MkdirTemp("", "mago-debri-complete-*")
+	if err != nil {
+		return "", fmt.Errorf("debri: creating scratch dir: %w", err)
+	}
+	defer os.RemoveAll(scratchDir)
+
 	args := []string{
+		"--working-dir", scratchDir,
 		"--permission-mode", "auto",
 		"--stable-timeout", debriStableTimeoutComplete,
 		"--json",
@@ -144,9 +189,11 @@ func debriComplete(a *Agent, prompt string) (string, error) {
 		if attempt > 0 {
 			time.Sleep(time.Duration(attempt) * 2 * time.Second) // 2s, 4s backoff
 		}
-		cmd := exec.Command("debri", args...)
+		ctx, cancel := context.WithTimeout(context.Background(), debriCompleteContextTimeout)
+		cmd := exec.CommandContext(ctx, "debri", args...)
 		cmd.Env = os.Environ()
 		out, err := cmd.Output()
+		cancel()
 		content, cerr := debriJSONResult(out)
 		if cerr == nil && content != "" {
 			return content, nil

@@ -26,6 +26,14 @@ func TestCombineDebriPrompt(t *testing.T) {
 	if strings.Index(got, "PERSONA RULES") > strings.Index(got, "BRIEFING TASK") {
 		t.Errorf("system prompt must come before the briefing: %q", got)
 	}
+	// The reflection-format reminder must come LAST — that's the whole point (reinforce the
+	// requirement right before generation, where a model's attention is freshest).
+	if strings.Index(got, "BRIEFING TASK") > strings.Index(got, "fenced ```json") {
+		t.Errorf("reflection reminder must come after the briefing: %q", got)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(got), "for a small or already-complete task.") {
+		t.Errorf("reflection reminder must be the final thing in the prompt: %q", got)
+	}
 }
 
 func TestExtractDebriFinalContent_DoneLine(t *testing.T) {
