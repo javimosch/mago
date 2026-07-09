@@ -19,6 +19,8 @@ func agentComplete(a *Agent, prompt string) (string, error) {
 		return claudeComplete(a, prompt)
 	case "pi":
 		return piComplete(a, prompt)
+	case "debri":
+		return debriComplete(a, prompt)
 	default:
 		return tauComplete(a, prompt)
 	}
