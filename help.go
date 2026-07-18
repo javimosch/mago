@@ -127,4 +127,14 @@ Claim a GitHub App installation (entitles your repos).
 
 Mode tokens: reactive | proactive[=secs] | review | verified | comms=on|off.
 `,
+	"feedback": `mago feedback "<message>" [--kind bug|idea|praise|note] [--context "<what you were doing>"]
+
+Report friction, bugs, or ideas from the CLI. Dual-writes to the mago platform
+and the central feedback relay. Never fails the caller.
+
+  mago feedback "the task command is confusing when the backlog is empty" --kind friction
+  mago feedback "agent got stuck in a loop" --kind bug --context "running tick on acme repo"
+
+FEEDBACK_RELAY=off disables the relay write.
+`,
 }
