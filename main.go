@@ -124,6 +124,9 @@ Env overrides (smoke test):
   MAGO_COMPANY                 company directory (same as -C; default: cwd)
   MAGO_GH_REPO                 backlog repo "owner/repo" -> use GitHub-backed mode
                                (tasks=issues, status=labels); unset = local backend
+  MAGO_GH_TOKEN                Personal Access Token (repo scope) for GitHub API calls
+                               in GitHub-backed mode; create one at
+                               https://github.com/settings/tokens?type=legacy
   MAGO_TASK_LABEL              issue label marking a task in GitHub-backed mode
   MAGO_PROVIDER, MAGO_MODEL    override the agent's tau provider/model
   MAGO_PLATFORM_URL            platform API base (default http://localhost:9100)

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -30,14 +31,38 @@ const (
 )
 
 func gh(args ...string) (string, error) {
-	out, err := exec.Command("gh", args...).Output()
+	cmd := exec.Command("gh", args...)
+	// If MAGO_GH_TOKEN is set, pass it as GH_TOKEN so the gh CLI uses it for API calls.
+	if tok := os.Getenv("MAGO_GH_TOKEN"); tok != "" {
+		env := os.Environ()
+		env = append(env, "GH_TOKEN="+tok)
+		cmd.Env = env
+	}
+	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("gh %s: %s", strings.Join(args, " "), strings.TrimSpace(string(ee.Stderr)))
+			stderr := strings.TrimSpace(string(ee.Stderr))
+			if isGHAuthError(stderr) {
+				return "", fmt.Errorf("GitHub authentication failed (gh %s) — check MAGO_GH_TOKEN or run `gh auth login`; "+
+					"create a token at https://github.com/settings/tokens?type=legacy (repo scope required)", strings.Join(args, " "))
+			}
+			return "", fmt.Errorf("gh %s: %s", strings.Join(args, " "), stderr)
 		}
 		return "", err
 	}
 	return string(out), nil
+}
+
+// isGHAuthError reports whether a gh CLI stderr message indicates an authentication failure.
+func isGHAuthError(stderr string) bool {
+	lower := strings.ToLower(stderr)
+	return strings.Contains(lower, "401") ||
+		strings.Contains(lower, "403") ||
+		strings.Contains(lower, "bad credentials") ||
+		strings.Contains(lower, "must be authenticated") ||
+		strings.Contains(lower, "authentication required") ||
+		strings.Contains(lower, "not logged in") ||
+		strings.Contains(lower, "must log in")
 }
 
 func (b *githubBackend) gh(args ...string) (string, error) {

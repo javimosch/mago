@@ -103,3 +103,67 @@ func TestCheckOpenCodeAPIKey_PassWithKey(t *testing.T) {
 		t.Errorf("checkOpenCodeAPIKey: should pass when OPENCODE_API_KEY is set, got hint: %s", c.hint)
 	}
 }
+
+// TestCheckGHToken_FailWithoutToken verifies failure when MAGO_GH_TOKEN is unset.
+func TestCheckGHToken_FailWithoutToken(t *testing.T) {
+	t.Setenv("MAGO_GH_TOKEN", "")
+	c := checkGHToken()
+	if c.ok {
+		t.Error("checkGHToken: should fail when MAGO_GH_TOKEN is empty")
+	}
+	if c.hint == "" {
+		t.Error("checkGHToken: hint must be non-empty on failure")
+	}
+	if !strings.Contains(c.hint, "MAGO_GH_TOKEN") {
+		t.Errorf("checkGHToken: hint should name MAGO_GH_TOKEN, got: %q", c.hint)
+	}
+	if !strings.Contains(c.hint, "github.com/settings/tokens") {
+		t.Errorf("checkGHToken: hint should link to PAT docs, got: %q", c.hint)
+	}
+}
+
+// TestCheckGHToken_PassWithToken verifies success when MAGO_GH_TOKEN is set.
+func TestCheckGHToken_PassWithToken(t *testing.T) {
+	t.Setenv("MAGO_GH_TOKEN", "ghp_test123")
+	c := checkGHToken()
+	if !c.ok {
+		t.Errorf("checkGHToken: should pass when MAGO_GH_TOKEN is set, got hint: %s", c.hint)
+	}
+}
+
+// TestCheckGHToken_LabelMentionsToken verifies the check label always mentions MAGO_GH_TOKEN.
+func TestCheckGHToken_LabelMentionsToken(t *testing.T) {
+	t.Setenv("MAGO_GH_TOKEN", "")
+	c := checkGHToken()
+	if !strings.Contains(c.label, "MAGO_GH_TOKEN") {
+		t.Errorf("checkGHToken: label should mention MAGO_GH_TOKEN, got: %q", c.label)
+	}
+}
+
+// TestIsGHAuthError covers the key stderr patterns that indicate a GitHub auth failure.
+func TestIsGHAuthError(t *testing.T) {
+	authErrors := []string{
+		"HTTP 401: Bad credentials",
+		"error: 403 Forbidden",
+		"You must be authenticated",
+		"Authentication required",
+		"You are not logged in",
+		"You must log in",
+	}
+	for _, s := range authErrors {
+		if !isGHAuthError(s) {
+			t.Errorf("isGHAuthError(%q): expected true, got false", s)
+		}
+	}
+	nonErrors := []string{
+		"gh issue list",
+		"no issues found",
+		"repo not found",
+		"",
+	}
+	for _, s := range nonErrors {
+		if isGHAuthError(s) {
+			t.Errorf("isGHAuthError(%q): expected false, got true", s)
+		}
+	}
+}
