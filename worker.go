@@ -16,9 +16,7 @@ var workerActions = []string{"doctor", "mode"}
 
 func cmdWorker(args []string) error {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: mago worker <subcommand>")
-		fmt.Fprintln(os.Stderr, "  subcommands: doctor, mode")
-		os.Exit(80)
+		return &cliErr{80, "usage: mago worker <subcommand> (doctor, mode)\nrun `mago worker --help` for usage"}
 	}
 	switch args[0] {
 	case "doctor":
@@ -27,12 +25,9 @@ func cmdWorker(args []string) error {
 		return cmdWorkerMode(args[1:])
 	default:
 		if s := nearestAction(args[0], workerActions); s != "" {
-			fmt.Fprintf(os.Stderr, "unknown worker subcommand: %s — did you mean %q?\n", args[0], s)
-		} else {
-			fmt.Fprintf(os.Stderr, "unknown worker subcommand: %s\n", args[0])
-			fmt.Fprintln(os.Stderr, "  subcommands: doctor, mode")
+			return &cliErr{80, fmt.Sprintf("unknown worker subcommand %q — did you mean %q?\nrun `mago worker --help` for usage", args[0], s)}
 		}
-		os.Exit(80)
+		return &cliErr{80, fmt.Sprintf("unknown worker subcommand %q (valid: doctor, mode)\nrun `mago worker --help` for usage", args[0])}
 	}
 	return nil
 }
