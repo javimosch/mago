@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -101,6 +102,7 @@ func providerCheckNames(provider string) []string {
 // workerDoctor validates that the configured LLM harness, gh, and any required
 // API keys are present. Provider-aware: reads MAGO_PROVIDER and runs the appropriate
 // checks (tau+OPENCODE_API_KEY for opencode/tau workers; claude+auth for claude workers).
+// When MAGO_GH_REPO is set (GitHub-backed mode), also checks MAGO_GH_TOKEN.
 // Prints a pass/fail line per check with a fix hint on failure.
 // Exits 101 if any check fails (integration error per AGENTS.md exit code map).
 func workerDoctor() {
@@ -113,6 +115,9 @@ func workerDoctor() {
 		checks = append(checks, checkTau(), checkOpenCodeAPIKey())
 	}
 	checks = append(checks, checkGhOnPath(), checkGhAuth())
+	if ghRepo := strings.TrimSpace(os.Getenv("MAGO_GH_REPO")); ghRepo != "" {
+		checks = append(checks, checkGHToken())
+	}
 
 	failed := 0
 	for _, c := range checks {
@@ -230,4 +235,19 @@ func checkClaudeAuth() diagCheck {
 		}
 	}
 	return diagCheck{label: "claude authenticated", ok: true}
+}
+
+// checkGHToken verifies that MAGO_GH_TOKEN is set when in GitHub-backed mode.
+// An absent token means mago falls back to gh's own auth, which may silently
+// fail in CI or on a fresh machine. This check makes the missing token explicit.
+func checkGHToken() diagCheck {
+	if os.Getenv("MAGO_GH_TOKEN") == "" {
+		return diagCheck{
+			label: "MAGO_GH_TOKEN set",
+			ok:    false,
+			hint: "export MAGO_GH_TOKEN=<your-pat>  " +
+				"(create a Personal Access Token with repo scope at https://github.com/settings/tokens?type=legacy)",
+		}
+	}
+	return diagCheck{label: "MAGO_GH_TOKEN set", ok: true}
 }
