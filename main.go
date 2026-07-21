@@ -7,6 +7,16 @@ import (
 
 const version = "0.0.2-poc"
 
+// cliErr is an error that carries a semantic exit code per AGENTS.md's exit-code table
+// (80–89 user errors, 90–99 resource errors, 100–109 integration errors). cmd* functions
+// return it so main() can propagate the right code instead of always using 1.
+type cliErr struct {
+	code int
+	msg  string
+}
+
+func (e *cliErr) Error() string { return e.msg }
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -75,7 +85,11 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		code := 1
+		if ce, ok := err.(*cliErr); ok {
+			code = ce.code
+		}
+		os.Exit(code)
 	}
 }
 
