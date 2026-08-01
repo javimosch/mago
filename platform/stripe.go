@@ -32,13 +32,21 @@ func (s *server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 	cus := u.StripeCustomer
 	if cus == "" {
-		c, err := stripeCreateCustomer(s.stripeKey, u.Email, fmt.Sprint(u.ID))
+		existing, err := stripeCustomerByEmail(s.stripeKey, u.Email)
 		if err != nil {
-			log.Printf("stripe customer: %v", err)
-			httpErr(w, 500, "billing setup failed")
-			return
+			log.Printf("stripe customer lookup: %v", err)
 		}
-		cus = c
+		if existing != "" {
+			cus = existing
+		} else {
+			c, err := stripeCreateCustomer(s.stripeKey, u.Email, fmt.Sprint(u.ID))
+			if err != nil {
+				log.Printf("stripe customer: %v", err)
+				httpErr(w, 500, "billing setup failed")
+				return
+			}
+			cus = c
+		}
 		s.store.Update(uid, func(u *User) { u.StripeCustomer = cus })
 	}
 	link, err := stripeCheckout(s.stripeKey, cus, s.priceID, s.appURL, fmt.Sprint(uid))
