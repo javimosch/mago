@@ -192,6 +192,34 @@ func stripeCustomerByEmail(key, email string) (string, error) {
 	return out.Data[0].ID, nil
 }
 
+// stripeDelete sends a DELETE to the Stripe API and treats a 404 as success
+// (the object is already gone). It is used for idempotent cleanup such as
+// canceling a prior subscription before attaching a new one.
+func stripeDelete(key, path string) error {
+	req, _ := http.NewRequest("DELETE", "https://api.stripe.com/v1/"+path, nil)
+	req.SetBasicAuth(key, "")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == 404 {
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("stripe %s -> %d: %s", path, resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+func stripeCancelSubscription(key, subID string) error {
+	if subID == "" {
+		return nil
+	}
+	return stripeDelete(key, "subscriptions/"+subID)
+}
+
 // handleWebhook verifies the Stripe signature, dedups, and activates/downgrades the user.
 func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
@@ -223,6 +251,15 @@ func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		json.Unmarshal(ev.Data.Object, &o)
 		if uid := atoi(o.Metadata["user_id"]); uid > 0 {
+			// Belt-and-braces: cancel any prior active subscription before moving
+			// the user to the new one, so duplicate customers cannot keep billing.
+			if u := s.store.GetByID(uid); u != nil && u.StripeSub != "" && u.StripeSub != o.Subscription {
+				if s.stripeKey != "" {
+					if err := stripeCancelSubscription(s.stripeKey, u.StripeSub); err != nil {
+						log.Printf("stripe cancel old sub for user %d: %v", uid, err)
+					}
+				}
+			}
 			s.store.Update(uid, func(u *User) {
 				u.Plan, u.StripeCustomer, u.StripeSub = "mago", o.Customer, o.Subscription
 				if u.LicenseKey == "" {
