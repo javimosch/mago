@@ -141,6 +141,49 @@ func stripePost(key, path string, form url.Values, out any) error {
 	return json.Unmarshal(b, out)
 }
 
+func stripeGet(key, path string, q url.Values, out any) error {
+	url := "https://api.stripe.com/v1/" + path
+	if len(q) > 0 {
+		url += "?" + q.Encode()
+	}
+	req, _ := http.NewRequest("GET", url, nil)
+	req.SetBasicAuth(key, "")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("stripe %s -> %d: %s", path, resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return json.Unmarshal(b, out)
+}
+
+// stripeCustomerByEmail returns an existing Stripe customer id for the given email,
+// or an empty string if none exists. This prevents duplicate customer records when
+// a user re-checkouts with the same email.
+func stripeCustomerByEmail(key, email string) (string, error) {
+	if email == "" {
+		return "", nil
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	q := url.Values{}
+	q.Set("email", email)
+	q.Set("limit", "1")
+	if err := stripeGet(key, "customers", q, &out); err != nil {
+		return "", err
+	}
+	if len(out.Data) == 0 {
+		return "", nil
+	}
+	return out.Data[0].ID, nil
+}
+
 // handleWebhook verifies the Stripe signature, dedups, and activates/downgrades the user.
 func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
