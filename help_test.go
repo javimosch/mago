@@ -32,7 +32,7 @@ func TestWantsHelp(t *testing.T) {
 var dispatchCommands = []string{
 	"init", "task", "project", "run", "loop", "tick", "serve", "status",
 	"answer", "digest", "skills", "mode", "register", "login", "subscribe",
-	"billing", "account", "link", "worker",
+	"billing", "account", "link", "worker", "feedback",
 }
 
 func TestEveryDispatchedCommandHasHelp(t *testing.T) {

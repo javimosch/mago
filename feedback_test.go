@@ -4,7 +4,7 @@ import "testing"
 
 func TestParseFeedbackArgs(t *testing.T) {
 	msg, ftype := parseFeedbackArgs([]string{"worker", "doctor", "is", "confusing"})
-	if msg != "worker doctor is confusing" || ftype != "feedback" {
+	if msg != "worker doctor is confusing" || ftype != "note" {
 		t.Errorf("default type: msg=%q type=%q", msg, ftype)
 	}
 	msg, ftype = parseFeedbackArgs([]string{"--type", "bug", "relay", "drops", "events"})
