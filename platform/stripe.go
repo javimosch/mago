@@ -150,11 +150,11 @@ func stripePost(key, path string, form url.Values, out any) error {
 }
 
 func stripeGet(key, path string, q url.Values, out any) error {
-	url := "https://api.stripe.com/v1/" + path
+	endpoint := "https://api.stripe.com/v1/" + path
 	if len(q) > 0 {
-		url += "?" + q.Encode()
+		endpoint += "?" + q.Encode()
 	}
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", endpoint, nil)
 	req.SetBasicAuth(key, "")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
