@@ -264,8 +264,9 @@ func untilDuration(hhmm string) (time.Duration, error) {
 
 // proactiveLoop ticks the planner to propose backlog on the live mode cadence. It re-reads the mode
 // each cycle, so enabling/disabling/retuning proactive (mago mode / mago worker mode) takes effect
-// without a restart. When reactive (cadence 0) it idles, polling the mode every 30s. It stops when
-// ctx is canceled.
+// without a restart. When reactive (cadence 0) it idles, polling the mode every 30s. On a long
+// proactive cadence it still wakes every 30s to re-check the mode, so a switch to reactive is
+// picked up within ~30s (matching the promise in cmdMode). It stops when ctx is canceled.
 func (w *eventWorker) proactiveLoop(ctx context.Context) {
 	for {
 		secs := w.comp.modeProactive()
@@ -275,10 +276,23 @@ func (w *eventWorker) proactiveLoop(ctx context.Context) {
 			}
 			continue
 		}
-		if err := w.sleep(ctx, time.Duration(secs)*time.Second); err != nil {
-			return
+		// Wait the proactive cadence, but poll the live mode at least every 30s so a reactive
+		// switch is picked up within ~30s even on a long cadence.
+		remaining := time.Duration(secs) * time.Second
+		for remaining > 0 {
+			chunk := remaining
+			if chunk > 30*time.Second {
+				chunk = 30 * time.Second
+			}
+			if err := w.sleep(ctx, chunk); err != nil {
+				return
+			}
+			if w.comp.modeProactive() <= 0 {
+				break // switched to reactive; skip the signal this cycle
+			}
+			remaining -= chunk
 		}
-		if w.comp.modeProactive() > 0 { // still proactive after the sleep?
+		if w.comp.modeProactive() > 0 { // still proactive after the wait?
 			w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
 		}
 	}
