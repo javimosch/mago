@@ -4,6 +4,7 @@
 platform/.env
 .env
 /mago-platform
+platform/mago-platform
 *.db
 *.db-wal
 *.db-shm
