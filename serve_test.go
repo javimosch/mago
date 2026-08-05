@@ -125,3 +125,64 @@ func TestProactiveLoop_IdlesWhenReactive(t *testing.T) {
 
 	cancel()
 }
+
+// TestProactiveLoop_RespectsLiveModeSwitch verifies that the loop re-reads the live mode after
+// the sleep elapses, so a proactive->reactive switch while it is sleeping suppresses the wake.
+func TestProactiveLoop_RespectsLiveModeSwitch(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+	c.saveMode(workerMode{Proactive: 1, Merge: "review"})
+
+	w := &eventWorker{comp: c, wake: make(chan wakeEvent, 4)}
+
+	sleepCh := make(chan time.Duration, 2)
+	proceed := make(chan struct{})
+	w.sleep = func(ctx context.Context, d time.Duration) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		sleepCh <- d
+		select {
+		case <-proceed:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go w.proactiveLoop(ctx)
+
+	// Wait for the proactive sleep.
+	select {
+	case d := <-sleepCh:
+		if d != time.Second {
+			t.Errorf("sleep duration = %v, want 1s", d)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for proactive sleep")
+	}
+
+	// Switch the live mode to reactive before the sleep elapses.
+	c.saveMode(workerMode{Proactive: 0, Merge: "review"})
+	proceed <- struct{}{}
+
+	// No proactive wake should be emitted after the mode switched to reactive.
+	select {
+	case ev := <-w.wake:
+		t.Fatalf("unexpected proactive wake after reactive switch: %+v", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// The loop should now idle at the reactive poll cadence.
+	select {
+	case d := <-sleepCh:
+		if d != 30*time.Second {
+			t.Errorf("reactive idle sleep duration = %v, want 30s", d)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for reactive idle sleep")
+	}
+}
