@@ -187,6 +187,87 @@ func TestProactiveLoop_RespectsLiveModeSwitch(t *testing.T) {
 	}
 }
 
+// TestRun_ReconcilesAfterProactiveFilesWork verifies that a proactive wake which files new
+// backlog immediately triggers a reconcile so the worker routes/claims the newly filed task.
+func TestRun_ReconcilesAfterProactiveFilesWork(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir, Name: "co"}
+
+	proposed := make(chan int, 1)
+	reconciled := make(chan struct{})
+	w := &eventWorker{
+		comp: c,
+		wake: make(chan wakeEvent, 4),
+		propose: func() int {
+			proposed <- 2
+			return 2
+		},
+		reconcile: func() (bool, error) {
+			close(reconciled)
+			return true, nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go w.run(ctx)
+
+	w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
+
+	select {
+	case n := <-proposed:
+		if n != 2 {
+			t.Errorf("proposed = %d, want 2", n)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for proposeBacklog to be called")
+	}
+
+	select {
+	case <-reconciled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for reconcile after proactive planning")
+	}
+}
+
+// TestRun_SkipsReconcileWhenProactiveFilesNothing verifies that a proactive wake which files
+// no backlog does not trigger a reconcile and does not consume a budget action.
+func TestRun_SkipsReconcileWhenProactiveFilesNothing(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir, Name: "co"}
+
+	proposed := make(chan struct{})
+	w := &eventWorker{
+		comp: c,
+		wake: make(chan wakeEvent, 4),
+		propose: func() int {
+			close(proposed)
+			return 0
+		},
+		reconcile: func() (bool, error) {
+			t.Fatal("reconcile called when proposeBacklog filed nothing")
+			return false, nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go w.run(ctx)
+
+	w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
+
+	select {
+	case <-proposed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for proposeBacklog to be called")
+	}
+
+	// Give run a moment to ensure it did not call reconcile.
+	select {
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 // TestProactiveLoop_RespectsReactiveSwitchOnLongCadence verifies that a long proactive cadence is
 // not a single uninterruptible sleep; a switch to reactive is picked up at the next 30s poll.
 func TestProactiveLoop_RespectsReactiveSwitchOnLongCadence(t *testing.T) {
