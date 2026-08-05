@@ -114,7 +114,7 @@ func cmdServe(args []string) error {
 		}()
 	}
 
-	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 64)}
+	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 64), sleep: defaultSleep}
 	go w.run()
 	w.signal(wakeEvent{reason: "startup"})
 	if heartbeat > 0 {
@@ -122,7 +122,7 @@ func cmdServe(args []string) error {
 	}
 	// Proactive planning runs on the live mode's cadence (0 = reactive). Always started; it self-gates
 	// so the mode can be switched at runtime (mago mode / mago worker mode) without a restart.
-	go w.proactiveLoop()
+	go w.proactiveLoop(context.Background())
 	repos := comp.repos()
 	reposStr := "none — add with `mago project add <name> --repo owner/repo`"
 	if len(repos) > 0 {
@@ -163,8 +163,9 @@ type wakeEvent struct {
 }
 
 type eventWorker struct {
-	comp *Company
-	wake chan wakeEvent
+	comp  *Company
+	wake  chan wakeEvent
+	sleep func(context.Context, time.Duration) error
 }
 
 func (w *eventWorker) signal(ev wakeEvent) {
@@ -263,18 +264,34 @@ func untilDuration(hhmm string) (time.Duration, error) {
 
 // proactiveLoop ticks the planner to propose backlog on the live mode cadence. It re-reads the mode
 // each cycle, so enabling/disabling/retuning proactive (mago mode / mago worker mode) takes effect
-// without a restart. When reactive (cadence 0) it idles, polling the mode every 30s.
-func (w *eventWorker) proactiveLoop() {
+// without a restart. When reactive (cadence 0) it idles, polling the mode every 30s. It stops when
+// ctx is canceled.
+func (w *eventWorker) proactiveLoop(ctx context.Context) {
 	for {
 		secs := w.comp.modeProactive()
 		if secs <= 0 {
-			time.Sleep(30 * time.Second)
+			if err := w.sleep(ctx, 30*time.Second); err != nil {
+				return
+			}
 			continue
 		}
-		time.Sleep(time.Duration(secs) * time.Second)
+		if err := w.sleep(ctx, time.Duration(secs)*time.Second); err != nil {
+			return
+		}
 		if w.comp.modeProactive() > 0 { // still proactive after the sleep?
 			w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
 		}
+	}
+}
+
+// defaultSleep waits for d or until ctx is canceled. It is the production sleep used by the
+// proactive loop; tests replace it on the eventWorker to drive the loop without wall-clock waits.
+func defaultSleep(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
 	}
 }
 
