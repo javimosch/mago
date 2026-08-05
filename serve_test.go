@@ -186,3 +186,63 @@ func TestProactiveLoop_RespectsLiveModeSwitch(t *testing.T) {
 		t.Fatal("timeout waiting for reactive idle sleep")
 	}
 }
+
+// TestProactiveLoop_RespectsReactiveSwitchOnLongCadence verifies that a long proactive cadence is
+// not a single uninterruptible sleep; a switch to reactive is picked up at the next 30s poll.
+func TestProactiveLoop_RespectsReactiveSwitchOnLongCadence(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+	c.saveMode(workerMode{Proactive: 100, Merge: "review"})
+
+	w := &eventWorker{comp: c, wake: make(chan wakeEvent, 4)}
+
+	sleepCh := make(chan time.Duration, 2)
+	proceed := make(chan struct{})
+	w.sleep = func(ctx context.Context, d time.Duration) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		sleepCh <- d
+		select {
+		case <-proceed:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go w.proactiveLoop(ctx)
+
+	// Wait for the first 30s chunk of the long proactive cadence.
+	select {
+	case d := <-sleepCh:
+		if d != 30*time.Second {
+			t.Errorf("long-cadence chunk = %v, want 30s", d)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for first long-cadence chunk")
+	}
+
+	// Switch to reactive mid-cadence.
+	c.saveMode(workerMode{Proactive: 0, Merge: "review"})
+	proceed <- struct{}{}
+
+	// No proactive wake should be emitted, and the loop should fall back to idle.
+	select {
+	case ev := <-w.wake:
+		t.Fatalf("unexpected proactive wake on long cadence after reactive switch: %+v", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	select {
+	case d := <-sleepCh:
+		if d != 30*time.Second {
+			t.Errorf("reactive idle sleep duration = %v, want 30s", d)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for reactive idle sleep")
+	}
+}
