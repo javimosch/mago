@@ -114,8 +114,14 @@ func cmdServe(args []string) error {
 		}()
 	}
 
-	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 64), sleep: defaultSleep}
-	go w.run()
+	w := &eventWorker{
+		comp:      comp,
+		wake:      make(chan wakeEvent, 64),
+		sleep:     defaultSleep,
+		propose:   comp.proposeBacklog,
+		reconcile: func() (bool, error) { return reconcileOnce(comp) },
+	}
+	go w.run(context.Background())
 	w.signal(wakeEvent{reason: "startup"})
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
@@ -163,9 +169,11 @@ type wakeEvent struct {
 }
 
 type eventWorker struct {
-	comp  *Company
-	wake  chan wakeEvent
-	sleep func(context.Context, time.Duration) error
+	comp      *Company
+	wake      chan wakeEvent
+	sleep     func(context.Context, time.Duration) error
+	propose   func() int
+	reconcile func() (bool, error)
 }
 
 func (w *eventWorker) signal(ev wakeEvent) {
@@ -184,57 +192,70 @@ func (w *eventWorker) signal(ev wakeEvent) {
 }
 
 // run consumes wake events serially: a targeted event runs just that agent; otherwise
-// a full reconcile.
-func (w *eventWorker) run() {
-	for ev := range w.wake {
-		switch {
-		case ev.proactive:
-			if w.comp.guardBudget("proactive planning") {
-				continue
+// a full reconcile. It stops when ctx is canceled.
+func (w *eventWorker) run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-w.wake:
+			if !ok {
+				return
 			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
-			if w.comp.proposeBacklog() > 0 { // only count cycles that actually filed work
+			switch {
+			case ev.proactive:
+				if w.comp.guardBudget("proactive planning") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
+				proposed := w.propose()
+				if proposed > 0 { // only count cycles that actually filed work
+					w.comp.recordAction()
+					fmt.Fprintf(os.Stderr, "[wake] %s -> %d issue(s) proposed, reconciling to pick them up\n", ev.reason, proposed)
+					if _, err := w.reconcile(); err != nil {
+						fmt.Fprintf(os.Stderr, "[wake] reconcile after proactive error: %v\n", err)
+					}
+				}
+			case ev.comms:
+				if !w.comp.modeComms() { // non-code flow toggled off (live)
+					continue
+				}
+				if w.comp.guardBudget("release note") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
+				if w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle) {
+					w.comp.recordAction()
+				}
+			case ev.prRepo != "":
+				if w.comp.guardBudget("PR review") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
+				if w.comp.reviewPR(ev.prRepo, ev.prNum) {
+					w.comp.recordAction()
+				}
+			case ev.target != "":
+				if w.comp.guardBudget("tick") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
+				if _, err := runTick(w.comp, ev.target); err != nil {
+					fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
+				}
 				w.comp.recordAction()
-			}
-		case ev.comms:
-			if !w.comp.modeComms() { // non-code flow toggled off (live)
-				continue
-			}
-			if w.comp.guardBudget("release note") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
-			if w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle) {
-				w.comp.recordAction()
-			}
-		case ev.prRepo != "":
-			if w.comp.guardBudget("PR review") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
-			if w.comp.reviewPR(ev.prRepo, ev.prNum) {
-				w.comp.recordAction()
-			}
-		case ev.target != "":
-			if w.comp.guardBudget("tick") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
-			if _, err := runTick(w.comp, ev.target); err != nil {
-				fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
-			}
-			w.comp.recordAction()
-		default:
-			if w.comp.guardBudget("reconcile") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
-			worked, err := reconcileOnce(w.comp)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
-			}
-			if worked { // only count cycles that actually did work (idle reconciles are free)
-				w.comp.recordAction()
+			default:
+				if w.comp.guardBudget("reconcile") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
+				worked, err := w.reconcile()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
+				}
+				if worked { // only count cycles that actually did work (idle reconciles are free)
+					w.comp.recordAction()
+				}
 			}
 		}
 	}
