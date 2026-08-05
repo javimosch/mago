@@ -31,7 +31,7 @@ func TestWantsHelp(t *testing.T) {
 // per-command help. Keep this in sync with main()'s dispatch.
 var dispatchCommands = []string{
 	"init", "task", "project", "run", "loop", "tick", "serve", "status",
-	"answer", "digest", "skills", "mode", "register", "login", "subscribe",
+	"answer", "digest", "skills", "mode", "feedback", "register", "login", "subscribe",
 	"billing", "account", "link", "worker",
 }
 

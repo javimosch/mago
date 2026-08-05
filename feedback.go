@@ -22,7 +22,7 @@ const defaultRelayURL = "https://feedback.intrane.fr"
 
 // parseFeedbackArgs splits the args into the free-text message and an optional --kind.
 func parseFeedbackArgs(args []string) (msg, kind string) {
-	kind = "note"
+	kind = "feedback"
 	var words []string
 	for i := 0; i < len(args); i++ {
 		if (args[i] == "--kind" || args[i] == "-k" || args[i] == "--type" || args[i] == "-t") && i+1 < len(args) {
@@ -82,7 +82,7 @@ func postFeedback(url string, body map[string]any) bool {
 func cmdFeedback(args []string) error {
 	msg, kind := parseFeedbackArgs(args)
 	if msg == "" {
-		return fmt.Errorf("usage: mago feedback \"<message>\" [--kind bug|idea|praise|note] [--context \"<what you were doing>\"]")
+		return fmt.Errorf("usage: mago feedback \"<message>\" [--type bug|friction|feature|question] [--context \"<what you were doing>\"]")
 	}
 	ctx := parseContext(args)
 	id := genFeedbackID()
