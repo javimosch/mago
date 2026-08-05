@@ -57,12 +57,25 @@ func reconcileOnce(comp *Company) (bool, error) {
 	}
 	prCap := comp.modePRCap()  // open-PR backpressure per repo (0 = off)
 	atCap := map[string]bool{} // memoize the gh count per repo within this reconcile
+	knownAgents := map[string]bool{}
+	for _, a := range agents {
+		knownAgents[a.Name] = true
+	}
 	for _, t := range tasks {
 		// mago:go on a still-in-clarification task — promote it (drop planning state) so it
 		// routes fresh to an implementer.
 		if t.Go && (t.Clarify || t.Status == "needs_human") {
 			comp.tasks.ClearClarify(t)
 			fmt.Fprintf(os.Stderr, "[route] task #%s: mago:go -> promoting to implementation\n", t.ID)
+		}
+		// A task pre-labeled with an agent that doesn't exist in the roster can't be picked up.
+		// Bounce it so the router can reassign it to a real agent and the worker will pick it up.
+		if t.Assignee != "" && !knownAgents[t.Assignee] {
+			fmt.Fprintf(os.Stderr, "[route] task #%s: assignee %q not in roster — bouncing for re-routing\n", t.ID, t.Assignee)
+			if err := comp.tasks.Bounce(t); err != nil {
+				fmt.Fprintf(os.Stderr, "[route] task #%s: bounce failed: %v\n", t.ID, err)
+				continue
+			}
 		}
 		if t.Status != "open" || t.Assignee != "" {
 			continue
