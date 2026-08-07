@@ -32,13 +32,21 @@ func (s *server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 	cus := u.StripeCustomer
 	if cus == "" {
-		c, err := stripeCreateCustomer(s.stripeKey, u.Email, fmt.Sprint(u.ID))
+		existing, err := stripeCustomerByEmail(s.stripeKey, u.Email)
 		if err != nil {
-			log.Printf("stripe customer: %v", err)
-			httpErr(w, 500, "billing setup failed")
-			return
+			log.Printf("stripe customer lookup: %v", err)
 		}
-		cus = c
+		if existing != "" {
+			cus = existing
+		} else {
+			c, err := stripeCreateCustomer(s.stripeKey, u.Email, fmt.Sprint(u.ID))
+			if err != nil {
+				log.Printf("stripe customer: %v", err)
+				httpErr(w, 500, "billing setup failed")
+				return
+			}
+			cus = c
+		}
 		s.store.Update(uid, func(u *User) { u.StripeCustomer = cus })
 	}
 	link, err := stripeCheckout(s.stripeKey, cus, s.priceID, s.appURL, fmt.Sprint(uid))
@@ -141,6 +149,77 @@ func stripePost(key, path string, form url.Values, out any) error {
 	return json.Unmarshal(b, out)
 }
 
+func stripeGet(key, path string, q url.Values, out any) error {
+	endpoint := "https://api.stripe.com/v1/" + path
+	if len(q) > 0 {
+		endpoint += "?" + q.Encode()
+	}
+	req, _ := http.NewRequest("GET", endpoint, nil)
+	req.SetBasicAuth(key, "")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("stripe %s -> %d: %s", path, resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return json.Unmarshal(b, out)
+}
+
+// stripeCustomerByEmail returns an existing Stripe customer id for the given email,
+// or an empty string if none exists. This prevents duplicate customer records when
+// a user re-checkouts with the same email.
+func stripeCustomerByEmail(key, email string) (string, error) {
+	if email == "" {
+		return "", nil
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	q := url.Values{}
+	q.Set("email", email)
+	q.Set("limit", "1")
+	if err := stripeGet(key, "customers", q, &out); err != nil {
+		return "", err
+	}
+	if len(out.Data) == 0 {
+		return "", nil
+	}
+	return out.Data[0].ID, nil
+}
+
+// stripeDelete sends a DELETE to the Stripe API and treats a 404 as success
+// (the object is already gone). It is used for idempotent cleanup such as
+// canceling a prior subscription before attaching a new one.
+func stripeDelete(key, path string) error {
+	req, _ := http.NewRequest("DELETE", "https://api.stripe.com/v1/"+path, nil)
+	req.SetBasicAuth(key, "")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == 404 {
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("stripe %s -> %d: %s", path, resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+func stripeCancelSubscription(key, subID string) error {
+	if subID == "" {
+		return nil
+	}
+	return stripeDelete(key, "subscriptions/"+subID)
+}
+
 // handleWebhook verifies the Stripe signature, dedups, and activates/downgrades the user.
 func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
@@ -172,6 +251,15 @@ func (s *server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		json.Unmarshal(ev.Data.Object, &o)
 		if uid := atoi(o.Metadata["user_id"]); uid > 0 {
+			// Belt-and-braces: cancel any prior active subscription before moving
+			// the user to the new one, so duplicate customers cannot keep billing.
+			if u := s.store.GetByID(uid); u != nil && u.StripeSub != "" && u.StripeSub != o.Subscription {
+				if s.stripeKey != "" {
+					if err := stripeCancelSubscription(s.stripeKey, u.StripeSub); err != nil {
+						log.Printf("stripe cancel old sub for user %d: %v", uid, err)
+					}
+				}
+			}
 			s.store.Update(uid, func(u *User) {
 				u.Plan, u.StripeCustomer, u.StripeSub = "mago", o.Customer, o.Subscription
 				if u.LicenseKey == "" {
