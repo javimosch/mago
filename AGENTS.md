@@ -96,3 +96,9 @@ authenticated; fail with a clear `100–109` integration error, not a crash, whe
   (accounts breakdown + signup/subscribe/worker-connect timeline), then SQLite queries on
   `platform.db` for anything ad-hoc. Full playbook: [`.agents/skills/metrics.md`](.agents/skills/metrics.md).
   Read-only on prod; never print secrets.
+
+## Runtime invariants
+
+- Proactive planning is not enough: when `mago serve`'s proactive wake files issues
+  (`proposeBacklog() > 0`), the same wake must drive `reconcileOnce()` so the worker routes
+  and claims them before idling.
