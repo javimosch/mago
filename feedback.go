@@ -50,7 +50,11 @@ func parseContext(args []string) string {
 
 func genFeedbackID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Entropy unlikely to fail, but if it does a process-unique fallback is
+		// good enough: feedback IDs only need to be unique for the caller.
+		return fmt.Sprintf("%016x%016x", time.Now().UnixNano(), os.Getpid())
+	}
 	return hex.EncodeToString(b)
 }
 
