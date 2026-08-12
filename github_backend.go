@@ -33,7 +33,7 @@ const (
 func gh(args ...string) (string, error) {
 	cmd := exec.Command("gh", args...)
 	// If MAGO_GH_TOKEN is set, pass it as GH_TOKEN so the gh CLI uses it for API calls.
-	if tok := os.Getenv("MAGO_GH_TOKEN"); tok != "" {
+	if tok := strings.TrimSpace(os.Getenv("MAGO_GH_TOKEN")); tok != "" {
 		env := os.Environ()
 		env = append(env, "GH_TOKEN="+tok)
 		cmd.Env = env
