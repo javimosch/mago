@@ -358,7 +358,7 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 			// Wake only on HUMAN-applied control labels: the scoped-backlog label (MAGO_TASK_LABEL),
 			// or the clarify/go labels. mago never applies these itself (it toggles agent:/mago:in-
 			// progress/hitl), so this can't self-wake in a loop.
-			tl := os.Getenv("MAGO_TASK_LABEL")
+			tl := strings.TrimSpace(os.Getenv("MAGO_TASK_LABEL"))
 			if p.Label.Name == "mago:clarify" || p.Label.Name == "mago:go" || (tl != "" && p.Label.Name == tl) {
 				return wakeEvent{reason: fmt.Sprintf("issue #%d labeled %s", p.Issue.Number, p.Label.Name)}, true
 			}
