@@ -50,7 +50,7 @@ func loadCompany(dir string) (*Company, error) {
 		}
 	}
 	if c.ghRepo != "" {
-		c.tasks = &githubBackend{repo: c.ghRepo, taskLabel: os.Getenv("MAGO_TASK_LABEL")}
+		c.tasks = &githubBackend{repo: c.ghRepo, taskLabel: strings.TrimSpace(os.Getenv("MAGO_TASK_LABEL"))}
 	} else {
 		c.tasks = &localBackend{c: c}
 	}
