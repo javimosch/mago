@@ -143,6 +143,11 @@ Env overrides (smoke test):
                                https://github.com/settings/tokens?type=legacy
   MAGO_TASK_LABEL              issue label marking a task in GitHub-backed mode
   MAGO_PROVIDER, MAGO_MODEL    override the agent's tau provider/model
+  MAGO_NO_MERGE=1              reviewer comments but never auto-merges
+  MAGO_VERIFY=1                auto-detect and run verification before approval
+  MAGO_VERIFY_CMD              explicit verification command (e.g. "go test ./...")
+  MAGO_MERGE_UNVERIFIED=1      auto-merge when no verification check is detected
+  MAGO_UPDATE=auto             self-update the worker binary on a new platform release
   MAGO_PLATFORM_URL            platform API base (default http://localhost:9100)
   MAGO_PASSWORD                non-interactive password for register/login
 
