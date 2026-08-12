@@ -192,8 +192,13 @@ func (w *eventWorker) run() {
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
-			if w.comp.proposeBacklog() > 0 { // only count cycles that actually filed work
+			proposed := w.comp.proposeBacklog()
+			if proposed > 0 { // only count cycles that actually filed work
 				w.comp.recordAction()
+				fmt.Fprintf(os.Stderr, "[wake] %s -> %d issue(s) proposed, reconciling to pick them up\n", ev.reason, proposed)
+				if _, err := reconcileOnce(w.comp); err != nil {
+					fmt.Fprintf(os.Stderr, "[wake] reconcile after proactive error: %v\n", err)
+				}
 			}
 		case ev.comms:
 			if !w.comp.modeComms() { // non-code flow toggled off (live)
