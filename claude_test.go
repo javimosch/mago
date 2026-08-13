@@ -57,3 +57,26 @@ func TestWithClaudeRetry(t *testing.T) {
 		t.Errorf("non-transient should not retry: n=%d err=%v", n, err)
 	}
 }
+
+func TestOverloadish(t *testing.T) {
+	for _, c := range []struct {
+		in        string
+		transient bool
+	}{
+		{"API is overloaded", true},
+		{"rate limit hit", true},
+		{"rate_limit_exceeded", true},
+		{"throttled", true},
+		{"Too many requests", true},
+		{"at capacity, try again", true},
+		{"request timed out", true},
+		{"connection reset by peer", true},
+		{"Not logged in", false},
+		{"the code has a bug", false},
+		{"", false},
+	} {
+		if got := overloadish(c.in); got != c.transient {
+			t.Errorf("overloadish(%q) = %v, want %v", c.in, got, c.transient)
+		}
+	}
+}

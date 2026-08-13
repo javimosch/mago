@@ -21,7 +21,7 @@ func transientClaude(err error) bool { return errors.Is(err, errClaudeTransient)
 
 func overloadish(s string) bool {
 	l := strings.ToLower(s)
-	for _, m := range []string{"overloaded", "rate limit", "rate_limit", "try again", "timeout", "timed out", "503", "529", "502", "connection reset"} {
+	for _, m := range []string{"overloaded", "rate limit", "rate_limit", "throttled", "too many requests", "capacity", "try again", "timeout", "timed out", "503", "529", "502", "connection reset"} {
 		if strings.Contains(l, m) {
 			return true
 		}
