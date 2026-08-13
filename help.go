@@ -90,7 +90,8 @@ that one skill. The guide is current with this binary.
 	"mode": `mago mode [show | <tokens>] [-C dir]
 
 Show or switch a LOCAL worker's mode live (no restart; applied within ~30s).
-Tokens: reactive | proactive[=secs] | review | verified | comms=on|off.
+Tokens: reactive | proactive[=secs] | review | verified | comms=on|off
+        merge=review|verified|on | pr-cap=N | issue-cap=N | update=auto|manual
 ` + companyFlag,
 	"register": `mago register [--email <e>] [--password <p>]
 
@@ -125,7 +126,8 @@ Claim a GitHub App installation (entitles your repos).
   mago worker mode <tokens> --worker <id>|--all   switch a REMOTE worker's mode
   mago worker doctor                              validate gh auth and the configured LLM harness (tau or claude, per MAGO_PROVIDER)
 
-Mode tokens: reactive | proactive[=secs] | review | verified | comms=on|off.
+Mode tokens: reactive | proactive[=secs] | review | verified | comms=on|off
+             merge=review|verified|on | pr-cap=N | issue-cap=N | update=auto|manual
 `,
 	"feedback": `mago feedback "<message>" [--type bug|friction|feature|question] [--context "<what you were doing>"]
 
