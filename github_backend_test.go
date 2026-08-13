@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestIssueNumberFromURL(t *testing.T) {
 	cases := []struct {
@@ -16,5 +19,28 @@ func TestIssueNumberFromURL(t *testing.T) {
 		if got != c.want {
 			t.Errorf("issueNumberFromURL(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestGhIssueMethods(t *testing.T) {
+	payload := []byte(`{"number":1,"title":"test","state":"open","labels":[{"name":"mago:in-progress"},{"name":"agent:cto"},{"name":"project:supercli"}]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !gi.hasLabel("mago:in-progress") {
+		t.Error("hasLabel: expected to find mago:in-progress")
+	}
+	if gi.hasLabel("mago:blocked") {
+		t.Error("hasLabel: unexpected mago:blocked")
+	}
+	if gi.assignee() != "cto" {
+		t.Errorf("assignee() = %q, want cto", gi.assignee())
+	}
+	if gi.project() != "supercli" {
+		t.Errorf("project() = %q, want supercli", gi.project())
+	}
+	if gi.status() != "in_progress" {
+		t.Errorf("status() = %q, want in_progress", gi.status())
 	}
 }
