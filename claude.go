@@ -115,15 +115,14 @@ func runClaude(workspace string, a *Agent, systemPrompt, userPrompt string) (str
 		if os.Geteuid() == 0 && os.Getenv("IS_SANDBOX") == "" {
 			cmd.Env = append(cmd.Env, "IS_SANDBOX=1")
 		}
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return "", err
+		// Feed the prompt through stdin to avoid shell arg length limits. Using a
+		// Reader avoids the pipe-buffer deadlock that can occur when a large prompt
+		// is written before the child process has started.
+		cmd.Stdin = strings.NewReader(userPrompt)
+		out, runErr := cmd.Output() // claude prints the result JSON even on non-zero exit; claudeResult judges it
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "[claude] command error: %v\n", runErr)
 		}
-		if _, err := stdin.Write([]byte(userPrompt)); err != nil {
-			return "", err
-		}
-		stdin.Close()
-		out, _ := cmd.Output() // claude prints the result JSON even on non-zero exit; claudeResult judges it
 		return claudeResult(out)
 	})
 }
@@ -138,15 +137,13 @@ func claudeComplete(a *Agent, prompt string) (string, error) {
 		cmd := exec.CommandContext(ctx, "claude",
 			"--model", claudeModel(a), "--output-format", "json")
 		cmd.Env = os.Environ()
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return "", err
+		// Use a Reader for stdin so large prompts are streamed as the child
+		// reads, rather than blocking the parent before it has started.
+		cmd.Stdin = strings.NewReader(prompt)
+		out, runErr := cmd.Output() // result JSON is printed even on non-zero exit
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "[claude] command error: %v\n", runErr)
 		}
-		if _, err := stdin.Write([]byte(prompt)); err != nil {
-			return "", err
-		}
-		stdin.Close()
-		out, _ := cmd.Output() // result JSON is printed even on non-zero exit
 		return claudeResult(out)
 	})
 }
