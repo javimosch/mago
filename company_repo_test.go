@@ -53,6 +53,17 @@ func TestValidateGHRepo_RejectsMissingOwner(t *testing.T) {
 	}
 }
 
+// TestValidateGHRepo_AllowsRepoNameWithGithubDotCom verifies that a repo name which simply
+// contains the substring "github.com" (e.g. acme/github.com-foo) is accepted; only values
+// that actually start with github.com/ or look like URLs/remotes are rejected.
+func TestValidateGHRepo_AllowsRepoNameWithGithubDotCom(t *testing.T) {
+	for _, repo := range []string{"acme/github.com-foo", "acme/github.com_mirror", "my-org/libgithub.com"} {
+		if err := validateGHRepo(repo); err != nil {
+			t.Errorf("validateGHRepo(%q) = %v, want nil", repo, err)
+		}
+	}
+}
+
 // TestValidateGHRepo_RejectsGitSuffix verifies the common copy-from-clone-URL mistake of a
 // trailing .git is caught.
 func TestValidateGHRepo_RejectsGitSuffix(t *testing.T) {

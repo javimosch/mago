@@ -156,6 +156,8 @@ Env overrides (smoke test):
   MAGO_COMMS=1                 enable beyond-code deliverables when a PR merges
   MAGO_STATE_SYNC=1            push state to mago-state branch in MAGO_GH_REPO
   MAGO_PLATFORM_URL            platform API base (default http://localhost:9100)
+  MAGO_WORKER_ID               worker identity for relay registration (default: hostname)
+  MAGO_WEBHOOK_SECRET          GitHub webhook HMAC secret for mago serve (also --secret)
   MAGO_PASSWORD                non-interactive password for register/login
 
 The worker drives tau (stateless per tick) in <company>/workspace. Memory lives in
