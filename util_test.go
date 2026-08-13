@@ -102,6 +102,36 @@ func TestStripFences(t *testing.T) {
 	}
 }
 
+func TestDirListing(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("empty directory", func(t *testing.T) {
+		if got := dirListing(dir); got != "(empty)" {
+			t.Errorf("got %q, want %q", got, "(empty)")
+		}
+	})
+
+	t.Run("missing directory", func(t *testing.T) {
+		if got := dirListing(filepath.Join(dir, "nope")); got != "(empty)" {
+			t.Errorf("got %q, want %q", got, "(empty)")
+		}
+	})
+
+	t.Run("lists files and directories", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		got := dirListing(dir)
+		want := "- a.txt\n- sub/\n"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}
+
 func TestReadFileOr(t *testing.T) {
 	dir := t.TempDir()
 
