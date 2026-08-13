@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -96,5 +97,61 @@ func TestLoadCompany_MissingCompanyNamesRemedies(t *testing.T) {
 	}
 	if !strings.Contains(msg, "MAGO_COMPANY") {
 		t.Errorf("error %q should name the $MAGO_COMPANY remedy", msg)
+	}
+}
+
+// TestWriteIfMissing_CreatesOnlyWhenAbsent verifies writeIfMissing writes the default
+// content when the file is missing and leaves an existing file untouched.
+func TestWriteIfMissing_CreatesOnlyWhenAbsent(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/starter.txt"
+
+	writeIfMissing(path, "default")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("expected file to be created: %v", err)
+	}
+	if string(b) != "default" {
+		t.Errorf("created content = %q, want %q", string(b), "default")
+	}
+
+	writeIfMissing(path, "changed")
+	b, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("expected file to remain readable: %v", err)
+	}
+	if string(b) != "default" {
+		t.Errorf("existing content was overwritten to %q, want %q", string(b), "default")
+	}
+}
+
+// TestBackfillAgentFlag_AddsMissingFlagAndNoOps verifies backfillAgentFlag injects a
+// missing frontmatter flag, preserves an already-set flag, and is a no-op on missing files.
+func TestBackfillAgentFlag_AddsMissingFlagAndNoOps(t *testing.T) {
+	dir := t.TempDir()
+
+	// Missing file is a no-op.
+	backfillAgentFlag(dir+"/missing.md", "plans", "true")
+
+	path := dir + "/agent.md"
+	os.WriteFile(path, []byte("---\nname: tester\n---\nbody\n"), 0o644)
+	backfillAgentFlag(path, "plans", "true")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read updated file: %v", err)
+	}
+	got := string(b)
+	if !strings.Contains(got, "plans: true") {
+		t.Errorf("updated frontmatter missing plans flag:\n%s", got)
+	}
+
+	// Already-set value should be left unchanged.
+	backfillAgentFlag(path, "plans", "true")
+	b2, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to re-read file: %v", err)
+	}
+	if string(b2) != got {
+		t.Errorf("re-running backfill changed the file unexpectedly")
 	}
 }
