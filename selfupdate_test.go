@@ -39,3 +39,22 @@ func TestProbeBinary(t *testing.T) {
 		t.Error("missing binary must be rejected")
 	}
 }
+
+// TestFileSHA12 verifies the helper returns the first 12 hex chars of a file's
+// sha256, and an empty string when the file is missing.
+func TestFileSHA12(t *testing.T) {
+	dir := t.TempDir()
+
+	// Known SHA-256 for "hello" -> 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+	path := filepath.Join(dir, "hello.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := fileSHA12(path); got != "2cf24dba5fb0" {
+		t.Errorf("fileSHA12(hello) = %q, want %q", got, "2cf24dba5fb0")
+	}
+
+	if got := fileSHA12(filepath.Join(dir, "missing")); got != "" {
+		t.Errorf("missing file SHA should be empty, got %q", got)
+	}
+}
