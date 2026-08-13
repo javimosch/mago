@@ -114,15 +114,21 @@ func cmdServe(args []string) error {
 		}()
 	}
 
-	w := &eventWorker{comp: comp, wake: make(chan wakeEvent, 64)}
-	go w.run()
+	w := &eventWorker{
+		comp:      comp,
+		wake:      make(chan wakeEvent, 64),
+		sleep:     defaultSleep,
+		propose:   comp.proposeBacklog,
+		reconcile: func() (bool, error) { return reconcileOnce(comp) },
+	}
+	go w.run(context.Background())
 	w.signal(wakeEvent{reason: "startup"})
 	if heartbeat > 0 {
 		go w.heartbeatLoop(time.Duration(heartbeat) * time.Second)
 	}
 	// Proactive planning runs on the live mode's cadence (0 = reactive). Always started; it self-gates
 	// so the mode can be switched at runtime (mago mode / mago worker mode) without a restart.
-	go w.proactiveLoop()
+	go w.proactiveLoop(context.Background())
 	repos := comp.repos()
 	reposStr := "none — add with `mago project add <name> --repo owner/repo`"
 	if len(repos) > 0 {
@@ -163,8 +169,11 @@ type wakeEvent struct {
 }
 
 type eventWorker struct {
-	comp *Company
-	wake chan wakeEvent
+	comp      *Company
+	wake      chan wakeEvent
+	sleep     func(context.Context, time.Duration) error
+	propose   func() int
+	reconcile func() (bool, error)
 }
 
 func (w *eventWorker) signal(ev wakeEvent) {
@@ -183,62 +192,70 @@ func (w *eventWorker) signal(ev wakeEvent) {
 }
 
 // run consumes wake events serially: a targeted event runs just that agent; otherwise
-// a full reconcile.
-func (w *eventWorker) run() {
-	for ev := range w.wake {
-		switch {
-		case ev.proactive:
-			if w.comp.guardBudget("proactive planning") {
-				continue
+// a full reconcile. It stops when ctx is canceled.
+func (w *eventWorker) run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-w.wake:
+			if !ok {
+				return
 			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
-			proposed := w.comp.proposeBacklog()
-			if proposed > 0 { // only count cycles that actually filed work
-				w.comp.recordAction()
-				fmt.Fprintf(os.Stderr, "[wake] %s -> %d issue(s) proposed, reconciling to pick them up\n", ev.reason, proposed)
-				if _, err := reconcileOnce(w.comp); err != nil {
-					fmt.Fprintf(os.Stderr, "[wake] reconcile after proactive error: %v\n", err)
+			switch {
+			case ev.proactive:
+				if w.comp.guardBudget("proactive planning") {
+					continue
 				}
-			}
-		case ev.comms:
-			if !w.comp.modeComms() { // non-code flow toggled off (live)
-				continue
-			}
-			if w.comp.guardBudget("release note") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
-			if w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle) {
+				fmt.Fprintf(os.Stderr, "[wake] %s -> planner proposing backlog\n", ev.reason)
+				proposed := w.propose()
+				if proposed > 0 { // only count cycles that actually filed work
+					w.comp.recordAction()
+					fmt.Fprintf(os.Stderr, "[wake] %s -> %d issue(s) proposed, reconciling to pick them up\n", ev.reason, proposed)
+					if _, err := w.reconcile(); err != nil {
+						fmt.Fprintf(os.Stderr, "[wake] reconcile after proactive error: %v\n", err)
+					}
+				}
+			case ev.comms:
+				if !w.comp.modeComms() { // non-code flow toggled off (live)
+					continue
+				}
+				if w.comp.guardBudget("release note") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> CMO drafting release note for PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
+				if w.comp.shipReleaseNote(ev.prRepo, ev.prNum, ev.prTitle) {
+					w.comp.recordAction()
+				}
+			case ev.prRepo != "":
+				if w.comp.guardBudget("PR review") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
+				if w.comp.reviewPR(ev.prRepo, ev.prNum) {
+					w.comp.recordAction()
+				}
+			case ev.target != "":
+				if w.comp.guardBudget("tick") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
+				if _, err := runTick(w.comp, ev.target); err != nil {
+					fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
+				}
 				w.comp.recordAction()
-			}
-		case ev.prRepo != "":
-			if w.comp.guardBudget("PR review") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> reviewing PR #%d in %s\n", ev.reason, ev.prNum, ev.prRepo)
-			if w.comp.reviewPR(ev.prRepo, ev.prNum) {
-				w.comp.recordAction()
-			}
-		case ev.target != "":
-			if w.comp.guardBudget("tick") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> waking %s\n", ev.reason, ev.target)
-			if _, err := runTick(w.comp, ev.target); err != nil {
-				fmt.Fprintf(os.Stderr, "[wake] tick %s error: %v\n", ev.target, err)
-			}
-			w.comp.recordAction()
-		default:
-			if w.comp.guardBudget("reconcile") {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
-			worked, err := reconcileOnce(w.comp)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
-			}
-			if worked { // only count cycles that actually did work (idle reconciles are free)
-				w.comp.recordAction()
+			default:
+				if w.comp.guardBudget("reconcile") {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "[wake] %s -> reconciling\n", ev.reason)
+				worked, err := w.reconcile()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "[wake] reconcile error: %v\n", err)
+				}
+				if worked { // only count cycles that actually did work (idle reconciles are free)
+					w.comp.recordAction()
+				}
 			}
 		}
 	}
@@ -268,18 +285,48 @@ func untilDuration(hhmm string) (time.Duration, error) {
 
 // proactiveLoop ticks the planner to propose backlog on the live mode cadence. It re-reads the mode
 // each cycle, so enabling/disabling/retuning proactive (mago mode / mago worker mode) takes effect
-// without a restart. When reactive (cadence 0) it idles, polling the mode every 30s.
-func (w *eventWorker) proactiveLoop() {
+// without a restart. When reactive (cadence 0) it idles, polling the mode every 30s. On a long
+// proactive cadence it still wakes every 30s to re-check the mode, so a switch to reactive is
+// picked up within ~30s (matching the promise in cmdMode). It stops when ctx is canceled.
+func (w *eventWorker) proactiveLoop(ctx context.Context) {
 	for {
 		secs := w.comp.modeProactive()
 		if secs <= 0 {
-			time.Sleep(30 * time.Second)
+			if err := w.sleep(ctx, 30*time.Second); err != nil {
+				return
+			}
 			continue
 		}
-		time.Sleep(time.Duration(secs) * time.Second)
-		if w.comp.modeProactive() > 0 { // still proactive after the sleep?
+		// Wait the proactive cadence, but poll the live mode at least every 30s so a reactive
+		// switch is picked up within ~30s even on a long cadence.
+		remaining := time.Duration(secs) * time.Second
+		for remaining > 0 {
+			chunk := remaining
+			if chunk > 30*time.Second {
+				chunk = 30 * time.Second
+			}
+			if err := w.sleep(ctx, chunk); err != nil {
+				return
+			}
+			if w.comp.modeProactive() <= 0 {
+				break // switched to reactive; skip the signal this cycle
+			}
+			remaining -= chunk
+		}
+		if w.comp.modeProactive() > 0 { // still proactive after the wait?
 			w.signal(wakeEvent{reason: "proactive cadence", proactive: true})
 		}
+	}
+}
+
+// defaultSleep waits for d or until ctx is canceled. It is the production sleep used by the
+// proactive loop; tests replace it on the eventWorker to drive the loop without wall-clock waits.
+func defaultSleep(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
 	}
 }
 
@@ -358,7 +405,7 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 			// Wake only on HUMAN-applied control labels: the scoped-backlog label (MAGO_TASK_LABEL),
 			// or the clarify/go labels. mago never applies these itself (it toggles agent:/mago:in-
 			// progress/hitl), so this can't self-wake in a loop.
-			tl := strings.TrimSpace(os.Getenv("MAGO_TASK_LABEL"))
+			tl := os.Getenv("MAGO_TASK_LABEL")
 			if p.Label.Name == "mago:clarify" || p.Label.Name == "mago:go" || (tl != "" && p.Label.Name == tl) {
 				return wakeEvent{reason: fmt.Sprintf("issue #%d labeled %s", p.Issue.Number, p.Label.Name)}, true
 			}
