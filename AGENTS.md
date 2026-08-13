@@ -41,6 +41,8 @@ and `gh` via bash). Design commands for a machine caller:
   `relay.go` (worker dial-out), `review.go` (PR review); platform: `store.go`, `stripe.go`,
   `auth.go`, `relay.go`, `github.go`, `daemon.go`, `setupgithub.go`.
 - `gofmt` everything. Match surrounding style, comment density, and error-handling idiom.
+- Avoid competing style PRs: if `gofmt -l .` flags files that are already claimed by an
+  open style PR, prefer merging or waiting for that PR over filing a duplicate.
 - Comments explain **why**, not what. Keep them where the existing code keeps them.
 
 ## Daemon / process surface

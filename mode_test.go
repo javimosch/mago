@@ -52,7 +52,12 @@ func TestLoadModeTrimsEnv(t *testing.T) {
 	t.Setenv("MAGO_COMMS", " 1 ")
 	t.Setenv("MAGO_UPDATE", " auto ")
 	t.Setenv("MAGO_NO_MERGE", " 1 ")
-	if got := c.loadMode(); !got.Comms || got.Update != "auto" || got.Merge != "review" {
+	t.Setenv("MAGO_PROACTIVE", " 600 ")
+	t.Setenv("MAGO_PR_CAP", " 5 ")
+	t.Setenv("MAGO_ISSUE_CAP", " 7 ")
+	got := c.loadMode()
+	if !got.Comms || got.Update != "auto" || got.Merge != "review" ||
+		got.Proactive != 600 || got.PRCap != 5 || got.IssueCap != 7 {
 		t.Errorf("loadMode did not trim env values: %+v", got)
 	}
 }
