@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"io"
+	"os"
+	"testing"
+)
 
 func TestExtractPiFinalContent(t *testing.T) {
 	// turn_end assistant message
@@ -39,5 +43,35 @@ func TestExtractPiFinalContent(t *testing.T) {
 	// Empty lines are skipped.
 	if got, err := extractPiFinalContent([]string{"", " "}); err == nil {
 		t.Errorf("empty output should fail, got %q", got)
+	}
+}
+
+func TestEmitProgressPi(t *testing.T) {
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	t.Cleanup(func() {
+		os.Stderr = old
+		w.Close()
+	})
+
+	// Non-matching events produce no output.
+	emitProgressPi(`{"type":"turn_end"}`)
+	emitProgressPi(`not json`)
+
+	// text_delta events are written to stderr.
+	emitProgressPi(`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"hello"}}`)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(out); got != "hello" {
+		t.Errorf("emitProgressPi wrote %q, want %q", got, "hello")
 	}
 }
