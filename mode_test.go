@@ -44,6 +44,19 @@ func TestParseMode(t *testing.T) {
 	}
 }
 
+func TestLoadModeTrimsEnv(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	t.Setenv("MAGO_COMMS", " 1 ")
+	t.Setenv("MAGO_UPDATE", " auto ")
+	t.Setenv("MAGO_NO_MERGE", " 1 ")
+	if got := c.loadMode(); !got.Comms || got.Update != "auto" || got.Merge != "review" {
+		t.Errorf("loadMode did not trim env values: %+v", got)
+	}
+}
+
 func TestLoadSaveMode(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)

@@ -33,15 +33,15 @@ func (c *Company) loadMode() workerMode {
 	}
 	m = workerMode{
 		Proactive: int(atoiSafe(os.Getenv("MAGO_PROACTIVE"))),
-		Comms:     os.Getenv("MAGO_COMMS") == "1",
+		Comms:     strings.TrimSpace(os.Getenv("MAGO_COMMS")) == "1",
 		PRCap:     int(atoiSafe(os.Getenv("MAGO_PR_CAP"))),
 		IssueCap:  int(atoiSafe(os.Getenv("MAGO_ISSUE_CAP"))),
-		Update:    os.Getenv("MAGO_UPDATE"),
+		Update:    strings.TrimSpace(os.Getenv("MAGO_UPDATE")),
 	}
 	switch {
-	case os.Getenv("MAGO_NO_MERGE") == "1":
+	case strings.TrimSpace(os.Getenv("MAGO_NO_MERGE")) == "1":
 		m.Merge = "review"
-	case os.Getenv("MAGO_VERIFY") == "1" || os.Getenv("MAGO_VERIFY_CMD") != "":
+	case strings.TrimSpace(os.Getenv("MAGO_VERIFY")) == "1" || strings.TrimSpace(os.Getenv("MAGO_VERIFY_CMD")) != "":
 		m.Merge = "verified"
 	default:
 		m.Merge = "on"
