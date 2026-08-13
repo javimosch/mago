@@ -207,3 +207,40 @@ func TestFrontmatterRoundTripPreservesOrder(t *testing.T) {
 		t.Errorf("re-render not stable:\n got: %q\nwant: %q", rerendered, content)
 	}
 }
+
+// TestValidateAgentFrontmatter verifies that valid agent frontmatter is accepted,
+// unknown keys are rejected with a helpful message, and boolean keys are validated.
+func TestValidateAgentFrontmatter(t *testing.T) {
+	cases := []struct {
+		name    string
+		fm      map[string]string
+		wantErr bool
+	}{
+		{
+			name:    "valid",
+			fm:      map[string]string{"name": "cto", "reviews": "true"},
+			wantErr: false,
+		},
+		{
+			name:    "unknown key",
+			fm:      map[string]string{"name": "cto", "unknown": "value"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid boolean value",
+			fm:      map[string]string{"name": "cto", "plans": "yes"},
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAgentFrontmatter("agent.md", tc.fm)
+			if tc.wantErr && err == nil {
+				t.Error("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
