@@ -148,6 +148,13 @@ Env overrides (smoke test):
   MAGO_VERIFY_CMD              explicit verification command (e.g. "go test ./...")
   MAGO_MERGE_UNVERIFIED=1      auto-merge when no verification check is detected
   MAGO_UPDATE=auto             self-update the worker binary on a new platform release
+  MAGO_DAILY_BUDGET=<n>        max work cycles per day (0 = unlimited)
+  MAGO_PROACTIVE=<secs>        proactive planning cadence (unset = off)
+  MAGO_PROACTIVE_MAX=<n>       max new issues per planning cycle (default 2)
+  MAGO_PR_CAP=<n>              stop starting work after this many open mago PRs
+  MAGO_ISSUE_CAP=<n>           stop proposing backlog after this many open issues
+  MAGO_COMMS=1                 enable beyond-code deliverables when a PR merges
+  MAGO_STATE_SYNC=1            push state to mago-state branch in MAGO_GH_REPO
   MAGO_PLATFORM_URL            platform API base (default http://localhost:9100)
   MAGO_PASSWORD                non-interactive password for register/login
 
