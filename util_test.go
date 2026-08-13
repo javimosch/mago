@@ -183,3 +183,87 @@ func TestOrDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestCopyFile(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src", "a.txt")
+	dst := filepath.Join(dir, "dst", "a.txt")
+
+	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	copyFile(src, dst)
+
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("copyFile did not create destination: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Errorf("copied content = %q, want %q", got, "hello")
+	}
+
+	// Missing source is a silent no-op.
+	copyFile(filepath.Join(dir, "missing"), filepath.Join(dir, "out"))
+	if _, err := os.Stat(filepath.Join(dir, "out")); err == nil {
+		t.Errorf("copyFile from missing source should not create a destination")
+	}
+}
+
+func TestEnsureDir(t *testing.T) {
+	dir := t.TempDir()
+	nested := filepath.Join(dir, "a", "b", "c")
+
+	if err := ensureDir(nested); err != nil {
+		t.Fatalf("ensureDir(%q) error: %v", nested, err)
+	}
+
+	info, err := os.Stat(nested)
+	if err != nil {
+		t.Fatalf("ensureDir did not create %q: %v", nested, err)
+	}
+	if !info.IsDir() {
+		t.Errorf("ensureDir(%q) created a non-directory", nested)
+	}
+}
+
+func TestCopyTree(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	dst := filepath.Join(dir, "dst")
+
+	if err := os.MkdirAll(filepath.Join(src, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "a.txt"), []byte("root"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "sub", "b.txt"), []byte("nested"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	copyTree(src, dst)
+
+	for _, p := range []string{
+		filepath.Join(dst, "a.txt"),
+		filepath.Join(dst, "sub", "b.txt"),
+	} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("copyTree did not create %q: %v", p, err)
+		}
+	}
+
+	got, _ := os.ReadFile(filepath.Join(dst, "sub", "b.txt"))
+	if string(got) != "nested" {
+		t.Errorf("copied nested content = %q, want %q", got, "nested")
+	}
+
+	// Missing source is a silent no-op.
+	copyTree(filepath.Join(dir, "missing"), filepath.Join(dir, "out"))
+	if _, err := os.Stat(filepath.Join(dir, "out")); err == nil {
+		t.Errorf("copyTree from missing source should not create a destination")
+	}
+}
