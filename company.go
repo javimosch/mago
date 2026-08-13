@@ -68,7 +68,7 @@ func validateGHRepo(repo string) error {
 		return nil
 	}
 	const form = "expected the bare `owner/repo` form (e.g. acme/backlog)"
-	if strings.Contains(repo, "://") || strings.HasPrefix(repo, "git@") || strings.Contains(repo, "github.com") {
+	if strings.Contains(repo, "://") || strings.HasPrefix(repo, "git@") || strings.HasPrefix(repo, "github.com") {
 		return fmt.Errorf("MAGO_GH_REPO=%q looks like a URL or git remote — set it to %s, not a full GitHub URL", repo, form)
 	}
 	parts := strings.Split(repo, "/")
