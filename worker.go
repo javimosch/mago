@@ -214,7 +214,10 @@ func checkClaudeAuth() diagCheck {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "claude", "-p", "ping", "--output-format", "json")
 	cmd.Env = os.Environ()
-	out, _ := cmd.Output()
+	out, runErr := cmd.Output()
+	if runErr != nil {
+		fmt.Fprintf(os.Stderr, "[claude] auth probe error: %v\n", runErr)
+	}
 	if _, err := claudeResult(out); err != nil {
 		if transientClaude(err) {
 			return diagCheck{
