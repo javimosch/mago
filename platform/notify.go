@@ -91,9 +91,9 @@ func sendTelegramMessage(ctx context.Context, botToken, chatID, message string) 
 // formatMessage creates a concise, emoji-prefixed Telegram notification.
 func formatMessage(kind, email, detail string) string {
 	emoji := map[string]string{
-		"signup":         "🆕",
-		"subscribed":     "✅",
-		"canceled":       "❌",
+		"signup":      "🆕",
+		"subscribed":  "✅",
+		"canceled":    "❌",
 		"worker_connect": "🟢",
 	}[kind]
 

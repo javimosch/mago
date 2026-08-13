@@ -80,8 +80,8 @@ func TestExtractProjectName(t *testing.T) {
 		{"Write tests for greet()", ""},
 
 		// Edge cases
-		{": something", ""},                             // empty prefix
-		{"unknown: something", ""},                      // prefix not in projects
+		{": something", ""},                            // empty prefix
+		{"unknown: something", ""},                    // prefix not in projects
 		{"supercli :has space after colon", "supercli"}, // space is trimmed
 	}
 	for _, c := range cases {
