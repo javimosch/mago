@@ -2,6 +2,33 @@ package main
 
 import "testing"
 
+func TestStripArg(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		flag string
+		want []string
+	}{
+		{"removes flag", []string{"mago", "serve", "--relay"}, "--relay", []string{"mago", "serve"}},
+		{"no match", []string{"mago", "serve"}, "--daemon", []string{"mago", "serve"}},
+		{"empty", []string{}, "--relay", []string{}},
+		{"removes all occurrences", []string{"--relay", "mago", "--relay"}, "--relay", []string{"mago"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := stripArg(c.args, c.flag)
+			if len(got) != len(c.want) {
+				t.Fatalf("stripArg(%v, %q) = %v, want %v", c.args, c.flag, got, c.want)
+			}
+			for i := range got {
+				if got[i] != c.want[i] {
+					t.Errorf("stripArg(%v, %q)[%d] = %q, want %q", c.args, c.flag, i, got[i], c.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestClassifyServeProc(t *testing.T) {
 	dir := "/root/co-am"
 	cases := []struct {
