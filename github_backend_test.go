@@ -67,3 +67,31 @@ func TestGhIssueMethods(t *testing.T) {
 		t.Errorf("status() = %q, want in_progress", gi.status())
 	}
 }
+
+func TestGhIssueStatusClosed(t *testing.T) {
+	payload := []byte(`{"number":2,"title":"closed","state":"CLOSED","labels":[{"name":"mago:in-progress"}]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if gi.status() != "done" {
+		t.Errorf("status() = %q, want done", gi.status())
+	}
+}
+
+func TestGhIssueEmptyLabels(t *testing.T) {
+	payload := []byte(`{"number":3,"title":"plain","state":"open","labels":[]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if gi.status() != "open" {
+		t.Errorf("status() = %q, want open", gi.status())
+	}
+	if gi.assignee() != "" {
+		t.Errorf("assignee() = %q, want empty", gi.assignee())
+	}
+	if gi.project() != "" {
+		t.Errorf("project() = %q, want empty", gi.project())
+	}
+}
