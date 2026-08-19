@@ -118,3 +118,14 @@ authenticated; fail with a clear `100–109` integration error, not a crash, whe
 - Proactive planning is not enough: when `mago serve`'s proactive wake files issues
   (`proposeBacklog() > 0`), the same wake must drive `reconcileOnce()` so the worker routes
   and claims them before idling.
+
+## Open issue / PR triage
+
+When `gh issue list --state open` is empty, the open items in the GitHub API are pull
+requests, not issues. Triage the open PR queue rather than inventing new work:
+
+- Land focused PRs that add test coverage or hardening (e.g. proactive-loop tests).
+- Close stale style-only PRs when `gofmt -l .` is already clean on `master`.
+- Close bundle/duplicate PRs, especially those that reintroduce regressions such as
+  removing `strings.TrimSpace` from an environment-value check.
+- Only after the open queue is clear should dev pick small, unclaimed test-coverage wins.
