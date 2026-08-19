@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -35,6 +36,44 @@ func TestCompanyProjectConfsRoundTrip(t *testing.T) {
 	}
 	if got := c.projectMirror("mobile"); !got {
 		t.Error("projectMirror(mobile) = false, want true")
+	}
+}
+
+func TestCompanyPathsAndRoles(t *testing.T) {
+	c := newTestCompany(t)
+
+	// Path helpers resolve under the company dir.
+	if got := c.workspaceFor(nil); got != c.workspaceDir() {
+		t.Errorf("workspaceFor(nil) = %q, want %q", got, c.workspaceDir())
+	}
+	if got := c.workspaceFor(&Task{Project: "web"}); got != c.projectDir("web") {
+		t.Errorf("workspaceFor(Project=web) = %q, want %q", got, c.projectDir("web"))
+	}
+	if got := c.skillsIndex(); !strings.HasSuffix(got, ".mago/skills/INDEX.md") {
+		t.Errorf("skillsIndex() = %q, want ending .mago/skills/INDEX.md", got)
+	}
+
+	// Role helpers.
+	if !isPlannerRole(&Agent{Plans: true}) {
+		t.Error("isPlannerRole should be true when Plans is true")
+	}
+	if isPlannerRole(&Agent{Plans: false}) {
+		t.Error("isPlannerRole should be false when Plans is false")
+	}
+
+	if !isReviewerRole(&Agent{Reviews: true}) {
+		t.Error("isReviewerRole should be true when Reviews is true")
+	}
+	if !isReviewerRole(&Agent{Name: "reviewer-1"}) {
+		t.Error("isReviewerRole should match name containing 'review'")
+	}
+	if isReviewerRole(&Agent{Name: "coder", Title: "implementer"}) {
+		t.Error("isReviewerRole should be false for non-review agent")
+	}
+
+	// Clarify instructions are non-empty and point at the mago:clarify / mago:go labels.
+	if s := clarifyInstructions(); !strings.Contains(s, "mago:clarify") || !strings.Contains(s, "mago:go") {
+		t.Errorf("clarifyInstructions missing expected labels: %q", s)
 	}
 }
 
