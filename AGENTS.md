@@ -45,6 +45,20 @@ and `gh` via bash). Design commands for a machine caller:
   open style PR, prefer merging or waiting for that PR over filing a duplicate.
 - Comments explain **why**, not what. Keep them where the existing code keeps them.
 
+## Verification
+
+Before marking a PR ready, run the full core + platform verify gate:
+
+```
+go test ./...
+go vet ./...
+gofmt -l .
+cd platform && go test ./...
+cd platform && go vet ./...
+```
+
+No output from `gofmt -l .` or `go vet` means green.
+
 ## Daemon / process surface
 
 `mago-platform` (operator) has the daemon lifecycle: `start [--daemon] [--port]`, `stop`,
