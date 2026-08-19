@@ -27,6 +27,25 @@ func TestParseMode(t *testing.T) {
 	if _, err := parseMode(base, []string{"merge=sometimes"}); err == nil {
 		t.Error("bad merge value should error")
 	}
+	m, _ = parseMode(base, []string{"comms-on"})
+	if !m.Comms {
+		t.Errorf("comms-on preset: %+v", m)
+	}
+	m, _ = parseMode(workerMode{Comms: true}, []string{"comms-off"})
+	if m.Comms {
+		t.Errorf("comms-off preset: %+v", m)
+	}
+	m, _ = parseMode(workerMode{Comms: true}, []string{"comms=false"})
+	if m.Comms {
+		t.Errorf("comms=false: %+v", m)
+	}
+
+	// proactive preset should preserve an already-positive cadence.
+	m, _ = parseMode(workerMode{Proactive: 1800}, []string{"proactive"})
+	if m.Proactive != 1800 {
+		t.Errorf("proactive preset should keep existing cadence, got %d", m.Proactive)
+	}
+
 	m, _ = parseMode(base, []string{"pr-cap=10", "issue-cap=5"})
 	if m.PRCap != 10 || m.IssueCap != 5 {
 		t.Errorf("cap kv apply: %+v", m)
