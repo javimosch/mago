@@ -200,6 +200,7 @@ These are used for development, packaging, or smoke tests — most operators nev
 | `MAGO_BIN_DIR` | Install destination for the CLI installer script (default `$HOME/.local/bin`). |
 | `MAGO_CLI_DIR` | Directory the platform serves CLI binaries from (`mago-<os>-<arch>`). |
 | `MAGO_CLI_BINARY` | Legacy single-file CLI binary fallback for `linux/amd64`. |
+| `FEEDBACK_RELAY` | Override the default feedback relay URL (default `https://feedback.intrane.fr`), or set to `off` to disable the relay write. |
 | `MAGO_TEST_BAD_REFLECTION` | Test hook that forces a malformed reflection. |
 </content>
 </invoke>
