@@ -3,7 +3,9 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestSanitize(t *testing.T) {
@@ -181,6 +183,20 @@ func TestOrDefault(t *testing.T) {
 				t.Errorf("orDefault(%q, %q) = %q, want %q", c.v, c.def, got, c.want)
 			}
 		})
+	}
+}
+
+func TestNowStamp(t *testing.T) {
+	got := nowStamp()
+	if !strings.HasSuffix(got, "Z") {
+		t.Errorf("nowStamp() = %q, want UTC 'Z' suffix", got)
+	}
+	if strings.ContainsAny(got, ":/") {
+		t.Errorf("nowStamp() = %q, should not contain filesystem-unsafe ':' or '/'", got)
+	}
+	// Sanity-check that it parses back as a UTC timestamp with the dash separator format.
+	if _, err := time.Parse("2006-01-02T15-04-05Z", got); err != nil {
+		t.Errorf("nowStamp() = %q, does not match expected format: %v", got, err)
 	}
 }
 

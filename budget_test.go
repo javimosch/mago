@@ -38,6 +38,11 @@ func TestBudget(t *testing.T) {
 	if !c.guardBudget("x") {
 		t.Fatal("guardBudget should report paused when over budget")
 	}
+	// Calling guardBudget again on the same UTC day should still pause
+	// but must not re-emit the log line.
+	if !c.guardBudget("x") {
+		t.Fatal("guardBudget should keep reporting paused on the same day")
+	}
 
 	// A stale day resets the counters.
 	c.saveUsage(budgetUsage{Day: "2000-01-01", Actions: 99})
