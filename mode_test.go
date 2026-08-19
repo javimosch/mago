@@ -62,6 +62,31 @@ func TestLoadModeTrimsEnv(t *testing.T) {
 	}
 }
 
+func TestDescribeMode(t *testing.T) {
+	cases := []struct {
+		m    workerMode
+		want string
+	}{
+		{workerMode{}, "proactive off (reactive) · comms off · merge review"},
+		{workerMode{Proactive: 600, Comms: true, Merge: "verified"}, "proactive every 600s · comms on · merge verified"},
+		{workerMode{Proactive: 60, Comms: false, Merge: "on", PRCap: 5, IssueCap: 3, Update: "auto"}, "proactive every 60s · comms off · merge on · pr-cap 5 · issue-cap 3 · update auto"},
+	}
+	for _, tc := range cases {
+		if got := describeMode(tc.m); got != tc.want {
+			t.Errorf("describeMode(%+v) = %q, want %q", tc.m, got, tc.want)
+		}
+	}
+}
+
+func TestOnOff(t *testing.T) {
+	if got := onOff(true); got != "on" {
+		t.Errorf("onOff(true) = %q, want on", got)
+	}
+	if got := onOff(false); got != "off" {
+		t.Errorf("onOff(false) = %q, want off", got)
+	}
+}
+
 func TestLoadSaveMode(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
