@@ -56,3 +56,12 @@ func TestMarketingAgentMixed(t *testing.T) {
 		t.Fatalf("marketingAgent() = %v, want cmo", got)
 	}
 }
+
+func TestShipReleaseNoteNoCMO(t *testing.T) {
+	dir := t.TempDir()
+	writeAgent(t, dir, "cto", "---\nname: cto\nimplements: true\n---\n")
+	c := &Company{Dir: dir}
+	if c.shipReleaseNote("owner/repo", 1, "a title") {
+		t.Fatal("shipReleaseNote(...) = true, want false with no CMO")
+	}
+}
