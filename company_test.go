@@ -77,6 +77,21 @@ func TestCompanyPathsAndRoles(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPrompt(t *testing.T) {
+	a := &Agent{Name: "coder", Title: "Implementer", Persona: "Writes clean, tested Go."}
+	s := buildSystemPrompt(a)
+	for _, want := range []string{
+		"You are Implementer (coder)",
+		"mago operating contract",
+		"The files and the workspace are the source of truth",
+		"Report ONLY what you actually did",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("buildSystemPrompt missing %q: %s", want, s)
+		}
+	}
+}
+
 func TestCompanyLoadMirrors(t *testing.T) {
 	c := newTestCompany(t)
 	if got := c.loadMirrors(); len(got) != 0 {
