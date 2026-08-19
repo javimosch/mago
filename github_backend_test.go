@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -42,6 +43,33 @@ func TestIsMagoComment(t *testing.T) {
 		if got != c.want {
 			t.Errorf("isMagoComment(%q) = %v, want %v", c.in, got, c.want)
 		}
+	}
+}
+
+func TestGhIssueToTask(t *testing.T) {
+	payload := []byte(`{"number":42,"title":"ship it","state":"open","body":"do the thing","labels":[{"name":"mago:in-progress"},{"name":"agent:cto"}],"comments":[{"author":{"login":"dev1"},"body":"progress"}]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	task := gi.toTask()
+	if task.ID != "42" {
+		t.Errorf("ID = %q, want 42", task.ID)
+	}
+	if task.Title != "ship it" {
+		t.Errorf("Title = %q, want ship it", task.Title)
+	}
+	if task.Assignee != "cto" {
+		t.Errorf("Assignee = %q, want cto", task.Assignee)
+	}
+	if !strings.Contains(task.Body, "## Progress log") {
+		t.Errorf("Body missing progress log header: %q", task.Body)
+	}
+	if !strings.Contains(task.Body, "### dev1") {
+		t.Errorf("Body missing comment author: %q", task.Body)
+	}
+	if !strings.Contains(task.Body, "progress") {
+		t.Errorf("Body missing comment text: %q", task.Body)
 	}
 }
 
