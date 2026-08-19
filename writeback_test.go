@@ -228,6 +228,58 @@ func TestWritebackAppendIndexLine(t *testing.T) {
 	}
 }
 
+func TestApplyTaskStatus(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+	c := &Company{Dir: dir}
+	c.tasks = &localBackend{c: c}
+
+	task, err := c.tasks.AddTask("test task", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+
+	cases := []struct {
+		status     string
+		wantStatus string
+		bodyHas    string
+	}{
+		{"done", "done", "✅ done"},
+		{"already_done", "done", "already done"},
+		{"blocked", "blocked", "⛔ blocked"},
+		{"reassign", "open", "↩ reassign"},
+		{"needs_human", "needs_human", "NEEDS HUMAN"},
+		{"in_progress", "in_progress", "… in progress"},
+	}
+
+	for _, tc := range cases {
+		task, err = c.tasks.FindTask(task.ID)
+		if err != nil {
+			t.Fatalf("FindTask: %v", err)
+		}
+		r := &Reflection{
+			TaskStatus:   tc.status,
+			Summary:      "did the thing",
+			Next:         "next step",
+			HitlQuestion: "help",
+		}
+		c.applyTaskStatus(task, &Agent{Name: "dev"}, r)
+		if task.Status != tc.wantStatus {
+			t.Errorf("status %q -> got %q, want %q", tc.status, task.Status, tc.wantStatus)
+		}
+		if !strings.Contains(task.Body, tc.bodyHas) {
+			t.Errorf("status %q body missing %q:\n%s", tc.status, tc.bodyHas, task.Body)
+		}
+	}
+
+	// needs_human should create an inbox file.
+	inboxPath := filepath.Join(c.inboxDir(), "task-"+task.ID+".md")
+	if _, err := os.Stat(inboxPath); err != nil {
+		t.Errorf("needs_human should create inbox file: %v", err)
+	}
+}
+
 func TestWritebackWriteRawFailure(t *testing.T) {
 	c := &Company{Dir: t.TempDir()}
 	a := &Agent{Name: "dev"}
