@@ -157,3 +157,73 @@ func TestWritebackWriteJournal(t *testing.T) {
 		t.Errorf("md missing status: %s", content)
 	}
 }
+
+func TestWritebackAppendSkill(t *testing.T) {
+	c := &Company{Dir: t.TempDir()}
+	c.appendSkill("Go Conventions", "use gofmt before commit", "dev", "2026-08-19T10-00-00Z")
+
+	p := filepath.Join(c.skillsDir(), "go-conventions", "SKILL.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	content := string(b)
+	if !strings.Contains(content, "name: go-conventions") {
+		t.Errorf("missing frontmatter name: %s", content)
+	}
+	if !strings.Contains(content, "use gofmt before commit") {
+		t.Errorf("missing note: %s", content)
+	}
+
+	idx, err := os.ReadFile(c.skillsIndex())
+	if err != nil {
+		t.Fatalf("ReadFile index: %v", err)
+	}
+	if !strings.Contains(string(idx), "go-conventions") || !strings.Contains(string(idx), "use gofmt before commit") {
+		t.Errorf("index missing entry: %s", string(idx))
+	}
+
+	// duplicate note should not be recorded again
+	c.appendSkill("Go Conventions", "use gofmt before commit", "dev", "2026-08-19T10-00-00Z")
+	b, err = os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	bullet := "- 2026-08-19T10-00-00Z [dev] use gofmt before commit"
+	if strings.Count(string(b), bullet) != 1 {
+		t.Errorf("duplicate note added")
+	}
+
+	// a new note appends to the same skill file
+	c.appendSkill("Go Conventions", "keep files under 500 LOC", "dev", "2026-08-19T10-00-00Z")
+	b, err = os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(b), "- 2026-08-19T10-00-00Z [dev] keep files under 500 LOC") {
+		t.Errorf("new note missing: %s", string(b))
+	}
+}
+
+func TestWritebackAppendIndexLine(t *testing.T) {
+	c := &Company{Dir: t.TempDir()}
+	c.appendIndexLine("testing", "write unit tests first")
+
+	b, err := os.ReadFile(c.skillsIndex())
+	if err != nil {
+		t.Fatalf("ReadFile index: %v", err)
+	}
+	content := string(b)
+	if !strings.Contains(content, "testing") || !strings.Contains(content, "write unit tests first") {
+		t.Errorf("index missing first entry: %s", content)
+	}
+
+	c.appendIndexLine("linting", "run gofmt before commit")
+	b, err = os.ReadFile(c.skillsIndex())
+	if err != nil {
+		t.Fatalf("ReadFile index: %v", err)
+	}
+	if !strings.Contains(string(b), "linting") || !strings.Contains(string(b), "run gofmt before commit") {
+		t.Errorf("index missing second entry: %s", string(b))
+	}
+}
