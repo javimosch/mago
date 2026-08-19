@@ -51,3 +51,20 @@ func TestUserEntitled(t *testing.T) {
 		}
 	}
 }
+
+func TestReposToJSON(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want string
+	}{
+		{[]string{"b", "a"}, `["a","b"]`},
+		{[]string{}, "[]"},
+		{[]string{"repo"}, `["repo"]`},
+	}
+	for _, c := range cases {
+		got := reposToJSON(c.in)
+		if got != c.want {
+			t.Errorf("reposToJSON(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
