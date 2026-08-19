@@ -65,3 +65,14 @@ func TestShipReleaseNoteNoCMO(t *testing.T) {
 		t.Fatal("shipReleaseNote(...) = true, want false with no CMO")
 	}
 }
+
+func TestMarketingAgentSkipsReviewerAndPlanner(t *testing.T) {
+	dir := t.TempDir()
+	writeAgent(t, dir, "critic", "---\nname: critic\nreviews: true\nplans: true\n---\n")
+	writeAgent(t, dir, "cmo", "---\nname: cmo\n---\n")
+	c := &Company{Dir: dir}
+	got := c.marketingAgent()
+	if got == nil || got.Name != "cmo" {
+		t.Fatalf("marketingAgent() = %v, want cmo", got)
+	}
+}
