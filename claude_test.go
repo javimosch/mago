@@ -6,6 +6,21 @@ import (
 	"time"
 )
 
+func TestClaudeModel(t *testing.T) {
+	// Explicit model is respected.
+	if got := claudeModel(&Agent{Model: "opus"}); got != "opus" {
+		t.Errorf("claudeModel(Model=opus) = %q, want opus", got)
+	}
+	// Whitespace-only model falls back to the default.
+	if got := claudeModel(&Agent{Model: "  "}); got != "sonnet" {
+		t.Errorf("claudeModel(Model='  ') = %q, want sonnet", got)
+	}
+	// Empty model falls back to sonnet.
+	if got := claudeModel(&Agent{}); got != "sonnet" {
+		t.Errorf("claudeModel({}) = %q, want sonnet", got)
+	}
+}
+
 func TestClaudeResultClassification(t *testing.T) {
 	// Garbled / non-JSON -> transient.
 	if _, err := claudeResult([]byte("boom not json")); !transientClaude(err) {
