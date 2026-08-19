@@ -96,4 +96,16 @@ func TestAdvanceRoadmap(t *testing.T) {
 	if c.advanceRoadmap() {
 		t.Error("should not advance when Next is a placeholder")
 	}
+
+	// Placeholder Now with a real Next -> should not advance (no real focus to archive).
+	os.WriteFile(c.roadmapFile(), []byte("## Now\n(placeholder)\n\n## Next\nB.\n"), 0o644)
+	if c.advanceRoadmap() {
+		t.Error("should not advance when Now is a placeholder")
+	}
+	if got := c.roadmapNow(); got != "(placeholder)" {
+		t.Errorf("Now should remain the placeholder, got %q", got)
+	}
+	if got := c.roadmapNext(); got != "B." {
+		t.Errorf("Next should remain unchanged, got %q", got)
+	}
 }

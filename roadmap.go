@@ -151,6 +151,9 @@ func (c *Company) advanceRoadmap() bool {
 	}
 	oldNow := strings.TrimSpace(blocks[ni].Body)
 	nextBody := strings.TrimSpace(blocks[xi].Body)
+	if isPlaceholder(oldNow) {
+		return false // current focus is not set yet; wait for the CEO to set Now
+	}
 	if isPlaceholder(nextBody) {
 		return false // nothing to advance to — hold and wait for the CEO to set Next
 	}
