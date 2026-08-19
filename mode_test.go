@@ -87,6 +87,35 @@ func TestOnOff(t *testing.T) {
 	}
 }
 
+func TestModeAccessors(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+	c.saveMode(workerMode{Proactive: 600, Comms: true, Merge: "verified", PRCap: 5, IssueCap: 3, Update: "auto"})
+
+	if got := c.modeProactive(); got != 600 {
+		t.Errorf("modeProactive = %d, want 600", got)
+	}
+	if !c.modeComms() {
+		t.Error("modeComms should be true")
+	}
+	if got := c.modePRCap(); got != 5 {
+		t.Errorf("modePRCap = %d, want 5", got)
+	}
+	if got := c.modeIssueCap(); got != 3 {
+		t.Errorf("modeIssueCap = %d, want 3", got)
+	}
+	if got := c.modeUpdate(); got != "auto" {
+		t.Errorf("modeUpdate = %q, want auto", got)
+	}
+
+	// manual/normalized update
+	c.saveMode(workerMode{Update: "manual"})
+	if got := c.modeUpdate(); got != "manual" {
+		t.Errorf("modeUpdate = %q, want manual", got)
+	}
+}
+
 func TestLoadSaveMode(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)

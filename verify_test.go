@@ -44,3 +44,27 @@ func TestRunShell(t *testing.T) {
 		t.Errorf("runShell echo failed: %v %q", err, out)
 	}
 }
+
+func TestVerifyEnabled(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "t"}
+
+	// Default mode is "on" (auto-merge) -> verification disabled.
+	if c.verifyEnabled() {
+		t.Fatal("verifyEnabled should be off in default on/merge mode")
+	}
+
+	// verified mode enables verification.
+	c.saveMode(workerMode{Merge: "verified"})
+	if !c.verifyEnabled() {
+		t.Fatal("verifyEnabled should be on in verified merge mode")
+	}
+
+	// legacy MAGO_VERIFY_CMD also enables verification regardless of merge mode.
+	c.saveMode(workerMode{Merge: "on"})
+	t.Setenv("MAGO_VERIFY_CMD", "npm test")
+	if !c.verifyEnabled() {
+		t.Fatal("verifyEnabled should be on when MAGO_VERIFY_CMD is set")
+	}
+}
