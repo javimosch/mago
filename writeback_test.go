@@ -227,3 +227,30 @@ func TestWritebackAppendIndexLine(t *testing.T) {
 		t.Errorf("index missing second entry: %s", string(b))
 	}
 }
+
+func TestWritebackWriteRawFailure(t *testing.T) {
+	c := &Company{Dir: t.TempDir()}
+	a := &Agent{Name: "dev"}
+	task := &Task{ID: "7", Title: "failing task"}
+	c.writeRawFailure(a, task, "raw model output")
+
+	dir := filepath.Join(c.runsDir(), "dev")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one raw failure file, got %d", len(entries))
+	}
+	if !strings.HasSuffix(entries[0].Name(), "-RAW.txt") {
+		t.Fatalf("unexpected file: %s", entries[0].Name())
+	}
+
+	b, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(b) != "raw model output" {
+		t.Errorf("content = %q, want %q", string(b), "raw model output")
+	}
+}
