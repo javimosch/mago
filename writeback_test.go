@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -101,5 +102,58 @@ func TestWritebackAppendToSection(t *testing.T) {
 	}
 	if strings.Contains(string(b), "should not appear") {
 		t.Errorf("line added to nonexistent section")
+	}
+}
+
+func TestWritebackWriteJournal(t *testing.T) {
+	c := &Company{Dir: t.TempDir()}
+	a := &Agent{Name: "dev"}
+	task := &Task{ID: "42", Title: "write tests"}
+	r := &Reflection{
+		Summary:       "wrote a run journal",
+		StateDelta:    "state updated",
+		TaskStatus:    "in_progress",
+		Lessons:       []Lesson{{Skill: "go", Note: "keep tests small"}},
+		Next:          "cover more helpers",
+		CadenceSignal: "working",
+	}
+	c.writeJournal(a, task, r, "2026-08-19T10-00-00Z")
+
+	dir := filepath.Join(c.runsDir(), "dev")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 run files, got %d", len(entries))
+	}
+
+	jsonPath := filepath.Join(dir, "2026-08-19T10-00-00Z.json")
+	b, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("ReadFile json: %v", err)
+	}
+	content := string(b)
+	if !strings.Contains(content, `"task_id": "42"`) {
+		t.Errorf("json missing task_id: %s", content)
+	}
+	if !strings.Contains(content, `"agent": "dev"`) {
+		t.Errorf("json missing agent: %s", content)
+	}
+	if !strings.Contains(content, `"summary": "wrote a run journal"`) {
+		t.Errorf("json missing summary: %s", content)
+	}
+
+	mdPath := filepath.Join(dir, "2026-08-19T10-00-00Z.md")
+	b, err = os.ReadFile(mdPath)
+	if err != nil {
+		t.Fatalf("ReadFile md: %v", err)
+	}
+	content = string(b)
+	if !strings.Contains(content, "**Task:** #42 write tests") {
+		t.Errorf("md missing task heading: %s", content)
+	}
+	if !strings.Contains(content, "**Status:** in_progress") {
+		t.Errorf("md missing status: %s", content)
 	}
 }
