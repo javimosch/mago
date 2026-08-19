@@ -22,6 +22,29 @@ func TestIssueNumberFromURL(t *testing.T) {
 	}
 }
 
+func TestIsMagoComment(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"🔧 agent picking this up", true},
+		{"🙋 **cto** needs the CEO:", true},
+		{"📋 routed to cto", true},
+		{"↩ Not the right role", true},
+		{"📣 shipped", true},
+		{"**agent** _(mago agent)_", true},
+		{"human reply here", false},
+		{"  **bold** start with spaces", true},
+		{"", false},
+	}
+	for _, c := range cases {
+		got := isMagoComment(c.in)
+		if got != c.want {
+			t.Errorf("isMagoComment(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 func TestGhIssueMethods(t *testing.T) {
 	payload := []byte(`{"number":1,"title":"test","state":"open","labels":[{"name":"mago:in-progress"},{"name":"agent:cto"},{"name":"project:supercli"}]}`)
 	var gi ghIssue
