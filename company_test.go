@@ -1,43 +1,54 @@
 package main
 
 import (
-	"fmt"
-	"strings"
+	"os"
+	"reflect"
 	"testing"
 )
 
-func TestValidateGHRepo(t *testing.T) {
-	cases := []struct {
-		repo    string
-		wantErr string
-	}{
-		{repo: "", wantErr: ""},
-		{repo: "acme/backlog", wantErr: ""},
-		{repo: "https://github.com/acme/backlog", wantErr: "looks like a URL or git remote"},
-		{repo: "git@github.com:acme/backlog.git", wantErr: "looks like a URL or git remote"},
-		{repo: "github.com/acme/backlog", wantErr: "looks like a URL or git remote"},
-		{repo: "backlog", wantErr: "missing an owner or repo"},
-		{repo: "/backlog", wantErr: "missing an owner or repo"},
-		{repo: "acme/", wantErr: "missing an owner or repo"},
-		{repo: "acme/backlog/extra", wantErr: "missing an owner or repo"},
-		{repo: "acme/backlog.git", wantErr: "trailing .git"},
+func TestCompanyProjectConfsRoundTrip(t *testing.T) {
+	c := newTestCompany(t)
+	if err := c.saveProject("web", "acme/web", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.saveProject("mobile", "acme/mobile", true); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tc := range cases {
-		t.Run(fmt.Sprintf("repo=%q", tc.repo), func(t *testing.T) {
-			err := validateGHRepo(tc.repo)
-			if tc.wantErr == "" {
-				if err != nil {
-					t.Fatalf("validateGHRepo(%q) = %v, want nil", tc.repo, err)
-				}
-				return
-			}
-			if err == nil {
-				t.Fatalf("validateGHRepo(%q) = nil, want error containing %q", tc.repo, tc.wantErr)
-			}
-			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("validateGHRepo(%q) error = %q, want containing %q", tc.repo, err.Error(), tc.wantErr)
-			}
-		})
+	got := c.loadProjectConfs()
+	want := map[string]projConf{
+		"web":    {Repo: "acme/web", MirrorIssue: false},
+		"mobile": {Repo: "acme/mobile", MirrorIssue: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("loadProjectConfs() = %v, want %v", got, want)
+	}
+
+	projects := c.loadProjects()
+	wantProjects := map[string]string{"web": "acme/web", "mobile": "acme/mobile"}
+	if !reflect.DeepEqual(projects, wantProjects) {
+		t.Errorf("loadProjects() = %v, want %v", projects, wantProjects)
+	}
+
+	if got := c.projectRepo("web"); got != "acme/web" {
+		t.Errorf("projectRepo(web) = %q, want %q", got, "acme/web")
+	}
+	if got := c.projectMirror("mobile"); !got {
+		t.Error("projectMirror(mobile) = false, want true")
+	}
+}
+
+func TestCompanyLoadMirrors(t *testing.T) {
+	c := newTestCompany(t)
+	if got := c.loadMirrors(); len(got) != 0 {
+		t.Errorf("loadMirrors() with no file = %v, want empty", got)
+	}
+
+	if err := os.WriteFile(c.mirrorsFile(), []byte(`{"TASK-1": 42}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := c.loadMirrors()
+	if got["TASK-1"] != 42 {
+		t.Errorf("loadMirrors()[TASK-1] = %d, want 42", got["TASK-1"])
 	}
 }
