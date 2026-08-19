@@ -73,7 +73,11 @@ func describeMode(m workerMode) string {
 	if m.Proactive > 0 {
 		p = fmt.Sprintf("every %ds", m.Proactive)
 	}
-	s := fmt.Sprintf("proactive %s · comms %s · merge %s", p, onOff(m.Comms), m.Merge)
+	merge := m.Merge
+	if merge == "" {
+		merge = "review"
+	}
+	s := fmt.Sprintf("proactive %s · comms %s · merge %s", p, onOff(m.Comms), merge)
 	if m.PRCap > 0 {
 		s += fmt.Sprintf(" · pr-cap %d", m.PRCap)
 	}
