@@ -10,6 +10,94 @@ import (
 	"time"
 )
 
+func TestReadCreds(t *testing.T) {
+	t.Setenv("MAGO_PASSWORD", "")
+
+	email, password, err := readCreds([]string{"--password", "secret"}, "dev@example.com")
+	if err != nil {
+		t.Fatalf("flag password: %v", err)
+	}
+	if email != "dev@example.com" || password != "secret" {
+		t.Errorf("flag password = %q / %q, want dev@example.com / secret", email, password)
+	}
+
+	email, password, err = readCreds([]string{"--email", "  DEV@EXAMPLE.COM  ", "--password", "p"}, "")
+	if err != nil {
+		t.Fatalf("all flags: %v", err)
+	}
+	if email != "dev@example.com" || password != "p" {
+		t.Errorf("all flags = %q / %q, want dev@example.com / p", email, password)
+	}
+
+	t.Setenv("MAGO_PASSWORD", "envpass")
+	email, password, err = readCreds(nil, "env@example.com")
+	if err != nil {
+		t.Fatalf("env password: %v", err)
+	}
+	if email != "env@example.com" || password != "envpass" {
+		t.Errorf("env password = %q / %q, want env@example.com / envpass", email, password)
+	}
+
+	// Missing password with no env falls through to the interactive prompt; in tests stdin
+	// is not a tty so prompt returns an error instead of blocking.
+	t.Setenv("MAGO_PASSWORD", "")
+	_, _, err = readCreds([]string{"--email", "dev@example.com"}, "")
+	if err == nil {
+		t.Errorf("missing password: expected error, got nil")
+	}
+}
+
+func TestFetchAccount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/api/account" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(accountInfo{
+			Email:      "dev@example.com",
+			Plan:       "founding",
+			Active:     true,
+			Trial:      false,
+			TrialEnds:  0,
+			LicenseKey: "license-123",
+		})
+	}))
+	defer srv.Close()
+
+	cfg := &cliConfig{PlatformURL: srv.URL, Token: "token"}
+	acc, err := fetchAccount(cfg)
+	if err != nil {
+		t.Fatalf("fetchAccount: %v", err)
+	}
+	if acc.Email != "dev@example.com" || acc.Plan != "founding" || !acc.Active || acc.LicenseKey != "license-123" {
+		t.Errorf("fetchAccount result wrong: %+v", acc)
+	}
+	if cfg.LicenseKey != "license-123" {
+		t.Errorf("cfg.LicenseKey = %q, want license-123", cfg.LicenseKey)
+	}
+
+	// The cached license should be persisted to disk.
+	c2 := loadConfig()
+	if c2.LicenseKey != "license-123" {
+		t.Errorf("persisted LicenseKey = %q, want license-123", c2.LicenseKey)
+	}
+
+	// An unauthenticated request should return an error.
+	cfg.Token = "bad"
+	if _, err := fetchAccount(cfg); err == nil {
+		t.Errorf("fetchAccount bad token: expected error")
+	}
+}
+
 func TestAtoiSafe64(t *testing.T) {
 	cases := []struct {
 		in   string
