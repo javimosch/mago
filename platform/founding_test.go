@@ -2,8 +2,24 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestFoundingBanner(t *testing.T) {
+	full := foundingBanner(0)
+	if !strings.Contains(full, "founding cohort is full") {
+		t.Errorf("full banner missing cohort message: %q", full)
+	}
+
+	left := foundingBanner(3)
+	if !strings.Contains(left, "3 of 10 slots left") {
+		t.Errorf("banner should show remaining slots, got: %q", left)
+	}
+	if !strings.Contains(left, "free during beta") {
+		t.Errorf("banner should mention free beta, got: %q", left)
+	}
+}
 
 func TestIsInternalEmail(t *testing.T) {
 	internal := []string{"founder@mago.test", "x@dogfood.test", "stripe-verify-1@example.com", "mago-dogfood@intrane.fr", "A@INTRANE.FR"}
