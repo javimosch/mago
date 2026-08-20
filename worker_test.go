@@ -204,6 +204,27 @@ func TestCheckGHToken_LabelMentionsToken(t *testing.T) {
 	}
 }
 
+// TestCheckGhOnPath_Label verifies the gh-on-PATH check label names the GitHub CLI,
+// and that a missing binary produces a non-empty hint pointing at install docs.
+func TestCheckGhOnPath_Label(t *testing.T) {
+	c := checkGhOnPath()
+	if c.label == "" {
+		t.Error("checkGhOnPath: label must not be empty")
+	}
+	if !strings.Contains(c.label, "gh") {
+		t.Errorf("checkGhOnPath: label should mention gh, got %q", c.label)
+	}
+	if !strings.Contains(c.label, "GitHub CLI") {
+		t.Errorf("checkGhOnPath: label should mention GitHub CLI, got %q", c.label)
+	}
+	if !c.ok && c.hint == "" {
+		t.Error("checkGhOnPath: hint must be non-empty on failure")
+	}
+	if !c.ok && !strings.Contains(c.hint, "github.com") {
+		t.Errorf("checkGhOnPath: failure hint should point at gh install docs, got %q", c.hint)
+	}
+}
+
 // TestIsGHAuthError covers the key stderr patterns that indicate a GitHub auth failure.
 func TestIsGHAuthError(t *testing.T) {
 	authErrors := []string{
