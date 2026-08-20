@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -251,4 +254,52 @@ func TestIsGHAuthError(t *testing.T) {
 			t.Errorf("isGHAuthError(%q): expected false, got true", s)
 		}
 	}
+}
+
+// TestCheckGhAuth verifies the gh auth check using a fake gh binary so the test
+// does not depend on the host's real GitHub CLI authentication state.
+func TestCheckGhAuth(t *testing.T) {
+	makeGh := func(exit int) string {
+		dir := t.TempDir()
+		script := filepath.Join(dir, "gh")
+		if err := os.WriteFile(script, []byte("#!/bin/sh\nexit "+strconv.Itoa(exit)+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	t.Run("missing gh", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+		c := checkGhAuth()
+		if c.ok {
+			t.Error("missing gh should fail auth check")
+		}
+		if !strings.Contains(c.hint, "install") {
+			t.Errorf("hint should mention installing gh, got %q", c.hint)
+		}
+	})
+
+	t.Run("unauthenticated", func(t *testing.T) {
+		dir := makeGh(1)
+		t.Setenv("PATH", dir)
+		c := checkGhAuth()
+		if c.ok {
+			t.Error("non-zero exit should fail auth check")
+		}
+		if !strings.Contains(c.hint, "gh auth login") {
+			t.Errorf("hint should suggest gh auth login, got %q", c.hint)
+		}
+	})
+
+	t.Run("authenticated", func(t *testing.T) {
+		dir := makeGh(0)
+		t.Setenv("PATH", dir)
+		c := checkGhAuth()
+		if !c.ok {
+			t.Errorf("zero exit should pass auth check, got hint: %s", c.hint)
+		}
+		if !strings.Contains(c.label, "authenticated") {
+			t.Errorf("label should mention authenticated, got %q", c.label)
+		}
+	})
 }
