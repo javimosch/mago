@@ -6,29 +6,30 @@ import (
 )
 
 func TestRenderUsageSignal(t *testing.T) {
-	// No activity -> empty signal (planner just follows the focus).
-	if s := renderUsageSignal(accountUsage{Total: 0}, []string{"o/a"}); s != "" {
-		t.Errorf("no activity should render empty, got %q", s)
-	}
-
-	// Activity is scoped to repos this company serves.
-	u := accountUsage{
-		Total: 9, Issues: 5, PRs: 2, Comments: 2,
-		Repos: []string{"o/a", "o/other"}, // o/other is not served by this company
-	}
-	s := renderUsageSignal(u, []string{"o/a", "o/b"})
-	for _, want := range []string{"5 issue", "2 PR", "2 comment", "o/a"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("signal missing %q: %s", want, s)
+	t.Run("empty", func(t *testing.T) {
+		u := accountUsage{Total: 0, Issues: 0, PRs: 0, Comments: 0}
+		if got := renderUsageSignal(u, []string{"acme/web"}); got != "" {
+			t.Errorf("renderUsageSignal(total=0) = %q, want empty", got)
 		}
-	}
-	if strings.Contains(s, "o/other") {
-		t.Errorf("signal should not include repos this company doesn't serve: %s", s)
-	}
+	})
 
-	// Activity exists on the account but none on this company's repos -> "(none)" active.
-	s2 := renderUsageSignal(u, []string{"o/unrelated"})
-	if !strings.Contains(s2, "(none)") {
-		t.Errorf("no served-repo activity should show (none): %s", s2)
-	}
+	t.Run("no matching repos", func(t *testing.T) {
+		u := accountUsage{Total: 3, Issues: 1, PRs: 1, Comments: 1, Repos: []string{"other/repo"}}
+		got := renderUsageSignal(u, []string{"acme/web"})
+		if !strings.Contains(got, "active repos you serve: (none)") {
+			t.Errorf("renderUsageSignal no match = %q, want '(none)'", got)
+		}
+		if !strings.Contains(got, "1 issue · 1 PR · 1 comment events") {
+			t.Errorf("renderUsageSignal no match missing counts: %q", got)
+		}
+	})
+
+	t.Run("matching repos in order", func(t *testing.T) {
+		u := accountUsage{Total: 5, Issues: 2, PRs: 2, Comments: 1, Repos: []string{"acme/api", "acme/web", "other/repo"}}
+		got := renderUsageSignal(u, []string{"acme/web", "acme/api"})
+		want := "acme/api, acme/web"
+		if !strings.Contains(got, "active repos you serve: "+want) {
+			t.Errorf("renderUsageSignal match = %q, want to contain %q", got, want)
+		}
+	})
 }
