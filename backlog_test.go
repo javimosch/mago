@@ -111,3 +111,24 @@ func TestProactiveMaxPerCycle(t *testing.T) {
 		}
 	}
 }
+
+func TestShippedText(t *testing.T) {
+	c := newTestCompany(t)
+
+	// Missing STATE.md -> empty
+	if got := c.shippedText(); got != "" {
+		t.Errorf("missing STATE.md: got %q, want empty", got)
+	}
+
+	placeholder := "# co\n\n## Mission\n(Set by the CEO. Edit me.)\n\n## Shipped\n(nothing yet)\n\n## In flight\n(nothing yet)\n\n## Decisions\n(none yet)\n\n## Activity log\n- entry\n"
+	os.WriteFile(c.stateFile(), []byte(placeholder), 0o644)
+	if got := c.shippedText(); got != "" {
+		t.Errorf("placeholder Shipped: got %q, want empty", got)
+	}
+
+	real := "# co\n\n## Mission\n(Set by the CEO. Edit me.)\n\n## Shipped\n- landed onboarding flow\n- fixed login redirect\n\n## In flight\n(nothing yet)\n\n## Decisions\n(none yet)\n\n## Activity log\n- entry\n"
+	os.WriteFile(c.stateFile(), []byte(real), 0o644)
+	if got := c.shippedText(); got != "- landed onboarding flow\n- fixed login redirect" {
+		t.Errorf("real Shipped: got %q, want %q", got, "- landed onboarding flow\n- fixed login redirect")
+	}
+}
