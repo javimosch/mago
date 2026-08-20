@@ -2,7 +2,9 @@ package main
 
 import (
 	"path/filepath"
+	"regexp"
 	"testing"
+	"time"
 )
 
 func TestUsageAggregation(t *testing.T) {
@@ -57,5 +59,29 @@ func TestUsageAggregation(t *testing.T) {
 	// an account with no activity rolls up to zero, not a panic
 	if z := st.UsageForAccount(999, 7); z.Total != 0 || len(z.Repos) != 0 {
 		t.Errorf("empty account should be zero: %+v", z)
+	}
+}
+
+func TestAgoStr(t *testing.T) {
+	cases := []struct {
+		name    string
+		ts      int64
+		pattern string
+	}{
+		{"never", 0, "^never$"},
+		{"just now", time.Now().Unix(), "^just now$"},
+		{"minutes", time.Now().Add(-30 * time.Minute).Unix(), `^\d+m ago$`},
+		{"hours", time.Now().Add(-3 * time.Hour).Unix(), `^\d+h ago$`},
+		{"days", time.Now().Add(-3 * 24 * time.Hour).Unix(), `^\d+d ago$`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := agoStr(c.ts)
+			re := regexp.MustCompile(c.pattern)
+			if !re.MatchString(got) {
+				t.Errorf("agoStr(%d) = %q, want match %q", c.ts, got, c.pattern)
+			}
+		})
 	}
 }
