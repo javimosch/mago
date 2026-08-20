@@ -189,3 +189,15 @@ func TestValidateProjectsConfigAbsent(t *testing.T) {
 		t.Errorf("missing projects.json should not be an error, got: %v", err)
 	}
 }
+
+// TestValidateProjectsConfigValidJSON verifies that a well-formed projects.json
+// (simple string or object form) passes validation without error.
+func TestValidateProjectsConfigValidJSON(t *testing.T) {
+	c := newTestCompany(t)
+	if err := os.WriteFile(c.projectsConfigFile(), []byte(`{"web":"acme/web","mobile":{"repo":"acme/mobile","mirror_issue":true}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.validateProjectsConfig(); err != nil {
+		t.Errorf("valid projects.json should not return an error, got: %v", err)
+	}
+}
