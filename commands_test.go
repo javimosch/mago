@@ -254,6 +254,75 @@ func TestCmdTask_MissingTitle(t *testing.T) {
 	}
 }
 
+func TestCmdProject_ListEmpty(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "list"}); err != nil {
+			t.Fatalf("cmdProject: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "no projects") {
+		t.Errorf("expected empty project message, got: %q", out)
+	}
+}
+
+func TestCmdProject_AddAndList(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "add", "web", "--repo", "acme/web"}); err != nil {
+			t.Fatalf("cmdProject add: %v", err)
+		}
+	})
+	if !strings.Contains(out, `project "web" ready -> acme/web`) {
+		t.Errorf("unexpected add output: %q", out)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "projects", "web")); err != nil {
+		t.Errorf("project directory not created: %v", err)
+	}
+
+	out = captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "list"}); err != nil {
+			t.Fatalf("cmdProject list: %v", err)
+		}
+	})
+	if !strings.Contains(out, "web -> acme/web") {
+		t.Errorf("expected project in list, got: %q", out)
+	}
+}
+
+func TestCmdProject_AddShorthandOwnerRepo(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "add", "acme/web"}); err != nil {
+			t.Fatalf("cmdProject: %v", err)
+		}
+	})
+	if !strings.Contains(out, `project "web" ready -> acme/web`) {
+		t.Errorf("unexpected output: %q", out)
+	}
+}
+
+func TestCmdProject_MissingArgs(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	if err := cmdProject([]string{"-C", dir}); err == nil {
+		t.Fatal("expected usage error")
+	}
+}
+
 func TestCmdTask_UnknownActionSuggests(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
