@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -304,5 +305,74 @@ func TestWritebackWriteRawFailure(t *testing.T) {
 	}
 	if string(b) != "raw model output" {
 		t.Errorf("content = %q, want %q", string(b), "raw model output")
+	}
+}
+
+func TestPrintRunResult(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+
+	c := &Company{Dir: t.TempDir()}
+	a := &Agent{Name: "dev"}
+	task := &Task{ID: "42", Title: "write tests"}
+	ref := &Reflection{
+		Summary:    "shipped a feature",
+		TaskStatus: "done",
+		Next:       "cover more",
+		Lessons:    []Lesson{{Skill: "testing", Note: "keep tests small"}},
+	}
+	c.printRunResult(a, task, ref)
+
+	w.Close()
+	os.Stdout = old
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+
+	s := string(out)
+	for _, want := range []string{
+		"agent:    dev",
+		"task:     #42 write tests",
+		"status:   done",
+		"summary:  shipped a feature",
+		"lessons:  1 recorded",
+		"next:     cover more",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("output missing %q:\n%s", want, s)
+		}
+	}
+
+	// needs_human path
+	r, w, err = os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	os.Stdout = w
+
+	ref2 := &Reflection{
+		TaskStatus: "needs_human",
+		Summary:    "need a human",
+		Next:       "confirm the design",
+	}
+	c.printRunResult(a, task, ref2)
+
+	w.Close()
+	os.Stdout = old
+	out, err = io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	s = string(out)
+	if !strings.Contains(s, "needs human: confirm the design") {
+		t.Errorf("needs_human output missing prompt:\n%s", s)
+	}
+	if !strings.Contains(s, "mago answer 42 \"...\" -C") {
+		t.Errorf("needs_human output missing answer command:\n%s", s)
 	}
 }

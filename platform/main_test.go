@@ -1,0 +1,114 @@
+package main
+
+import (
+	"math"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestEnv(t *testing.T) {
+	t.Setenv("MAGO_TEST_ENV", "from-env")
+	if got := env("MAGO_TEST_ENV", "default"); got != "from-env" {
+		t.Errorf("env(set) = %q, want %q", got, "from-env")
+	}
+	if got := env("MAGO_TEST_MISSING", "fallback"); got != "fallback" {
+		t.Errorf("env(missing) = %q, want %q", got, "fallback")
+	}
+}
+
+func TestExpand(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	got := expand("~/data.db")
+	want := home + "/data.db"
+	if got != want {
+		t.Errorf("expand(~/data.db) = %q, want %q", got, want)
+	}
+
+	if got := expand("/abs/path"); got != "/abs/path" {
+		t.Errorf("expand(/abs/path) = %q, want %q", got, "/abs/path")
+	}
+}
+
+func TestAtoi(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int64
+	}{
+		{"42", 42},
+		{"  7  ", 7},
+		{"not-a-number", 0},
+		{"", 0},
+		{"-3", -3},
+	}
+	for _, c := range cases {
+		got := atoi(c.in)
+		if got != c.want {
+			t.Errorf("atoi(%q) = %d, want %d", c.in, got, c.want)
+		}
+	}
+
+	// Overflow saturates to MaxInt64 and the error is ignored, matching the
+	// helper's best-effort contract.
+	if got := atoi("999999999999999999999999999999999999"); got != math.MaxInt64 {
+		t.Errorf("atoi(overflow) = %d, want %d", got, math.MaxInt64)
+	}
+}
+
+func TestHttpErr(t *testing.T) {
+	rec := httptest.NewRecorder()
+	httpErr(rec, 418, "i am a teapot")
+
+	if rec.Code != 418 {
+		t.Errorf("status = %d, want 418", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"error":"i am a teapot"`) {
+		t.Errorf("body = %q, want error message", body)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestLoadDotenv(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/.env"
+	content := `# comment
+FOO=bar
+  BAZ  =  "quoted"  
+INVALID
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Clear any pre-existing value so loadDotenv can set it.
+	os.Unsetenv("FOO")
+	os.Unsetenv("BAZ")
+	loadDotenv(path)
+
+	if os.Getenv("FOO") != "bar" {
+		t.Errorf("FOO = %q, want bar", os.Getenv("FOO"))
+	}
+	if os.Getenv("BAZ") != "quoted" {
+		t.Errorf("BAZ = %q, want quoted", os.Getenv("BAZ"))
+	}
+	if os.Getenv("INVALID") != "" {
+		t.Errorf("INVALID should not be set, got %q", os.Getenv("INVALID"))
+	}
+
+	// Already-set values are not overridden.
+	t.Setenv("FOO", "preset")
+	os.WriteFile(path, []byte("FOO=not-override\n"), 0o644)
+	loadDotenv(path)
+	if os.Getenv("FOO") != "preset" {
+		t.Errorf("FOO was overridden to %q", os.Getenv("FOO"))
+	}
+
+	os.Unsetenv("FOO")
+	os.Unsetenv("BAZ")
+}
