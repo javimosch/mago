@@ -1,8 +1,11 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -131,5 +134,39 @@ func TestKeywordSelectShortTokensIgnored(t *testing.T) {
 	task := &Task{Title: "api", Body: ""}
 	if got := keywordSelect(task, entries, 4); got != nil {
 		t.Errorf("sub-4-rune overlap should not match, got %v", got)
+	}
+}
+
+func TestSelectSkillsTextEmpty(t *testing.T) {
+	c := newTestCompany(t)
+	got := c.selectSkillsText(nil, &Task{Title: "task", Body: "body"})
+	if !strings.Contains(got, "(no skills yet)") {
+		t.Errorf("empty index should render no-skills message: %q", got)
+	}
+}
+
+func TestSelectSkillsTextInjectsAll(t *testing.T) {
+	c := newTestCompany(t)
+
+	// The em dash (—) is the delimiter readIndexEntries expects.
+	index := "- skill-a \u2014 hook-a\n- skill-b \u2014 hook-b\n"
+	if err := os.WriteFile(c.skillsIndex(), []byte(index), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	for _, name := range []string{"skill-a", "skill-b"} {
+		dir := filepath.Join(c.skillsDir(), name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("body of "+name+"\n"), 0o644); err != nil {
+			t.Fatalf("write %s skill: %v", name, err)
+		}
+	}
+
+	got := c.selectSkillsText(nil, &Task{Title: "task", Body: "body"})
+	for _, want := range []string{"skill-a", "skill-b", "hook-a", "hook-b", "--- skill: skill-a ---", "body of skill-a", "--- skill: skill-b ---", "body of skill-b"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q:\n%s", want, got)
+		}
 	}
 }
