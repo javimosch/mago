@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -56,5 +58,37 @@ func TestFileSHA12(t *testing.T) {
 
 	if got := fileSHA12(filepath.Join(dir, "missing")); got != "" {
 		t.Errorf("missing file SHA should be empty, got %q", got)
+	}
+}
+
+// TestDownloadFile verifies the helper streams a 200 response to disk and
+// surfaces non-200 status codes as errors.
+func TestDownloadFile(t *testing.T) {
+	dir := t.TempDir()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ok" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("payload"))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	dst := filepath.Join(dir, "ok")
+	if err := downloadFile(ts.URL+"/ok", dst); err != nil {
+		t.Fatalf("downloadFile(200) error: %v", err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("downloadFile did not create destination: %v", err)
+	}
+	if string(got) != "payload" {
+		t.Errorf("downloaded content = %q, want %q", got, "payload")
+	}
+
+	if err := downloadFile(ts.URL+"/missing", filepath.Join(dir, "missing")); err == nil {
+		t.Error("downloadFile(404) should return an error")
 	}
 }
