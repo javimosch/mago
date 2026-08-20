@@ -75,3 +75,25 @@ func TestGenLicense(t *testing.T) {
 		t.Errorf("genLicense() hex part not valid hex: %v", err)
 	}
 }
+
+func TestHashPasswordAndCheck(t *testing.T) {
+	hashed := hashPassword("hunter2")
+	if hashed == "" {
+		t.Fatal("hashPassword returned empty string")
+	}
+	if hashed == "hunter2" {
+		t.Error("hashPassword returned plaintext")
+	}
+
+	if !checkPassword("hunter2", hashed) {
+		t.Error("checkPassword rejected the correct password")
+	}
+	if checkPassword("wrong", hashed) {
+		t.Error("checkPassword accepted an incorrect password")
+	}
+
+	// An empty hash can never match a login.
+	if checkPassword("hunter2", "") {
+		t.Error("checkPassword accepted an empty hash")
+	}
+}
