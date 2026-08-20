@@ -207,3 +207,174 @@ func TestIfStr(t *testing.T) {
 		}
 	}
 }
+
+func TestCmdTask_AddCreatesTask(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdTask([]string{"-C", dir, "add", "cover", "cmdTask"}); err != nil {
+			t.Fatalf("cmdTask: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "created task #1: cover cmdTask") {
+		t.Errorf("unexpected output: %q", out)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "tasks", "task-1.md")); err != nil {
+		t.Errorf("task file not created: %v", err)
+	}
+}
+
+func TestCmdTask_AddWithProject(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdTask([]string{"-C", dir, "add", "ship", "web", "--project", "web"}); err != nil {
+			t.Fatalf("cmdTask: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "created task #1: ship web [project: web]") {
+		t.Errorf("unexpected output: %q", out)
+	}
+}
+
+func TestCmdTask_MissingTitle(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	if err := cmdTask([]string{"-C", dir, "add"}); err == nil {
+		t.Fatal("expected error for missing title")
+	}
+}
+
+func TestCmdProject_ListEmpty(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "list"}); err != nil {
+			t.Fatalf("cmdProject: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "no projects") {
+		t.Errorf("expected empty project message, got: %q", out)
+	}
+}
+
+func TestCmdProject_AddAndList(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "add", "web", "--repo", "acme/web"}); err != nil {
+			t.Fatalf("cmdProject add: %v", err)
+		}
+	})
+	if !strings.Contains(out, `project "web" ready -> acme/web`) {
+		t.Errorf("unexpected add output: %q", out)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "projects", "web")); err != nil {
+		t.Errorf("project directory not created: %v", err)
+	}
+
+	out = captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "list"}); err != nil {
+			t.Fatalf("cmdProject list: %v", err)
+		}
+	})
+	if !strings.Contains(out, "web -> acme/web") {
+		t.Errorf("expected project in list, got: %q", out)
+	}
+}
+
+func TestCmdProject_AddShorthandOwnerRepo(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "add", "acme/web"}); err != nil {
+			t.Fatalf("cmdProject: %v", err)
+		}
+	})
+	if !strings.Contains(out, `project "web" ready -> acme/web`) {
+		t.Errorf("unexpected output: %q", out)
+	}
+}
+
+func TestCmdProject_MissingArgs(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	if err := cmdProject([]string{"-C", dir}); err == nil {
+		t.Fatal("expected usage error")
+	}
+}
+
+func TestCmdStatus_Empty(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdStatus([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdStatus: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "# company:") {
+		t.Errorf("expected company header, got: %q", out)
+	}
+	if !strings.Contains(out, "(no STATE.md)") {
+		t.Errorf("expected missing state marker, got: %q", out)
+	}
+	if !strings.Contains(out, "(none)") {
+		t.Errorf("expected empty task list, got: %q", out)
+	}
+}
+
+func TestCmdStatus_WithTask(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	if err := cmdTask([]string{"-C", dir, "add", "cover status"}); err != nil {
+		t.Fatalf("cmdTask: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdStatus([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdStatus: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "#1 [open] cover status") {
+		t.Errorf("expected task in status output, got: %q", out)
+	}
+}
+
+func TestCmdTask_UnknownActionSuggests(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	err := cmdTask([]string{"-C", dir, "ad", "title"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if !strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("expected suggestion, got: %v", err)
+	}
+}
