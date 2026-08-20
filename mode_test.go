@@ -135,6 +135,37 @@ func TestModeAccessors(t *testing.T) {
 	}
 }
 
+func TestApplyControl(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	c.applyControl([]byte(`{"tokens":["proactive=1200","comms=on","merge=verified","update=auto"]}`))
+
+	m := c.loadMode()
+	if m.Proactive != 1200 || !m.Comms || m.Merge != "verified" || m.Update != "auto" {
+		t.Errorf("applyControl did not persist mode: %+v", m)
+	}
+
+	c.applyControl([]byte(`{not json`))
+	m = c.loadMode()
+	if m.Proactive != 1200 || !m.Comms || m.Merge != "verified" || m.Update != "auto" {
+		t.Errorf("invalid JSON should not overwrite mode: %+v", m)
+	}
+
+	c.applyControl([]byte(`{"tokens":[]}`))
+	m = c.loadMode()
+	if m.Proactive != 1200 || !m.Comms || m.Merge != "verified" || m.Update != "auto" {
+		t.Errorf("empty tokens should not overwrite mode: %+v", m)
+	}
+
+	c.applyControl([]byte(`{"tokens":["bogus"]}`))
+	m = c.loadMode()
+	if m.Proactive != 1200 || !m.Comms || m.Merge != "verified" || m.Update != "auto" {
+		t.Errorf("rejected tokens should not overwrite mode: %+v", m)
+	}
+}
+
 func TestLoadSaveMode(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
