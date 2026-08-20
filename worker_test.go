@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -251,4 +255,113 @@ func TestIsGHAuthError(t *testing.T) {
 			t.Errorf("isGHAuthError(%q): expected false, got true", s)
 		}
 	}
+}
+
+// TestCheckGhAuth verifies the gh auth check using a fake gh binary so the test
+// does not depend on the host's real GitHub CLI authentication state.
+func TestCheckGhAuth(t *testing.T) {
+	makeGh := func(exit int) string {
+		dir := t.TempDir()
+		script := filepath.Join(dir, "gh")
+		if err := os.WriteFile(script, []byte("#!/bin/sh\nexit "+strconv.Itoa(exit)+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	t.Run("missing gh", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+		c := checkGhAuth()
+		if c.ok {
+			t.Error("missing gh should fail auth check")
+		}
+		if !strings.Contains(c.hint, "install") {
+			t.Errorf("hint should mention installing gh, got %q", c.hint)
+		}
+	})
+
+	t.Run("unauthenticated", func(t *testing.T) {
+		dir := makeGh(1)
+		t.Setenv("PATH", dir)
+		c := checkGhAuth()
+		if c.ok {
+			t.Error("non-zero exit should fail auth check")
+		}
+		if !strings.Contains(c.hint, "gh auth login") {
+			t.Errorf("hint should suggest gh auth login, got %q", c.hint)
+		}
+	})
+
+	t.Run("authenticated", func(t *testing.T) {
+		dir := makeGh(0)
+		t.Setenv("PATH", dir)
+		c := checkGhAuth()
+		if !c.ok {
+			t.Errorf("zero exit should pass auth check, got hint: %s", c.hint)
+		}
+		if !strings.Contains(c.label, "authenticated") {
+			t.Errorf("label should mention authenticated, got %q", c.label)
+		}
+	})
+}
+
+// TestCheckClaudeAuth verifies the claude auth check with a fake claude binary,
+// covering pass, not-on-PATH, auth-failure and transient-probe outcomes.
+func TestCheckClaudeAuth(t *testing.T) {
+	makeClaude := func(stdout string, exit int) string {
+		dir := t.TempDir()
+		script := filepath.Join(dir, "claude")
+		body := fmt.Sprintf("#!/bin/sh\necho '%s'\nexit %d\n", stdout, exit)
+		if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	t.Run("missing claude", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+		c := checkClaudeAuth()
+		if c.ok {
+			t.Error("missing claude should fail auth check")
+		}
+		if !strings.Contains(c.hint, "install claude") {
+			t.Errorf("hint should mention installing claude, got %q", c.hint)
+		}
+	})
+
+	t.Run("authenticated", func(t *testing.T) {
+		dir := makeClaude(`{"result":"pong","is_error":false}`, 0)
+		t.Setenv("PATH", dir)
+		c := checkClaudeAuth()
+		if !c.ok {
+			t.Errorf("valid JSON result should pass auth check, got hint: %s", c.hint)
+		}
+		if !strings.Contains(c.label, "claude authenticated") {
+			t.Errorf("label should mention claude authenticated, got %q", c.label)
+		}
+	})
+
+	t.Run("not logged in", func(t *testing.T) {
+		dir := makeClaude(`{"result":"Not logged in","is_error":true}`, 0)
+		t.Setenv("PATH", dir)
+		c := checkClaudeAuth()
+		if c.ok {
+			t.Error("Not logged in result should fail auth check")
+		}
+		if !strings.Contains(c.hint, "claude /login") {
+			t.Errorf("hint should suggest claude /login, got %q", c.hint)
+		}
+	})
+
+	t.Run("transient probe", func(t *testing.T) {
+		dir := makeClaude("garbage-not-json", 0)
+		t.Setenv("PATH", dir)
+		c := checkClaudeAuth()
+		if c.ok {
+			t.Error("garbled output should fail auth check")
+		}
+		if !strings.Contains(c.hint, "transient") {
+			t.Errorf("hint should mention transient error, got %q", c.hint)
+		}
+	})
 }
