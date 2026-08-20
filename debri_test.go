@@ -1,10 +1,37 @@
 package main
 
 import (
+	"io"
 	"os"
 	"strings"
 	"testing"
 )
+
+func TestEmitProgressDebri(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+
+	emitProgressDebri(`{"event":"chunk","content":"hello "}`)
+	emitProgressDebri(`{"event":"chunk","content":"world"}`)
+	emitProgressDebri(`{"event":"init","status":"ok"}`) // non-chunk: no output
+	emitProgressDebri("not valid json")                 // unparseable: no output
+
+	w.Close()
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	got := string(out)
+	want := "hello world"
+	if got != want {
+		t.Errorf("emitProgressDebri wrote %q, want %q", got, want)
+	}
+}
 
 func TestDebriModel(t *testing.T) {
 	if got := debriModel(&Agent{Model: "SWE-1.6"}); got != "SWE-1.6" {
