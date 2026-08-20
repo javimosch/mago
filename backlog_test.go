@@ -91,3 +91,83 @@ func TestExtractProjectName(t *testing.T) {
 		}
 	}
 }
+
+func TestProactiveMaxPerCycle(t *testing.T) {
+	cases := []struct {
+		env  string
+		want int
+	}{
+		{"", 2},             // default
+		{"1", 1},            // override
+		{"5", 5},            // larger override
+		{"0", 2},            // zero falls back to default
+		{"not-a-number", 2}, // invalid falls back to default
+		{"  3  ", 3},        // trimmed whitespace
+	}
+	for _, c := range cases {
+		t.Setenv("MAGO_PROACTIVE_MAX", c.env)
+		if got := proactiveMaxPerCycle(); got != c.want {
+			t.Errorf("proactiveMaxPerCycle() with MAGO_PROACTIVE_MAX=%q = %d, want %d", c.env, got, c.want)
+		}
+	}
+}
+
+func TestShippedText(t *testing.T) {
+	c := newTestCompany(t)
+
+	// Missing STATE.md -> empty
+	if got := c.shippedText(); got != "" {
+		t.Errorf("missing STATE.md: got %q, want empty", got)
+	}
+
+	placeholder := "# co\n\n## Mission\n(Set by the CEO. Edit me.)\n\n## Shipped\n(nothing yet)\n\n## In flight\n(nothing yet)\n\n## Decisions\n(none yet)\n\n## Activity log\n- entry\n"
+	os.WriteFile(c.stateFile(), []byte(placeholder), 0o644)
+	if got := c.shippedText(); got != "" {
+		t.Errorf("placeholder Shipped: got %q, want empty", got)
+	}
+
+	real := "# co\n\n## Mission\n(Set by the CEO. Edit me.)\n\n## Shipped\n- landed onboarding flow\n- fixed login redirect\n\n## In flight\n(nothing yet)\n\n## Decisions\n(none yet)\n\n## Activity log\n- entry\n"
+	os.WriteFile(c.stateFile(), []byte(real), 0o644)
+	if got := c.shippedText(); got != "- landed onboarding flow\n- fixed login redirect" {
+		t.Errorf("real Shipped: got %q, want %q", got, "- landed onboarding flow\n- fixed login redirect")
+	}
+}
+
+func TestPlannerAgent(t *testing.T) {
+	// No agents -> nil
+	c := newTestCompany(t)
+	if got := c.plannerAgent(); got != nil {
+		t.Errorf("empty roster: got %v, want nil", got)
+	}
+
+	// Non-planner agents -> nil
+	c = newTestCompany(t)
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\n---\nYou code.")
+	if got := c.plannerAgent(); got != nil {
+		t.Errorf("non-planner: got %v, want nil", got)
+	}
+
+	// Planner found and returned
+	c = newTestCompany(t)
+	writeAgentFile(t, c, "hop", "---\nname: hop\ntitle: Head of Product\nplans: true\nprovider: deepseek\n---\nYou plan.")
+	got := c.plannerAgent()
+	if got == nil {
+		t.Fatal("expected planner agent, got nil")
+	}
+	if got.Name != "hop" || got.Title != "Head of Product" {
+		t.Errorf("planner identity: got %q / %q, want %q / %q", got.Name, got.Title, "hop", "Head of Product")
+	}
+
+	// Model override from env is applied
+	c = newTestCompany(t)
+	writeAgentFile(t, c, "hop", "---\nname: hop\ntitle: Head of Product\nplans: true\nprovider: deepseek\n---\nYou plan.")
+	t.Setenv("MAGO_PROVIDER", "opencode-go")
+	t.Setenv("MAGO_MODEL", "gpt-4")
+	got = c.plannerAgent()
+	if got == nil {
+		t.Fatal("expected planner agent, got nil")
+	}
+	if got.Provider != "opencode-go" || got.Model != "gpt-4" {
+		t.Errorf("model override: got provider=%q model=%q, want opencode-go / gpt-4", got.Provider, got.Model)
+	}
+}
