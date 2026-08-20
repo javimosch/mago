@@ -91,3 +91,23 @@ func TestExtractProjectName(t *testing.T) {
 		}
 	}
 }
+
+func TestProactiveMaxPerCycle(t *testing.T) {
+	cases := []struct {
+		env  string
+		want int
+	}{
+		{"", 2},             // default
+		{"1", 1},            // override
+		{"5", 5},            // larger override
+		{"0", 2},            // zero falls back to default
+		{"not-a-number", 2}, // invalid falls back to default
+		{"  3  ", 3},        // trimmed whitespace
+	}
+	for _, c := range cases {
+		t.Setenv("MAGO_PROACTIVE_MAX", c.env)
+		if got := proactiveMaxPerCycle(); got != c.want {
+			t.Errorf("proactiveMaxPerCycle() with MAGO_PROACTIVE_MAX=%q = %d, want %d", c.env, got, c.want)
+		}
+	}
+}
