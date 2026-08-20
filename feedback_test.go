@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestParseFeedbackArgs(t *testing.T) {
 	msg, ftype := parseFeedbackArgs([]string{"worker", "doctor", "is", "confusing"})
@@ -49,5 +53,38 @@ func TestGenFeedbackID(t *testing.T) {
 	id2 := genFeedbackID()
 	if len(id1) == 0 || id1 == id2 {
 		t.Errorf("genFeedbackID returned empty or duplicate: %q, %q", id1, id2)
+	}
+}
+
+func TestPostFeedback(t *testing.T) {
+	body := map[string]any{"message": "hello"}
+
+	called := false
+	okSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if r.Method != "POST" {
+			t.Errorf("method = %q, want POST", r.Method)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer okSrv.Close()
+
+	if !postFeedback(okSrv.URL, body) {
+		t.Error("postFeedback on 200 should return true")
+	}
+	if !called {
+		t.Error("server was never called")
+	}
+
+	failSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer failSrv.Close()
+
+	if postFeedback(failSrv.URL, body) {
+		t.Error("postFeedback on 500 should return false")
 	}
 }
