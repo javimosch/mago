@@ -74,6 +74,34 @@ func TestHttpErr(t *testing.T) {
 	}
 }
 
+// TestReadJSON verifies valid JSON is decoded into v and invalid JSON is rejected
+// with a 400 response containing an "invalid json" error.
+func TestReadJSON(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api", strings.NewReader(`{"name":"mago"}`))
+	var v struct{ Name string }
+	if !readJSON(rec, req, &v) {
+		t.Fatal("readJSON valid JSON returned false")
+	}
+	if v.Name != "mago" {
+		t.Errorf("v.Name = %q, want mago", v.Name)
+	}
+
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest("POST", "/api", strings.NewReader(`not json`))
+	var v2 struct{ Name string }
+	if readJSON(rec2, req2, &v2) {
+		t.Fatal("readJSON invalid JSON returned true")
+	}
+	if rec2.Code != 400 {
+		t.Errorf("status = %d, want 400", rec2.Code)
+	}
+	body := rec2.Body.String()
+	if !strings.Contains(body, "invalid json") {
+		t.Errorf("body = %q, want invalid json", body)
+	}
+}
+
 func TestLoadDotenv(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/.env"
