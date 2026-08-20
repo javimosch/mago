@@ -155,3 +155,22 @@ func TestBackfillAgentFlag_AddsMissingFlagAndNoOps(t *testing.T) {
 		t.Errorf("re-running backfill changed the file unexpectedly")
 	}
 }
+
+func TestIfStr(t *testing.T) {
+	cases := []struct {
+		cond     bool
+		trueVal  string
+		falseVal string
+		want     string
+	}{
+		{true, "yes", "no", "yes"},
+		{false, "yes", "no", "no"},
+		{true, "", "fallback", ""},
+		{false, "ignored", "", ""},
+	}
+	for _, tc := range cases {
+		if got := ifStr(tc.cond, tc.trueVal, tc.falseVal); got != tc.want {
+			t.Errorf("ifStr(%v, %q, %q) = %q, want %q", tc.cond, tc.trueVal, tc.falseVal, got, tc.want)
+		}
+	}
+}
