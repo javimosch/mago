@@ -1,6 +1,68 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+)
+
+func TestWorkerPidFile(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	want := filepath.Join(dir, ".mago", "worker.pid")
+	if got := workerPidFile(c); got != want {
+		t.Errorf("workerPidFile() = %q, want %q", got, want)
+	}
+}
+
+func TestWorkerLogFile(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	want := filepath.Join(dir, ".mago", "worker.log")
+	if got := workerLogFile(c); got != want {
+		t.Errorf("workerLogFile() = %q, want %q", got, want)
+	}
+}
+
+func TestReadWorkerPid(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+
+	// Missing pidfile: not alive.
+	if pid, alive := readWorkerPid(c); pid != 0 || alive {
+		t.Errorf("missing pidfile: got pid=%d alive=%v, want 0/false", pid, alive)
+	}
+
+	// Malformed pidfile: not alive.
+	magoDir := c.magoDir()
+	if err := os.MkdirAll(magoDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	pidFile := workerPidFile(c)
+	if err := os.WriteFile(pidFile, []byte("not-a-number\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	if pid, alive := readWorkerPid(c); pid != 0 || alive {
+		t.Errorf("malformed pidfile: got pid=%d alive=%v, want 0/false", pid, alive)
+	}
+
+	// Current process is alive.
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	if pid, alive := readWorkerPid(c); pid != os.Getpid() || !alive {
+		t.Errorf("current pid: got pid=%d alive=%v, want %d/true", pid, alive, os.Getpid())
+	}
+
+	// Non-existent process: not alive.
+	if err := os.WriteFile(pidFile, []byte("999999\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	if pid, alive := readWorkerPid(c); pid != 999999 || alive {
+		t.Errorf("non-existent pid: got pid=%d alive=%v, want 999999/false", pid, alive)
+	}
+}
 
 func TestStripArg(t *testing.T) {
 	cases := []struct {
