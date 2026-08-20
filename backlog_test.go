@@ -132,3 +132,42 @@ func TestShippedText(t *testing.T) {
 		t.Errorf("real Shipped: got %q, want %q", got, "- landed onboarding flow\n- fixed login redirect")
 	}
 }
+
+func TestPlannerAgent(t *testing.T) {
+	// No agents -> nil
+	c := newTestCompany(t)
+	if got := c.plannerAgent(); got != nil {
+		t.Errorf("empty roster: got %v, want nil", got)
+	}
+
+	// Non-planner agents -> nil
+	c = newTestCompany(t)
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\n---\nYou code.")
+	if got := c.plannerAgent(); got != nil {
+		t.Errorf("non-planner: got %v, want nil", got)
+	}
+
+	// Planner found and returned
+	c = newTestCompany(t)
+	writeAgentFile(t, c, "hop", "---\nname: hop\ntitle: Head of Product\nplans: true\nprovider: deepseek\n---\nYou plan.")
+	got := c.plannerAgent()
+	if got == nil {
+		t.Fatal("expected planner agent, got nil")
+	}
+	if got.Name != "hop" || got.Title != "Head of Product" {
+		t.Errorf("planner identity: got %q / %q, want %q / %q", got.Name, got.Title, "hop", "Head of Product")
+	}
+
+	// Model override from env is applied
+	c = newTestCompany(t)
+	writeAgentFile(t, c, "hop", "---\nname: hop\ntitle: Head of Product\nplans: true\nprovider: deepseek\n---\nYou plan.")
+	t.Setenv("MAGO_PROVIDER", "opencode-go")
+	t.Setenv("MAGO_MODEL", "gpt-4")
+	got = c.plannerAgent()
+	if got == nil {
+		t.Fatal("expected planner agent, got nil")
+	}
+	if got.Provider != "opencode-go" || got.Model != "gpt-4" {
+		t.Errorf("model override: got provider=%q model=%q, want opencode-go / gpt-4", got.Provider, got.Model)
+	}
+}
