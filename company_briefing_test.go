@@ -73,3 +73,50 @@ func TestRecentJournalSummaries(t *testing.T) {
 		t.Errorf("oldest run should be excluded by limit:\n%s", got)
 	}
 }
+
+// TestOpenPRsText verifies parsing of gh pr list output and graceful fallback
+// when the gh call fails or returns malformed JSON.
+func TestOpenPRsText(t *testing.T) {
+	c := newTestCompany(t)
+	repo := "acme/web"
+
+	t.Run("success", func(t *testing.T) {
+		fake := fakeGh(t, `if [ "$3" = "pr" ] && [ "$4" = "list" ]; then echo '[{"number":3,"title":"fix thing","headRefName":"mago/task-123"}]'; else echo '[]'; fi`)
+		t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+		got := c.openPRsText(repo)
+		if !strings.Contains(got, "#3") || !strings.Contains(got, "mago/task-123") || !strings.Contains(got, "fix thing") {
+			t.Errorf("openPRsText missing expected PR:\n%s", got)
+		}
+	})
+
+	t.Run("gh failure", func(t *testing.T) {
+		fake := fakeGh(t, `echo "no auth" >&2; exit 1`)
+		t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+		got := c.openPRsText(repo)
+		if got != "(could not list)" {
+			t.Errorf("gh failure: got %q, want (could not list)", got)
+		}
+	})
+
+	t.Run("malformed json", func(t *testing.T) {
+		fake := fakeGh(t, `echo "not json"`)
+		t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+		got := c.openPRsText(repo)
+		if got != "(none open)" {
+			t.Errorf("malformed json: got %q, want (none open)", got)
+		}
+	})
+}
+
+// fakeGh creates a temp directory containing an executable `gh` shell stub
+// with the supplied body and returns that directory.
+func fakeGh(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\n" + body + "\n"
+	path := filepath.Join(dir, "gh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
