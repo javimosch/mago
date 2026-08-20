@@ -1,8 +1,10 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +61,67 @@ func TestTauConfigHasKey(t *testing.T) {
 		os.WriteFile(filepath.Join(cfg, "config.json"), []byte(`{"keys":{"opencode-go":"secret"}}`), 0o600)
 		if !tauConfigHasKey("opencode-go") {
 			t.Fatal("tauConfigHasKey with per-provider key = false, want true")
+		}
+	})
+}
+
+func TestWarnIfNoProviderKey(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+
+	capture := func(f func()) string {
+		old := os.Stderr
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stderr = w
+		f()
+		w.Close()
+		os.Stderr = old
+		b, _ := io.ReadAll(r)
+		return string(b)
+	}
+
+	t.Run("unknown provider is silent", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "unknown")
+		t.Setenv("MAGO_MODEL", "")
+		out := capture(warnIfNoProviderKey)
+		if out != "" {
+			t.Errorf("unknown provider produced stderr: %q", out)
+		}
+	})
+
+	t.Run("env key present is silent", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "opencode-go")
+		t.Setenv("MAGO_MODEL", "")
+		t.Setenv("OPENCODE_API_KEY", "secret")
+		out := capture(warnIfNoProviderKey)
+		if out != "" {
+			t.Errorf("env key present produced stderr: %q", out)
+		}
+	})
+
+	t.Run("missing key warns", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "opencode-go")
+		t.Setenv("MAGO_MODEL", "")
+		t.Setenv("OPENCODE_API_KEY", "")
+		out := capture(warnIfNoProviderKey)
+		if !strings.Contains(out, "no API key for provider") {
+			t.Errorf("missing key stderr = %q, want key warning", out)
+		}
+		if !strings.Contains(out, "OPENCODE_API_KEY") {
+			t.Errorf("missing key stderr should name OPENCODE_API_KEY: %q", out)
+		}
+	})
+
+	t.Run("flash model warns", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "opencode-go")
+		t.Setenv("MAGO_MODEL", "openrouter/flash-v1")
+		t.Setenv("OPENCODE_API_KEY", "secret")
+		out := capture(warnIfNoProviderKey)
+		if !strings.Contains(out, "flash variant") {
+			t.Errorf("flash model stderr = %q, want flash warning", out)
 		}
 	})
 }
