@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -153,6 +154,38 @@ func TestBackfillAgentFlag_AddsMissingFlagAndNoOps(t *testing.T) {
 	}
 	if string(b2) != got {
 		t.Errorf("re-running backfill changed the file unexpectedly")
+	}
+}
+
+// TestCmdInit_ScaffoldsCompany verifies cmdInit creates the expected directory layout,
+// seeds the starter team, and writes the company state, vision and roadmap files.
+func TestCmdInit_ScaffoldsCompany(t *testing.T) {
+	dir := t.TempDir() + "/acme"
+	if err := cmdInit([]string{dir}); err != nil {
+		t.Fatalf("cmdInit: %v", err)
+	}
+
+	for _, sub := range []string{
+		".mago/agents", ".mago/skills", ".mago/runs", ".mago/inbox",
+		"tasks", "workspace", "projects",
+	} {
+		if _, err := os.Stat(filepath.Join(dir, sub)); err != nil {
+			t.Errorf("missing directory %q: %v", sub, err)
+		}
+	}
+
+	for _, f := range []string{"STATE.md", "VISION.md", "ROADMAP.md"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Errorf("missing file %q: %v", f, err)
+		}
+	}
+
+	state, err := os.ReadFile(filepath.Join(dir, "STATE.md"))
+	if err != nil {
+		t.Fatalf("failed to read STATE.md: %v", err)
+	}
+	if !strings.Contains(string(state), "acme — company state") {
+		t.Errorf("STATE.md does not contain expected company name; got:\n%s", state)
 	}
 }
 

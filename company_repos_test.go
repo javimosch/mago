@@ -89,3 +89,44 @@ func TestCompanyTaskRepo_ResolvesProjectRepo(t *testing.T) {
 		t.Errorf("taskRepo(unknown project) = %q, want empty", got)
 	}
 }
+
+// TestEnsureMirrorIssue_CreatesAndCaches verifies that ensureMirrorIssue opens a GitHub
+// issue via gh, persists the task→issue mapping, and returns the cached number on later
+// calls (even if gh would fail) so resumes don't duplicate mirror issues.
+func TestEnsureMirrorIssue_CreatesAndCaches(t *testing.T) {
+	c := newTestCompany(t)
+	task := &Task{ID: "task-1", Title: "Fix the thing", Body: "A detailed\nmultiline body."}
+	repo := "acme/web"
+
+	t.Run("create", func(t *testing.T) {
+		fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "create" ]; then echo "https://github.com/acme/web/issues/7"; else exit 1; fi`)
+		t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+		if got := c.ensureMirrorIssue(task, repo); got != 7 {
+			t.Errorf("ensureMirrorIssue() = %d, want 7", got)
+		}
+		if m := c.loadMirrors(); m[task.ID] != 7 {
+			t.Errorf("mirror map = %v, want task-1=7", m)
+		}
+	})
+
+	t.Run("cached", func(t *testing.T) {
+		// Even with a failing gh, the cached mapping should be returned.
+		fake := fakeGh(t, `echo "should not run" >&2; exit 1`)
+		t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+		if got := c.ensureMirrorIssue(task, repo); got != 7 {
+			t.Errorf("ensureMirrorIssue(cached) = %d, want 7", got)
+		}
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		c2 := newTestCompany(t)
+		fake := fakeGh(t, `echo "no auth" >&2; exit 1`)
+		t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+		if got := c2.ensureMirrorIssue(&Task{ID: "task-2", Title: "Fail", Body: "x"}, repo); got != 0 {
+			t.Errorf("ensureMirrorIssue(failure) = %d, want 0", got)
+		}
+	})
+}
