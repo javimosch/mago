@@ -8,6 +8,71 @@ import (
 	"testing"
 )
 
+func TestWriteBack(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+	c := &Company{Dir: dir}
+	c.tasks = &localBackend{c: c}
+
+	a := &Agent{Name: "dev"}
+	task, err := c.tasks.AddTask("write tests", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	r := &Reflection{
+		Summary:    "shipped the feature",
+		StateDelta: "tests added",
+		TaskStatus: "done",
+		Next:       "cover more",
+		Lessons:    []Lesson{{Skill: "testing", Note: "keep tests small"}},
+	}
+
+	if err := c.writeBack(a, task, r, "raw output"); err != nil {
+		t.Fatalf("writeBack: %v", err)
+	}
+
+	// Journal files were written.
+	runDir := filepath.Join(c.runsDir(), "dev")
+	entries, err := os.ReadDir(runDir)
+	if err != nil {
+		t.Fatalf("ReadDir runs: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("writeBack did not write a run journal")
+	}
+
+	// State was appended.
+	state, err := os.ReadFile(c.stateFile())
+	if err != nil {
+		t.Fatalf("ReadFile state: %v", err)
+	}
+	if !strings.Contains(string(state), "tests added") {
+		t.Errorf("state missing state delta: %s", string(state))
+	}
+
+	// Skill was recorded.
+	skill, err := os.ReadFile(filepath.Join(c.skillsDir(), "testing", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("ReadFile skill: %v", err)
+	}
+	if !strings.Contains(string(skill), "keep tests small") {
+		t.Errorf("skill missing note: %s", string(skill))
+	}
+
+	// Task status was updated.
+	updated, err := c.tasks.FindTask(task.ID)
+	if err != nil {
+		t.Fatalf("FindTask: %v", err)
+	}
+	if updated.Status != "done" {
+		t.Errorf("task status = %q, want done", updated.Status)
+	}
+	if !strings.Contains(updated.Body, "✅ done") {
+		t.Errorf("task body missing done note: %s", updated.Body)
+	}
+}
+
 func TestProgressNote(t *testing.T) {
 	cases := []struct {
 		status, summary, next, want string
