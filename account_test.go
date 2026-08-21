@@ -311,3 +311,37 @@ func TestCmdSubscribe(t *testing.T) {
 		t.Errorf("expected checkout URL in output, got: %q", out)
 	}
 }
+
+func TestCmdBilling(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/portal" || r.Method != "POST" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"url": "https://stripe.example/portal"})
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+	os.MkdirAll(filepath.Join(home, ".mago"), 0o755)
+	os.WriteFile(filepath.Join(home, ".mago", "config.json"), []byte(`{"token":"token"}`), 0o600)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = cmdBilling(nil)
+	})
+	if err != nil {
+		t.Fatalf("cmdBilling: %v", err)
+	}
+	if !strings.Contains(out, "https://stripe.example/portal") {
+		t.Errorf("expected portal URL in output, got: %q", out)
+	}
+}
