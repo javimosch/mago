@@ -411,3 +411,13 @@ func TestCmdTask_UnknownActionSuggests(t *testing.T) {
 		t.Errorf("expected suggestion, got: %v", err)
 	}
 }
+
+// TestCmdAnswer_MissingArgs verifies cmdAnswer rejects fewer than two positional args.
+func TestCmdAnswer_MissingArgs(t *testing.T) {
+	if err := cmdAnswer([]string{}); err == nil {
+		t.Fatal("expected error for missing args")
+	}
+	if err := cmdAnswer([]string{"1"}); err == nil {
+		t.Fatal("expected error for missing answer text")
+	}
+}
