@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -162,5 +163,42 @@ func TestClassifyEvent(t *testing.T) {
 				t.Errorf("target = %q, want %q", got.target, tt.wantTarget)
 			}
 		})
+	}
+}
+
+func TestSignal(t *testing.T) {
+	w := &eventWorker{wake: make(chan wakeEvent, 4)}
+
+	// Non-coalescable events always queue.
+	w.signal(wakeEvent{reason: "human comment on #1"})
+	if got := len(w.wake); got != 1 {
+		t.Fatalf("want 1 queued, got %d", got)
+	}
+
+	// Fill the channel to capacity.
+	for i := 0; i < 3; i++ {
+		w.signal(wakeEvent{reason: fmt.Sprintf("issue #%d", i)})
+	}
+	if got := len(w.wake); got != 4 {
+		t.Fatalf("want channel full at 4, got %d", got)
+	}
+
+	// One-shot events block on a full channel and are dropped.
+	w.signal(wakeEvent{reason: "dropped one-shot"})
+	if got := len(w.wake); got != 4 {
+		t.Errorf("one-shot should be dropped when full, got %d queued", got)
+	}
+
+	// Coalescable (heartbeat/proactive) events are dropped once the queue is half full.
+	w2 := &eventWorker{wake: make(chan wakeEvent, 4)}
+	w2.signal(wakeEvent{reason: "heartbeat", proactive: false})
+	w2.signal(wakeEvent{reason: "heartbeat", proactive: false})
+	w2.signal(wakeEvent{reason: "heartbeat", proactive: false})
+	if got := len(w2.wake); got != 3 {
+		t.Fatalf("want 3 heartbeats queued, got %d", got)
+	}
+	w2.signal(wakeEvent{reason: "heartbeat", proactive: false}) // > cap/2, should be dropped
+	if got := len(w2.wake); got != 3 {
+		t.Errorf("coalescable should be dropped past half full, got %d queued", got)
 	}
 }
