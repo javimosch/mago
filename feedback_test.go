@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -53,6 +54,33 @@ func TestGenFeedbackID(t *testing.T) {
 	id2 := genFeedbackID()
 	if len(id1) == 0 || id1 == id2 {
 		t.Errorf("genFeedbackID returned empty or duplicate: %q, %q", id1, id2)
+	}
+}
+
+// TestCmdFeedback_WhenOffline verifies the full `mago feedback` command is
+// best-effort: it prints a JSON ok response with stored/relayed zeroes when not
+// logged in and FEEDBACK_RELAY=off.
+func TestCmdFeedback_WhenOffline(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("FEEDBACK_RELAY", "off")
+
+	out := captureStdout(t, func() {
+		if err := cmdFeedback([]string{"this", "is", "a", "test"}); err != nil {
+			t.Fatalf("cmdFeedback: %v", err)
+		}
+	})
+	if !strings.Contains(out, `"ok":true`) {
+		t.Errorf("expected ok=true, got: %q", out)
+	}
+	if !strings.Contains(out, `"stored":0`) {
+		t.Errorf("expected stored=0 when not logged in, got: %q", out)
+	}
+	if !strings.Contains(out, `"relayed":0`) {
+		t.Errorf("expected relayed=0 with relay off, got: %q", out)
+	}
+	if !strings.Contains(out, `"id":"`) {
+		t.Errorf("expected id in output, got: %q", out)
 	}
 }
 
