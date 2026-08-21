@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -183,5 +184,18 @@ func TestRouteTask_NoImplementerFallsToFirstCandidate(t *testing.T) {
 	got := routeTask(cmo, task, []*Agent{cmo, hop})
 	if got == "" {
 		t.Error("should fall back to first candidate when no implementer")
+	}
+}
+
+// --- reconcileOnce ---
+
+func TestReconcileOnce_NoAgents(t *testing.T) {
+	c := newTestCompany(t)
+	_, err := reconcileOnce(c)
+	if err == nil {
+		t.Fatal("reconcileOnce with no agents should return an error")
+	}
+	if !strings.Contains(err.Error(), "no agents") {
+		t.Errorf("error should mention 'no agents', got: %v", err)
 	}
 }
