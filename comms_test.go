@@ -76,3 +76,21 @@ func TestMarketingAgentSkipsReviewerAndPlanner(t *testing.T) {
 		t.Fatalf("marketingAgent() = %v, want cmo", got)
 	}
 }
+
+func TestAgentCompleteClaude(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\": \"done\", \"is_error\": false, \"subtype\": \"\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	got, err := agentComplete(&Agent{Provider: "claude"}, "do the thing")
+	if err != nil {
+		t.Fatalf("agentComplete: %v", err)
+	}
+	if got != "done" {
+		t.Errorf("agentComplete = %q, want done", got)
+	}
+}

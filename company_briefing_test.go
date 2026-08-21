@@ -108,6 +108,42 @@ func TestOpenPRsText(t *testing.T) {
 	})
 }
 
+func TestBuildBriefingReviewer(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir, Name: "testco", ghRepo: "acme/web"}
+
+	// Direction files give the briefing its product-context section.
+	if err := os.WriteFile(filepath.Join(dir, "VISION.md"), []byte("## North star\nBuild.\n\n## Constraints\nNone.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ROADMAP.md"), []byte("## Now\nShip.\n\n## Out of scope\nOther.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := fakeGh(t, "echo '[]'")
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	got := c.buildBriefing(&Agent{Name: "critic", Title: "Reviewer", Reviews: true}, &Task{ID: "1", Title: "Fix it", Body: "do it", Status: "in_progress"})
+	for _, want := range []string{
+		"# BRIEFING",
+		"## Your role",
+		"## Active task #1: Fix it",
+		"status: in_progress",
+		"## Open PRs in acme/web",
+		"(none open)",
+		"## Product direction",
+		"## Project repo",
+		"You are REVIEWING",
+		"## Skills",
+		"## Your recent runs",
+		"## Instruction",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildBriefing missing %q:\n%s", want, got)
+		}
+	}
+}
+
 // fakeGh creates a temp directory containing an executable `gh` shell stub
 // with the supplied body and returns that directory.
 func fakeGh(t *testing.T, body string) string {
