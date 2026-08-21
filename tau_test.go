@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -114,5 +116,35 @@ func TestExtractFinalContent_Empty(t *testing.T) {
 	_, err := extractFinalContent(nil)
 	if err == nil {
 		t.Fatal("expected error for empty lines, got nil")
+	}
+}
+
+func TestEmitProgress(t *testing.T) {
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	t.Cleanup(func() {
+		os.Stderr = old
+		w.Close()
+	})
+
+	// Non-JSON and JSON without a "chunk" key produce no output.
+	emitProgress("not json")
+	emitProgress(`{"foo":"bar"}`)
+
+	// A "chunk" value is written straight to stderr.
+	emitProgress(`{"chunk":"hello"}`)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(out); got != "hello" {
+		t.Errorf("emitProgress wrote %q, want %q", got, "hello")
 	}
 }
