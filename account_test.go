@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -274,5 +275,39 @@ func TestCmdLogin(t *testing.T) {
 	}
 	if cfg.Token != "login-token" {
 		t.Errorf("Token = %q, want login-token", cfg.Token)
+	}
+}
+
+func TestCmdSubscribe(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/checkout" || r.Method != "POST" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"url": "https://stripe.example/checkout"})
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+	os.MkdirAll(filepath.Join(home, ".mago"), 0o755)
+	os.WriteFile(filepath.Join(home, ".mago", "config.json"), []byte(`{"token":"token"}`), 0o600)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = cmdSubscribe(nil)
+	})
+	if err != nil {
+		t.Fatalf("cmdSubscribe: %v", err)
+	}
+	if !strings.Contains(out, "https://stripe.example/checkout") {
+		t.Errorf("expected checkout URL in output, got: %q", out)
 	}
 }
