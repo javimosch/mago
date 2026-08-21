@@ -170,3 +170,55 @@ func TestSelectSkillsTextInjectsAll(t *testing.T) {
 		}
 	}
 }
+
+// TestLLMSelectSkills verifies the LLM skill selector using a fake tau binary.
+// It checks that the returned JSON array is filtered to known skills and capped at k.
+func TestLLMSelectSkills(t *testing.T) {
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	// tauComplete scans the last JSON line with a "content" field; the prompt
+	// itself is irrelevant for this unit test, so the fake just echoes the array.
+	body := "#!/bin/sh\necho '{\"content\":\"[\\\"skill-a\\\",\\\"skill-b\\\",\\\"unknown\\\"]\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	a := &Agent{Provider: "deepseek", Model: "deepseek-chat"}
+	entries := []skillEntry{
+		{name: "skill-a", hook: "hook a"},
+		{name: "skill-b", hook: "hook b"},
+	}
+
+	cases := []struct {
+		name string
+		k    int
+		want []string
+	}{
+		{
+			name: "filters unknown and caps at k",
+			k:    1,
+			want: []string{"skill-a"},
+		},
+		{
+			name: "returns multiple known up to k",
+			k:    2,
+			want: []string{"skill-a", "skill-b"},
+		},
+		{
+			name: "caps at k even when more returned",
+			k:    1,
+			want: []string{"skill-a"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := c.llmSelectSkills(a, &Task{Title: "task", Body: "body"}, entries, tc.k)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("llmSelectSkills(...) = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

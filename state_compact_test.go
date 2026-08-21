@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -277,5 +279,82 @@ func TestAppendToSection(t *testing.T) {
 	}
 	if !strings.Contains(s, "## Activity log\n- existing entry") {
 		t.Errorf("Activity log disturbed:\n%s", s)
+	}
+}
+
+// TestSynthesizeState exercises the LLM state-synthesis path with a fake tau binary.
+func TestSynthesizeState(t *testing.T) {
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	writeFakeTau := func(content string) {
+		// tauComplete returns the last JSON object with a non-empty "content" field.
+		// The content here is itself a JSON string that synthesizeState unmarshals.
+		body := fmt.Sprintf("#!/bin/sh\ncat <<'JSON'\n%s\nJSON\n", content)
+		if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+			t.Fatalf("write fake tau: %v", err)
+		}
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	base := &stateSections{
+		Mission:   "original mission",
+		Shipped:   "original shipped",
+		InFlight:  "original in flight",
+		Decisions: "original decisions",
+	}
+
+	cases := []struct {
+		name    string
+		content string
+		check   func(t *testing.T, got *stateSections)
+	}{
+		{
+			name:    "updates all sections",
+			content: `{"content":"{\"mission\":\"keep mission\",\"shipped\":\"- shipped A\",\"in_flight\":\"- in flight B\",\"decisions\":\"- decide C\"}"}`,
+			check: func(t *testing.T, got *stateSections) {
+				if got.Mission != "keep mission" {
+					t.Errorf("Mission = %q, want %q", got.Mission, "keep mission")
+				}
+				if got.Shipped != "- shipped A" {
+					t.Errorf("Shipped = %q, want %q", got.Shipped, "- shipped A")
+				}
+				if got.InFlight != "- in flight B" {
+					t.Errorf("InFlight = %q, want %q", got.InFlight, "- in flight B")
+				}
+				if got.Decisions != "- decide C" {
+					t.Errorf("Decisions = %q, want %q", got.Decisions, "- decide C")
+				}
+			},
+		},
+		{
+			name:    "falls back to base for empty fields",
+			content: `{"content":"{}"}`,
+			check: func(t *testing.T, got *stateSections) {
+				if got.Mission != "original mission" {
+					t.Errorf("Mission = %q, want %q", got.Mission, "original mission")
+				}
+				if got.Shipped != "original shipped" {
+					t.Errorf("Shipped = %q, want %q", got.Shipped, "original shipped")
+				}
+				if got.InFlight != "original in flight" {
+					t.Errorf("InFlight = %q, want %q", got.InFlight, "original in flight")
+				}
+				if got.Decisions != "original decisions" {
+					t.Errorf("Decisions = %q, want %q", got.Decisions, "original decisions")
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			writeFakeTau(tc.content)
+			got, err := c.synthesizeState(base, []string{"- 2024-01-01 [cto] did work"})
+			if err != nil {
+				t.Fatalf("synthesizeState: %v", err)
+			}
+			tc.check(t, got)
+		})
 	}
 }
