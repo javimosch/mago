@@ -1,9 +1,40 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 	"time"
 )
+
+func TestValidSignature(t *testing.T) {
+	secret := "shhh"
+	body := []byte("payload")
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	want := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	if !validSignature(secret, want, body) {
+		t.Errorf("validSignature(%q, %q, %q) = false, want true", secret, want, body)
+	}
+
+	// Wrong secret produces a different mac.
+	if validSignature("other", want, body) {
+		t.Errorf("validSignature with wrong secret should fail")
+	}
+
+	// Missing or malformed prefix is rejected.
+	if validSignature(secret, hex.EncodeToString(mac.Sum(nil)), body) {
+		t.Errorf("validSignature without sha256= prefix should fail")
+	}
+	if validSignature(secret, "sha1=deadbeef", body) {
+		t.Errorf("validSignature with sha1 prefix should fail")
+	}
+	if validSignature(secret, "", body) {
+		t.Errorf("validSignature with empty signature should fail")
+	}
+}
 
 func TestUntilDuration(t *testing.T) {
 	// Valid HH:MM → a duration in (0, 24h].
