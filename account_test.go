@@ -346,6 +346,74 @@ func TestCmdBilling(t *testing.T) {
 	}
 }
 
+func TestCmdRegister(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/auth/signup":
+			if r.Method != "POST" {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			var in map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if in["email"] != "dev@example.com" || in["password"] != "secret" {
+				http.Error(w, "bad creds", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"token": "register-token"})
+		case "/api/account":
+			if r.Method != "GET" {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			if r.Header.Get("Authorization") != "Bearer register-token" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(accountInfo{
+				Email:      "dev@example.com",
+				Plan:       "founding",
+				Active:     true,
+				Trial:      false,
+				TrialEnds:  0,
+				LicenseKey: "",
+			})
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = cmdRegister([]string{"--email", "dev@example.com", "--password", "secret"})
+	})
+	if err != nil {
+		t.Fatalf("cmdRegister: %v", err)
+	}
+	if !strings.Contains(out, "registered dev@example.com") {
+		t.Errorf("expected registration message, got: %q", out)
+	}
+
+	cfg := loadConfig()
+	if cfg.Email != "dev@example.com" {
+		t.Errorf("Email = %q, want dev@example.com", cfg.Email)
+	}
+	if cfg.Token != "register-token" {
+		t.Errorf("Token = %q, want register-token", cfg.Token)
+	}
+}
+
 func TestCmdAccountStatus(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
