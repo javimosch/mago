@@ -365,6 +365,39 @@ func TestCmdStatus_WithTask(t *testing.T) {
 	}
 }
 
+// TestCmdAnswer_RecordsResponse verifies the `mago answer` command appends the
+// human response to an existing task and flips its status to in_progress.
+func TestCmdAnswer_RecordsResponse(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+
+	if err := cmdTask([]string{"-C", c.Dir, "add", "answer", "this"}); err != nil {
+		t.Fatalf("cmdTask: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdAnswer([]string{"-C", c.Dir, "1", "the", "answer"}); err != nil {
+			t.Fatalf("cmdAnswer: %v", err)
+		}
+	})
+	if !strings.Contains(out, "answer recorded on task #1") {
+		t.Errorf("expected answer recorded, got: %q", out)
+	}
+
+	b, err := os.ReadFile(filepath.Join(c.Dir, "tasks", "task-1.md"))
+	if err != nil {
+		t.Fatalf("task file missing: %v", err)
+	}
+	content := string(b)
+	if !strings.Contains(content, "HUMAN ANSWER: the answer") {
+		t.Errorf("task body missing answer, got:\n%s", content)
+	}
+	if !strings.Contains(content, "status: in_progress") {
+		t.Errorf("task status not in_progress, got:\n%s", content)
+	}
+}
+
 func TestCmdTask_UnknownActionSuggests(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)

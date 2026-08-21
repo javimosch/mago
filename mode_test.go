@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -163,6 +164,57 @@ func TestApplyControl(t *testing.T) {
 	m = c.loadMode()
 	if m.Proactive != 1200 || !m.Comms || m.Merge != "verified" || m.Update != "auto" {
 		t.Errorf("rejected tokens should not overwrite mode: %+v", m)
+	}
+}
+
+// TestCmdMode_ShowAndSet verifies the local `mago mode` command displays the current
+// mode and persists changes after applying tokens.
+func TestCmdMode_ShowAndSet(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_NO_MERGE", "1")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_COMMS", "")
+	t.Setenv("MAGO_PROACTIVE", "")
+	t.Setenv("MAGO_PR_CAP", "")
+	t.Setenv("MAGO_ISSUE_CAP", "")
+	t.Setenv("MAGO_UPDATE", "")
+
+	out := captureStdout(t, func() {
+		if err := cmdMode([]string{"-C", c.Dir, "show"}); err != nil {
+			t.Fatalf("cmdMode show: %v", err)
+		}
+	})
+	if !strings.Contains(out, "proactive off (react") {
+		t.Errorf("show output missing default proactive: %q", out)
+	}
+	if !strings.Contains(out, "merge review") {
+		t.Errorf("show output missing default merge=review: %q", out)
+	}
+
+	out = captureStdout(t, func() {
+		if err := cmdMode([]string{"-C", c.Dir, "proactive=600", "comms=on", "merge=verified", "update=auto"}); err != nil {
+			t.Fatalf("cmdMode set: %v", err)
+		}
+	})
+	if !strings.Contains(out, "proactive every 600s") {
+		t.Errorf("set output missing proactive: %q", out)
+	}
+	if !strings.Contains(out, "comms on") {
+		t.Errorf("set output missing comms: %q", out)
+	}
+	if !strings.Contains(out, "merge verified") {
+		t.Errorf("set output missing merge: %q", out)
+	}
+	if !strings.Contains(out, "update auto") {
+		t.Errorf("set output missing update auto: %q", out)
+	}
+
+	m := c.loadMode()
+	if m.Proactive != 600 || !m.Comms || m.Merge != "verified" || m.Update != "auto" {
+		t.Errorf("persisted mode mismatch: %+v", m)
 	}
 }
 
