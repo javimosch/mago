@@ -61,6 +61,24 @@ func TestFileSHA12(t *testing.T) {
 	}
 }
 
+// TestSelfVersion verifies the running executable hash is returned as a
+// 12-character hex string and is cached across calls.
+func TestSelfVersion(t *testing.T) {
+	got := selfVersion()
+	if len(got) != 12 {
+		t.Fatalf("selfVersion() length = %d, want 12", len(got))
+	}
+	for i := 0; i < len(got); i++ {
+		c := got[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Fatalf("selfVersion() = %q, want lowercase hex", got)
+		}
+	}
+	if got2 := selfVersion(); got2 != got {
+		t.Fatalf("selfVersion() not cached: %q vs %q", got, got2)
+	}
+}
+
 // TestDownloadFile verifies the helper streams a 200 response to disk and
 // surfaces non-200 status codes as errors.
 func TestDownloadFile(t *testing.T) {

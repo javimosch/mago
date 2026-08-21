@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -364,4 +367,99 @@ func TestCheckClaudeAuth(t *testing.T) {
 			t.Errorf("hint should mention transient error, got %q", c.hint)
 		}
 	})
+}
+
+// TestCmdWorkerMode_Validation covers the input-validation paths before any platform call.
+func TestCmdWorkerMode_Validation(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"no tokens", []string{}, "usage: mago worker mode"},
+		{"no worker or --all", []string{"reactive"}, "specify --worker"},
+		{"unknown token", []string{"badmode", "--worker", "w1"}, "unknown mode token"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := cmdWorkerMode(c.args)
+			if err == nil {
+				t.Fatalf("cmdWorkerMode(%v) should fail", c.args)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("error %q should contain %q", err.Error(), c.want)
+			}
+		})
+	}
+}
+
+// TestCmdWorkerMode_NotLoggedIn verifies the command fails with a clear auth hint when no token is saved.
+func TestCmdWorkerMode_NotLoggedIn(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	err := cmdWorkerMode([]string{"reactive", "--worker", "w1"})
+	if err == nil {
+		t.Fatal("expected error without token")
+	}
+	if !strings.Contains(err.Error(), "not logged in") {
+		t.Errorf("error %q should mention 'not logged in'", err.Error())
+	}
+}
+
+// TestCmdWorkerMode_Success verifies the live mode push path, including stdout output.
+func TestCmdWorkerMode_Success(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/api/worker/control" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"updated": 2,
+			"workers": []string{"w1", "w2"},
+		})
+	}))
+	defer srv.Close()
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+	if err := os.MkdirAll(filepath.Join(home, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+	b, _ := json.Marshal(&cliConfig{Token: "token"})
+	if err := os.WriteFile(filepath.Join(home, ".mago", "config.json"), b, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdWorkerMode([]string{"reactive", "--worker", "w1"}); err != nil {
+			t.Errorf("cmdWorkerMode: %v", err)
+		}
+	})
+
+	if gotBody != nil {
+		if w, _ := gotBody["worker"].(string); w != "w1" {
+			t.Errorf("request worker = %q, want w1", w)
+		}
+		if all, _ := gotBody["all"].(bool); all {
+			t.Error("request all = true, want false")
+		}
+	}
+	if !strings.Contains(out, "mode pushed live to 2 worker(s)") {
+		t.Errorf("output missing success message:\n%s", out)
+	}
+	if !strings.Contains(out, "w1") || !strings.Contains(out, "w2") {
+		t.Errorf("output missing worker ids:\n%s", out)
+	}
 }
