@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -461,5 +462,31 @@ func TestCmdWorkerMode_Success(t *testing.T) {
 	}
 	if !strings.Contains(out, "w1") || !strings.Contains(out, "w2") {
 		t.Errorf("output missing worker ids:\n%s", out)
+	}
+}
+
+// TestWorkerDoctor_FailuresExit101 verifies that workerDoctor exits with code 101
+// (integration error per AGENTS.md) when any diagnostic check fails. Because
+// workerDoctor calls os.Exit, the test runs it in a subprocess so the main test
+// process isn't terminated.
+func TestWorkerDoctor_FailuresExit101(t *testing.T) {
+	if os.Getenv("MAGO_TEST_WORKER_DOCTOR_CHILD") == "1" {
+		t.Setenv("MAGO_PROVIDER", "")
+		t.Setenv("MAGO_GH_REPO", "")
+		t.Setenv("OPENCODE_API_KEY", "")
+		t.Setenv("PATH", t.TempDir())
+		workerDoctor()
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestWorkerDoctor_FailuresExit101")
+	cmd.Env = append(os.Environ(), "MAGO_TEST_WORKER_DOCTOR_CHILD=1")
+	err := cmd.Run()
+	exit, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("workerDoctor did not exit the process: %v", err)
+	}
+	if exit.ExitCode() != 101 {
+		t.Fatalf("workerDoctor exit code = %d, want 101", exit.ExitCode())
 	}
 }

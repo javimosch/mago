@@ -124,6 +124,22 @@ func TestWorkerStatus(t *testing.T) {
 	}
 }
 
+func TestWorkerStop_NoWorker(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+	t.Setenv("MAGO_GH_REPO", "")
+
+	err := workerStop(dir)
+	if err == nil {
+		t.Fatal("workerStop with no running worker should return an error")
+	}
+	if !strings.Contains(err.Error(), "no worker running") {
+		t.Errorf("error = %q, want 'no worker running'", err.Error())
+	}
+}
+
 func TestClassifyServeProc(t *testing.T) {
 	dir := "/root/co-am"
 	cases := []struct {
