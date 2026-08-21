@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -170,4 +172,77 @@ func TestPlannerAgent(t *testing.T) {
 	if got.Provider != "opencode-go" || got.Model != "gpt-4" {
 		t.Errorf("model override: got provider=%q model=%q, want opencode-go / gpt-4", got.Provider, got.Model)
 	}
+}
+
+// TestProposeBacklog exercises the planner's early-exit paths and a successful filing
+// cycle using a fake tau binary so the test runs without a real provider.
+func TestProposeBacklog(t *testing.T) {
+	t.Run("no focus", func(t *testing.T) {
+		c := newTestCompany(t)
+		c.tasks = &localBackend{c: c}
+		if got := c.proposeBacklog(); got != 0 {
+			t.Errorf("proposeBacklog() with no focus = %d, want 0", got)
+		}
+	})
+
+	t.Run("active at cap", func(t *testing.T) {
+		c := newTestCompany(t)
+		c.tasks = &localBackend{c: c}
+		mission := "# co\n\n## Mission\nShip things.\n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n"
+		if err := os.WriteFile(c.stateFile(), []byte(mission), 0o644); err != nil {
+			t.Fatalf("write state: %v", err)
+		}
+		for i := 0; i < 3; i++ {
+			if _, err := c.tasks.AddTask(fmt.Sprintf("active task %d", i), ""); err != nil {
+				t.Fatalf("add task: %v", err)
+			}
+		}
+		if got := c.proposeBacklog(); got != 0 {
+			t.Errorf("proposeBacklog() at cap = %d, want 0", got)
+		}
+	})
+
+	t.Run("no planner", func(t *testing.T) {
+		c := newTestCompany(t)
+		c.tasks = &localBackend{c: c}
+		mission := "# co\n\n## Mission\nShip things.\n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n"
+		if err := os.WriteFile(c.stateFile(), []byte(mission), 0o644); err != nil {
+			t.Fatalf("write state: %v", err)
+		}
+		if got := c.proposeBacklog(); got != 0 {
+			t.Errorf("proposeBacklog() with no planner = %d, want 0", got)
+		}
+	})
+
+	t.Run("proposes up to per-cycle cap", func(t *testing.T) {
+		bindir := t.TempDir()
+		script := filepath.Join(bindir, "tau")
+		// tauComplete returns the last JSON object with a "content" field.
+		// The content string uses JSON \n escapes, which Unmarshal turns into real newlines.
+		body := "#!/bin/sh\nprintf '%s\\n' '{\"content\":\"Implement the login flow\\nAdd password reset\"}'\n"
+		if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+			t.Fatalf("write fake tau: %v", err)
+		}
+		t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+		c := newTestCompany(t)
+		c.tasks = &localBackend{c: c}
+		mission := "# co\n\n## Mission\nShip a delightful CLI.\n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n"
+		if err := os.WriteFile(c.stateFile(), []byte(mission), 0o644); err != nil {
+			t.Fatalf("write state: %v", err)
+		}
+		writeAgentFile(t, c, "hop", "---\nname: hop\ntitle: Head of Product\nplans: true\nprovider: deepseek\n---\nYou plan.")
+
+		got := c.proposeBacklog()
+		if got != 2 {
+			t.Errorf("proposeBacklog() = %d, want 2", got)
+		}
+		ts, err := c.tasks.ListTasks()
+		if err != nil {
+			t.Fatalf("ListTasks: %v", err)
+		}
+		if len(ts) != 2 {
+			t.Errorf("filed %d tasks, want 2", len(ts))
+		}
+	})
 }
