@@ -346,6 +346,48 @@ func TestCmdBilling(t *testing.T) {
 	}
 }
 
+func TestCmdLinkListsInstallations(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/installations" || r.Method != "GET" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"installations": []map[string]any{
+				{"ID": int64(123), "GithubLogin": "acme", "Repos": []string{"acme/web"}},
+			},
+			"repos": []string{"acme/web"},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+	os.MkdirAll(filepath.Join(home, ".mago"), 0o755)
+	os.WriteFile(filepath.Join(home, ".mago", "config.json"), []byte(`{"token":"token"}`), 0o600)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = cmdLink(nil)
+	})
+	if err != nil {
+		t.Fatalf("cmdLink: %v", err)
+	}
+	if !strings.Contains(out, "installation 123") {
+		t.Errorf("expected installation id in output, got: %q", out)
+	}
+	if !strings.Contains(out, "acme/web") {
+		t.Errorf("expected repo in output, got: %q", out)
+	}
+}
+
 func TestCmdRegister(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
