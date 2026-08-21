@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"testing"
 	"time"
 )
@@ -55,5 +56,111 @@ func TestUntilDuration(t *testing.T) {
 		if _, err := untilDuration(bad); err == nil {
 			t.Errorf("untilDuration(%q) should error", bad)
 		}
+	}
+}
+
+func TestClassifyEvent(t *testing.T) {
+	// For labeled events, a custom task label can also wake the worker.
+	t.Setenv("MAGO_TASK_LABEL", "task")
+
+	tests := []struct {
+		name       string
+		event      string
+		body       string
+		wantOK     bool
+		wantReason string
+		wantTarget string
+	}{
+		{
+			name:       "issue opened",
+			event:      "issues",
+			body:       `{"action":"opened","issue":{"number":42}}`,
+			wantOK:     true,
+			wantReason: "issue #42 opened",
+		},
+		{
+			name:       "issue labeled with control label",
+			event:      "issues",
+			body:       `{"action":"labeled","issue":{"number":7},"label":{"name":"mago:go"}}`,
+			wantOK:     true,
+			wantReason: "issue #7 labeled mago:go",
+		},
+		{
+			name:   "issue labeled with ignored label",
+			event:  "issues",
+			body:   `{"action":"labeled","issue":{"number":7},"label":{"name":"nope"}}`,
+			wantOK: false,
+		},
+		{
+			name:       "issue labeled with custom task label",
+			event:      "issues",
+			body:       `{"action":"labeled","issue":{"number":8},"label":{"name":"task"}}`,
+			wantOK:     true,
+			wantReason: "issue #8 labeled task",
+		},
+		{
+			name:       "human comment wakes owner",
+			event:      "issue_comment",
+			body:       `{"action":"created","issue":{"number":3,"labels":[{"name":"agent:foo"}]},"comment":{"body":"hello"}}`,
+			wantOK:     true,
+			wantReason: "human comment on #3",
+			wantTarget: "foo",
+		},
+		{
+			name:   "mago comment is ignored",
+			event:  "issue_comment",
+			body:   `{"action":"created","issue":{"number":3},"comment":{"body":"🔧 fixed"}}`,
+			wantOK: false,
+		},
+		{
+			name:       "PR opened",
+			event:      "pull_request",
+			body:       `{"action":"opened","number":9,"pull_request":{"number":9,"title":"t","head":{"ref":"feature"}},"repository":{"full_name":"acme/corp"}}`,
+			wantOK:     true,
+			wantReason: "PR #9 opened",
+		},
+		{
+			name:   "PR closed but not merged",
+			event:  "pull_request",
+			body:   `{"action":"closed","pull_request":{"merged":false,"head":{"ref":"feature"}}}`,
+			wantOK: false,
+		},
+		{
+			name:       "PR merged on mago/task branch wakes comms",
+			event:      "pull_request",
+			body:       `{"action":"closed","pull_request":{"number":10,"title":"done","merged":true,"head":{"ref":"mago/task-1"}},"repository":{"full_name":"acme/corp"}}`,
+			wantOK:     true,
+			wantReason: "PR #10 merged",
+		},
+		{
+			name:   "unknown event",
+			event:  "fork",
+			body:   `{}`,
+			wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// default empty env so MAGO_TASK_LABEL does not leak across unrelated cases
+			if tt.name != "issue labeled with custom task label" {
+				os.Unsetenv("MAGO_TASK_LABEL")
+			} else {
+				os.Setenv("MAGO_TASK_LABEL", "task")
+			}
+			got, ok := classifyEvent(tt.event, []byte(tt.body))
+			if ok != tt.wantOK {
+				t.Fatalf("classifyEvent ok = %v, want %v", ok, tt.wantOK)
+			}
+			if !tt.wantOK {
+				return
+			}
+			if got.reason != tt.wantReason {
+				t.Errorf("reason = %q, want %q", got.reason, tt.wantReason)
+			}
+			if got.target != tt.wantTarget {
+				t.Errorf("target = %q, want %q", got.target, tt.wantTarget)
+			}
+		})
 	}
 }
