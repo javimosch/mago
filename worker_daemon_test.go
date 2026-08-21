@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -88,6 +89,38 @@ func TestStripArg(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestWorkerStatus(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+	t.Setenv("MAGO_GH_REPO", "")
+
+	// No pidfile: worker is stopped.
+	out := captureStdout(t, func() {
+		if err := workerStatus(dir); err != nil {
+			t.Fatalf("workerStatus stopped: %v", err)
+		}
+	})
+	if !strings.Contains(out, "stopped") {
+		t.Errorf("expected 'stopped', got: %q", out)
+	}
+
+	// Current process is alive.
+	pidFile := filepath.Join(dir, ".mago", "worker.pid")
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	out = captureStdout(t, func() {
+		if err := workerStatus(dir); err != nil {
+			t.Fatalf("workerStatus running: %v", err)
+		}
+	})
+	if !strings.Contains(out, "running") || !strings.Contains(out, "worker.log") {
+		t.Errorf("expected 'running' and log path, got: %q", out)
 	}
 }
 
