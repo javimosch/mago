@@ -345,3 +345,53 @@ func TestCmdBilling(t *testing.T) {
 		t.Errorf("expected portal URL in output, got: %q", out)
 	}
 }
+
+func TestCmdAccountStatus(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/account" || r.Method != "GET" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(accountInfo{
+			Email:      "dev@example.com",
+			Plan:       "founding",
+			Active:     true,
+			Trial:      true,
+			TrialEnds:  time.Now().Add(time.Hour).Unix(),
+			LicenseKey: "license-123",
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+	os.MkdirAll(filepath.Join(home, ".mago"), 0o755)
+	os.WriteFile(filepath.Join(home, ".mago", "config.json"), []byte(`{"token":"token"}`), 0o600)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = cmdAccount([]string{"status"})
+	})
+	if err != nil {
+		t.Fatalf("cmdAccount: %v", err)
+	}
+	if !strings.Contains(out, "dev@example.com") {
+		t.Errorf("expected email in output, got: %q", out)
+	}
+	if !strings.Contains(out, "founding") {
+		t.Errorf("expected plan in output, got: %q", out)
+	}
+	if !strings.Contains(out, "active") {
+		t.Errorf("expected active status in output, got: %q", out)
+	}
+	if !strings.Contains(out, "license-123") {
+		t.Errorf("expected license in output, got: %q", out)
+	}
+}
