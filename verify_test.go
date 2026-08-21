@@ -45,6 +45,21 @@ func TestRunShell(t *testing.T) {
 	}
 }
 
+func TestVerifyPR_Disabled(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	c := &Company{Dir: dir, Name: "t"}
+
+	res := c.verifyPR("owner/repo", 1)
+	if res.ran || res.ok || res.detail != "" {
+		t.Errorf("verifyPR disabled = %+v, want zero verifyResult", res)
+	}
+}
+
 func TestVerifyEnabled(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
