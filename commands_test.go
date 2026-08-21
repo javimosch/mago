@@ -313,6 +313,20 @@ func TestCmdProject_AddShorthandOwnerRepo(t *testing.T) {
 	}
 }
 
+func TestCmdProject_UnknownActionSuggests(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	err := cmdProject([]string{"-C", dir, "ad"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if !strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("expected suggestion, got: %v", err)
+	}
+}
+
 func TestCmdProject_MissingArgs(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
