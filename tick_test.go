@@ -176,3 +176,30 @@ func TestRecoverReflection_Success(t *testing.T) {
 		t.Errorf("summary = %q, want ok", got.Summary)
 	}
 }
+
+// TestCmdRun_MissingArgs verifies cmdRun surfaces usage when no agent is given.
+func TestCmdRun_MissingArgs(t *testing.T) {
+	err := cmdRun([]string{})
+	if err == nil {
+		t.Fatal("cmdRun with no args should error")
+	}
+	if !strings.Contains(err.Error(), "usage") {
+		t.Errorf("error = %q, want usage message", err.Error())
+	}
+}
+
+// TestCmdRun_Idle verifies cmdRun prints the idle message when no task is ready.
+func TestCmdRun_Idle(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\n---\n")
+
+	out := captureStdout(t, func() {
+		if err := cmdRun([]string{"-C", c.Dir, "dev"}); err != nil {
+			t.Fatalf("cmdRun error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "no actionable tasks") {
+		t.Errorf("output = %q, want idle message", out)
+	}
+}
