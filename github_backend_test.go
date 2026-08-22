@@ -324,3 +324,95 @@ func TestGithubBackendAddTask(t *testing.T) {
 		t.Errorf("Status = %q, want open", task.Status)
 	}
 }
+
+func TestGhWrapperPassesToken(t *testing.T) {
+	fake := fakeGh(t, `if [ "$1" = "issue" ] && [ "$2" = "list" ]; then
+		echo "GH_TOKEN=${GH_TOKEN}"
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_GH_TOKEN", "tok_123")
+
+	out, err := gh("issue", "list")
+	if err != nil {
+		t.Fatalf("gh: %v", err)
+	}
+	if !strings.Contains(out, "GH_TOKEN=tok_123") {
+		t.Errorf("gh did not pass GH_TOKEN; got %q", out)
+	}
+}
+
+func TestGhWrapperNonAuthError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+		echo "network timeout" >&2
+		exit 1
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	_, err := gh("issue", "view", "1")
+	if err == nil {
+		t.Fatal("expected error from gh")
+	}
+	want := "gh issue view 1: network timeout"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestGithubBackendSetStatus(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ]; then
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	cases := []struct {
+		status string
+		want   string
+	}{
+		{"done", "done"},
+		{"blocked", "blocked"},
+		{"in_progress", "in_progress"},
+		{"anything", "in_progress"},
+	}
+	for _, c := range cases {
+		t.Run(c.status, func(t *testing.T) {
+			task := &Task{ID: "7", Status: "open"}
+			if err := b.SetStatus(task, c.status); err != nil {
+				t.Fatalf("SetStatus(%q): %v", c.status, err)
+			}
+			if task.Status != c.want {
+				t.Errorf("status = %q, want %q", task.Status, c.want)
+			}
+		})
+	}
+}
+
+func TestGithubBackendRecordProgress(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "comment" ]; then
+		printf '%s' "$7" > "$0.body"
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task := &Task{ID: "7"}
+	if err := b.RecordProgress(task, "cto", "made progress"); err != nil {
+		t.Fatalf("RecordProgress: %v", err)
+	}
+	body, err := os.ReadFile(fake + "/gh.body")
+	if err != nil {
+		t.Fatalf("reading recorded body: %v", err)
+	}
+	got := string(body)
+	if !strings.Contains(got, "**cto** _(mago agent)_") || !strings.Contains(got, "made progress") {
+		t.Errorf("comment body missing expected text: %q", got)
+	}
+}
