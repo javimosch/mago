@@ -154,3 +154,17 @@ func TestGithubBackendListTasks(t *testing.T) {
 		t.Errorf("Project = %q, want supercli", task.Project)
 	}
 }
+
+func TestGithubBackendListTasksMalformed(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then echo "not json"; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	_, err := b.ListTasks()
+	if err == nil {
+		t.Fatalf("expected error for malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "parse issue list") {
+		t.Errorf("error %q does not mention parse issue list", err.Error())
+	}
+}
