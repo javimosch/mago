@@ -119,3 +119,38 @@ func TestDownloadFile_ConnectionError(t *testing.T) {
 		t.Error("downloadFile should surface a connection error")
 	}
 }
+
+// TestMaybeSelfUpdate verifies the nudge logic in manual mode: same or empty
+// versions are ignored, a new version records the nudge, and repeated calls
+// for the same version do not nudge again.
+func TestMaybeSelfUpdate(t *testing.T) {
+	lastNudgeVer = ""
+	t.Setenv("MAGO_WORKER_ID", "test-worker")
+	t.Setenv("MAGO_UPDATE", "")
+
+	w := &eventWorker{comp: &Company{Dir: t.TempDir()}}
+
+	// Same as running binary -> no nudge.
+	w.maybeSelfUpdate(selfVersion())
+	if lastNudgeVer != "" {
+		t.Errorf("same version should not nudge, lastNudgeVer=%q", lastNudgeVer)
+	}
+
+	// Empty version -> no nudge.
+	w.maybeSelfUpdate("")
+	if lastNudgeVer != "" {
+		t.Errorf("empty version should not nudge, lastNudgeVer=%q", lastNudgeVer)
+	}
+
+	// New version in manual mode -> nudge and record it.
+	w.maybeSelfUpdate("new-ver")
+	if lastNudgeVer != "new-ver" {
+		t.Errorf("lastNudgeVer = %q, want new-ver", lastNudgeVer)
+	}
+
+	// Repeated same version -> no double nudge.
+	w.maybeSelfUpdate("new-ver")
+	if lastNudgeVer != "new-ver" {
+		t.Errorf("lastNudgeVer changed unexpectedly to %q", lastNudgeVer)
+	}
+}

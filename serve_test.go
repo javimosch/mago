@@ -230,3 +230,34 @@ func TestHandleWebhook_NoSecret(t *testing.T) {
 		t.Errorf("reason = %q, want %q", ev.reason, "issue #42 opened")
 	}
 }
+
+// TestCmdServe_StatusStopped verifies cmdServe "status" prints "stopped" when
+// no worker is running for the company.
+func TestCmdServe_StatusStopped(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+
+	out := captureStdout(t, func() {
+		if err := cmdServe([]string{"-C", c.Dir, "status"}); err != nil {
+			t.Fatalf("cmdServe status: %v", err)
+		}
+	})
+	if !strings.Contains(out, "stopped") {
+		t.Errorf("output = %q, want 'stopped'", out)
+	}
+}
+
+// TestCmdServe_StopNoWorker verifies cmdServe "stop" errors cleanly when no
+// worker is running for the company.
+func TestCmdServe_StopNoWorker(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+
+	err := cmdServe([]string{"-C", c.Dir, "stop"})
+	if err == nil {
+		t.Fatal("cmdServe stop with no worker should error")
+	}
+	if !strings.Contains(err.Error(), "no worker running") {
+		t.Errorf("error = %q, want 'no worker running'", err.Error())
+	}
+}

@@ -140,3 +140,15 @@ func TestDriveLoop_ErrorBacksOff(t *testing.T) {
 		t.Fatalf("interval sequence = %v, want %v", intervals, want)
 	}
 }
+
+// cmdLoop wires parseLoopArgs, loadCompany, and driveLoop together. A zero-base,
+// single-tick run with an agent exercises the agent branch without real sleep.
+func TestCmdLoop_AgentTick(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\n---\n")
+
+	if err := cmdLoop([]string{"-C", c.Dir, "dev", "--base", "0", "--max-ticks", "1"}); err != nil {
+		t.Fatalf("cmdLoop error: %v", err)
+	}
+}
