@@ -5,7 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -200,5 +203,30 @@ func TestSignal(t *testing.T) {
 	w2.signal(wakeEvent{reason: "heartbeat", proactive: false}) // > cap/2, should be dropped
 	if got := len(w2.wake); got != 3 {
 		t.Errorf("coalescable should be dropped past half full, got %d queued", got)
+	}
+}
+
+func TestHandleWebhook_NoSecret(t *testing.T) {
+	w := &eventWorker{wake: make(chan wakeEvent, 4)}
+	h := w.handleWebhook("")
+
+	body := `{"action":"opened","issue":{"number":42}}`
+	req := httptest.NewRequest("POST", "/webhook/github", strings.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "issues")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if !strings.Contains(rr.Body.String(), "wake=true") {
+		t.Errorf("response = %q, want wake=true", rr.Body.String())
+	}
+	if len(w.wake) != 1 {
+		t.Fatalf("want 1 queued wake, got %d", len(w.wake))
+	}
+	ev := <-w.wake
+	if ev.reason != "issue #42 opened" {
+		t.Errorf("reason = %q, want %q", ev.reason, "issue #42 opened")
 	}
 }
