@@ -141,6 +141,24 @@ func TestCheckClaudeOnPath_Label(t *testing.T) {
 	}
 }
 
+// TestCheckClaudeOnPath_Present verifies the success path when claude is on PATH.
+func TestCheckClaudeOnPath_Present(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	c := checkClaudeOnPath()
+	if !c.ok {
+		t.Errorf("claude on PATH should pass, got hint: %s", c.hint)
+	}
+	if !strings.Contains(c.label, "claude") {
+		t.Errorf("checkClaudeOnPath: label should mention claude, got %q", c.label)
+	}
+}
+
 // TestCheckTau_Label verifies the tau label is always set regardless of PATH.
 func TestCheckTau_Label(t *testing.T) {
 	c := checkTau()
