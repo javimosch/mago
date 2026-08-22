@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -155,6 +156,27 @@ func TestDebriJSONResult_Garbled(t *testing.T) {
 	_, err := debriJSONResult([]byte("not json at all"))
 	if err == nil {
 		t.Fatal("expected an error for unparseable output, got nil")
+	}
+}
+
+func TestRunDebri(t *testing.T) {
+	tmp := t.TempDir()
+	debriBin := filepath.Join(tmp, "debri")
+	body := `#!/bin/sh
+printf '%s\n' '{"event":"init","status":"ok"}' '{"event":"done","content":"hello from debri","elapsed_ms":1}'
+`
+	if err := os.WriteFile(debriBin, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake debri: %v", err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	workspace := t.TempDir()
+	got, err := runDebri(workspace, &Agent{}, "system prompt", "user prompt")
+	if err != nil {
+		t.Fatalf("runDebri error: %v", err)
+	}
+	if got != "hello from debri" {
+		t.Errorf("runDebri = %q, want %q", got, "hello from debri")
 	}
 }
 
