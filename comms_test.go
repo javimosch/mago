@@ -66,6 +66,28 @@ func TestShipReleaseNoteNoCMO(t *testing.T) {
 	}
 }
 
+// TestShipReleaseNote_Posts verifies the CMO can draft a release note and the comment is
+// posted on the merged PR when both the harness and gh succeed.
+func TestShipReleaseNote_Posts(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\":\"Shipped a thing\",\"is_error\":false,\"subtype\":\"\"}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	dir := t.TempDir()
+	writeAgent(t, dir, "cmo", "---\nname: cmo\ntitle: Chief Marketing Officer\nprovider: claude\n---\n")
+	c := &Company{Dir: dir}
+	if !c.shipReleaseNote("owner/repo", 42, "a title") {
+		t.Fatal("shipReleaseNote(...) = false, want true")
+	}
+}
+
 func TestMarketingAgentSkipsReviewerAndPlanner(t *testing.T) {
 	dir := t.TempDir()
 	writeAgent(t, dir, "critic", "---\nname: critic\nreviews: true\nplans: true\n---\n")
