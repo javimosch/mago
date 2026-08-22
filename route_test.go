@@ -199,3 +199,15 @@ func TestReconcileOnce_NoAgents(t *testing.T) {
 		t.Errorf("error should mention 'no agents', got: %v", err)
 	}
 }
+
+func TestCmdTick_NoAgents(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	err := cmdTick([]string{"-C", c.Dir})
+	if err == nil {
+		t.Fatal("cmdTick with no agents should return an error")
+	}
+	if !strings.Contains(err.Error(), "no agents") {
+		t.Errorf("error should mention 'no agents', got: %v", err)
+	}
+}
