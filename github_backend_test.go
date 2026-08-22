@@ -168,3 +168,68 @@ func TestGithubBackendListTasksMalformed(t *testing.T) {
 		t.Errorf("error %q does not mention parse issue list", err.Error())
 	}
 }
+
+func TestRepoOpenMagoPRs(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "pr" ] && [ "$4" = "list" ] && [ "${10}" = "headRefName" ]; then
+		echo '[{"headRefName":"mago/task-1"},{"headRefName":"feature/x"},{"headRefName":"mago/task-2"}]'
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	if got := repoOpenMagoPRs("acme/web"); got != 2 {
+		t.Errorf("repoOpenMagoPRs counted %d mago/ PRs, want 2", got)
+	}
+}
+
+func TestRepoOpenMagoPRs_Failure(t *testing.T) {
+	fake := fakeGh(t, `exit 1`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	if got := repoOpenMagoPRs("acme/web"); got != -1 {
+		t.Errorf("repoOpenMagoPRs on gh failure = %d, want -1", got)
+	}
+}
+
+func TestRepoOpenMagoPRs_MalformedJSON(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "pr" ] && [ "$4" = "list" ]; then echo "not json"; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	if got := repoOpenMagoPRs("acme/web"); got != -1 {
+		t.Errorf("repoOpenMagoPRs on malformed JSON = %d, want -1", got)
+	}
+}
+
+func TestPrShippedForTask(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "pr" ] && [ "$4" = "list" ] && [ "$6" = "mago/task-123" ]; then
+		echo '[{"number":5}]'
+	else
+		echo '[]'
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	if !prShippedForTask("acme/web", "123") {
+		t.Error("prShippedForTask should report shipped for existing PR")
+	}
+	if prShippedForTask("acme/web", "999") {
+		t.Error("prShippedForTask should report not shipped for missing PR")
+	}
+}
+
+func TestPrShippedForTask_Failure(t *testing.T) {
+	fake := fakeGh(t, `exit 1`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	if !prShippedForTask("acme/web", "123") {
+		t.Error("prShippedForTask should fail open on gh error")
+	}
+}
+
+func TestPrShippedForTask_MalformedJSON(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "pr" ] && [ "$4" = "list" ]; then echo "not json"; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	if !prShippedForTask("acme/web", "123") {
+		t.Error("prShippedForTask should fail open on malformed JSON")
+	}
+}
