@@ -295,3 +295,32 @@ func TestGithubBackendPendingHITL(t *testing.T) {
 		t.Errorf("PendingHITL = %v, want [#5 blocked on you]", got)
 	}
 }
+
+func TestGithubBackendAddTask(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "label" ]; then
+		exit 0
+	elif [ "$3" = "issue" ] && [ "$4" = "create" ]; then
+		echo "https://github.com/acme/web/issues/9"
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task, err := b.AddTask("new task", "supercli")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if task.ID != "9" {
+		t.Errorf("ID = %q, want 9", task.ID)
+	}
+	if task.Title != "new task" {
+		t.Errorf("Title = %q, want new task", task.Title)
+	}
+	if task.Project != "supercli" {
+		t.Errorf("Project = %q, want supercli", task.Project)
+	}
+	if task.Status != "open" {
+		t.Errorf("Status = %q, want open", task.Status)
+	}
+}
