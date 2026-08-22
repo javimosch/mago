@@ -110,3 +110,12 @@ func TestDownloadFile(t *testing.T) {
 		t.Error("downloadFile(404) should return an error")
 	}
 }
+
+// TestDownloadFile_ConnectionError verifies that a completely unreachable
+// platform URL is reported as an error rather than being swallowed.
+func TestDownloadFile_ConnectionError(t *testing.T) {
+	dir := t.TempDir()
+	if err := downloadFile("http://127.0.0.1:1/nope", filepath.Join(dir, "nope")); err == nil {
+		t.Error("downloadFile should surface a connection error")
+	}
+}
