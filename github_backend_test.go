@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -121,5 +122,35 @@ func TestGhIssueEmptyLabels(t *testing.T) {
 	}
 	if gi.project() != "" {
 		t.Errorf("project() = %q, want empty", gi.project())
+	}
+}
+
+func TestGithubBackendListTasks(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then echo '[{"number":42,"title":"ship it","state":"open","labels":[{"name":"mago:in-progress"},{"name":"agent:cto"},{"name":"project:supercli"}]}]'; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	tasks, err := b.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("got %d tasks, want 1", len(tasks))
+	}
+	task := tasks[0]
+	if task.ID != "42" {
+		t.Errorf("ID = %q, want 42", task.ID)
+	}
+	if task.Title != "ship it" {
+		t.Errorf("Title = %q, want ship it", task.Title)
+	}
+	if task.Status != "in_progress" {
+		t.Errorf("Status = %q, want in_progress", task.Status)
+	}
+	if task.Assignee != "cto" {
+		t.Errorf("Assignee = %q, want cto", task.Assignee)
+	}
+	if task.Project != "supercli" {
+		t.Errorf("Project = %q, want supercli", task.Project)
 	}
 }
