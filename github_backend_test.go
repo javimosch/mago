@@ -233,3 +233,94 @@ func TestPrShippedForTask_MalformedJSON(t *testing.T) {
 		t.Error("prShippedForTask should fail open on malformed JSON")
 	}
 }
+
+func TestGithubBackendFindTask(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "view" ]; then
+		echo '{"number":7,"title":"find me","state":"open","body":"body","labels":[{"name":"agent:dev"},{"name":"project:web"}],"comments":[{"author":{"login":"qa"},"body":"ok"}]}'
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task, err := b.FindTask("7")
+	if err != nil {
+		t.Fatalf("FindTask: %v", err)
+	}
+	if task.ID != "7" {
+		t.Errorf("ID = %q, want 7", task.ID)
+	}
+	if task.Title != "find me" {
+		t.Errorf("Title = %q, want find me", task.Title)
+	}
+	if task.Assignee != "dev" {
+		t.Errorf("Assignee = %q, want dev", task.Assignee)
+	}
+	if task.Project != "web" {
+		t.Errorf("Project = %q, want web", task.Project)
+	}
+	if !strings.Contains(task.Body, "### qa") || !strings.Contains(task.Body, "ok") {
+		t.Errorf("Body missing expected comment text: %q", task.Body)
+	}
+}
+
+func TestGithubBackendViewIssueMalformed(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "view" ]; then echo "not json"; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	_, err := b.viewIssue("8")
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "parse issue 8") {
+		t.Errorf("error %q does not mention parse issue 8", err.Error())
+	}
+}
+
+func TestGithubBackendPendingHITL(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo '[{"number":5,"title":"blocked on you","state":"open","labels":[{"name":"mago:hitl"}]}]'
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	got, err := b.PendingHITL()
+	if err != nil {
+		t.Fatalf("PendingHITL: %v", err)
+	}
+	if len(got) != 1 || got[0] != "#5 blocked on you" {
+		t.Errorf("PendingHITL = %v, want [#5 blocked on you]", got)
+	}
+}
+
+func TestGithubBackendAddTask(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "label" ]; then
+		exit 0
+	elif [ "$3" = "issue" ] && [ "$4" = "create" ]; then
+		echo "https://github.com/acme/web/issues/9"
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task, err := b.AddTask("new task", "supercli")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if task.ID != "9" {
+		t.Errorf("ID = %q, want 9", task.ID)
+	}
+	if task.Title != "new task" {
+		t.Errorf("Title = %q, want new task", task.Title)
+	}
+	if task.Project != "supercli" {
+		t.Errorf("Project = %q, want supercli", task.Project)
+	}
+	if task.Status != "open" {
+		t.Errorf("Status = %q, want open", task.Status)
+	}
+}
