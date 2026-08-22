@@ -435,3 +435,15 @@ func TestCmdAnswer_MissingArgs(t *testing.T) {
 		t.Fatal("expected error for missing answer text")
 	}
 }
+
+// TestCmdAnswer_TaskNotFound verifies cmdAnswer surfaces the backend's "not found"
+// error instead of silently succeeding or crashing.
+func TestCmdAnswer_TaskNotFound(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+
+	if err := cmdAnswer([]string{"-C", c.Dir, "99", "nope"}); err == nil {
+		t.Fatal("expected error for missing task")
+	}
+}

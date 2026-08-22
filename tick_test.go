@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -142,4 +143,36 @@ func TestWarnIfNoProviderKey(t *testing.T) {
 			t.Errorf("flash model stderr = %q, want flash warning", out)
 		}
 	})
+}
+
+// TestRecoverReflection_Success verifies the reflection-recovery path can ask the
+// harness for a clean reflection and parse it when the original output was malformed.
+func TestRecoverReflection_Success(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+
+	// claude --output-format json emits a JSON result whose "result" string is itself
+	// a valid reflection JSON object.
+	reflection := `{"summary":"ok","task_status":"done","next":"","cadence_signal":"idle"}`
+	escaped := strings.ReplaceAll(reflection, `"`, `\"`)
+	body := fmt.Sprintf(`#!/bin/sh
+	cat >/dev/null 2>/dev/null
+	echo '{"result": "%s", "is_error": false, "subtype": ""}'
+`, escaped)
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	c := &Company{Dir: t.TempDir(), Name: "co"}
+	task := &Task{ID: "1", Title: "fix it"}
+	ws := t.TempDir()
+
+	got := c.recoverReflection(&Agent{Provider: "claude"}, task, ws)
+	if got == nil {
+		t.Fatal("recoverReflection returned nil, want a reflection")
+	}
+	if got.Summary != "ok" {
+		t.Errorf("summary = %q, want ok", got.Summary)
+	}
 }
