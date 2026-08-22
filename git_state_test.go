@@ -139,3 +139,31 @@ func TestEnsureStateRepoPreservesLocalMissionOverStaleRemote(t *testing.T) {
 		t.Fatalf("expected stale remote mission to be overwritten, got:\n%s", got)
 	}
 }
+
+func TestDefaultBranch(t *testing.T) {
+	bin := t.TempDir()
+	gh := filepath.Join(bin, "gh")
+	body := "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  echo 'trunk'\nelse\n  exit 1\nfi\n"
+	if err := os.WriteFile(gh, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	if got := defaultBranch("owner/repo"); got != "trunk" {
+		t.Errorf("defaultBranch = %q, want trunk", got)
+	}
+}
+
+func TestDefaultBranch_Fallback(t *testing.T) {
+	bin := t.TempDir()
+	gh := filepath.Join(bin, "gh")
+	// Always fail, simulating an unauthenticated or missing gh.
+	if err := os.WriteFile(gh, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	if got := defaultBranch("owner/repo"); got != "main" {
+		t.Errorf("defaultBranch = %q, want main fallback", got)
+	}
+}
