@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -146,5 +147,24 @@ func TestEmitProgress(t *testing.T) {
 	}
 	if got := string(out); got != "hello" {
 		t.Errorf("emitProgress wrote %q, want %q", got, "hello")
+	}
+}
+
+func TestRunTau(t *testing.T) {
+	dir := t.TempDir()
+	tauBin := filepath.Join(dir, "tau")
+	body := "#!/bin/sh\necho '{\"content\": \"reflection\", \"done\": true}'\n"
+	if err := os.WriteFile(tauBin, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	workspace := t.TempDir()
+	got, err := runTau(workspace, &Agent{Provider: "opencode", Model: "qwen2.5"}, "system prompt", "user prompt")
+	if err != nil {
+		t.Fatalf("runTau: %v", err)
+	}
+	if got != "reflection" {
+		t.Errorf("runTau = %q, want reflection", got)
 	}
 }

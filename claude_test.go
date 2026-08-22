@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -70,5 +72,24 @@ func TestWithClaudeRetry(t *testing.T) {
 	})
 	if err == nil || n != 1 {
 		t.Errorf("non-transient should not retry: n=%d err=%v", n, err)
+	}
+}
+
+func TestRunClaude(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\": \"done\", \"is_error\": false, \"subtype\": \"\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	workspace := t.TempDir()
+	got, err := runClaude(workspace, &Agent{}, "system prompt", "user prompt")
+	if err != nil {
+		t.Fatalf("runClaude: %v", err)
+	}
+	if got != "done" {
+		t.Errorf("runClaude = %q, want done", got)
 	}
 }
