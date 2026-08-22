@@ -143,3 +143,69 @@ func TestWarnIfNoProviderKey(t *testing.T) {
 		}
 	})
 }
+
+// installFakeTau writes a shell script named "tau" into a temp dir and prepends that
+// dir to PATH so tauComplete/recoverReflection can be exercised without a real tau.
+func installFakeTau(t *testing.T, output string) {
+	t.Helper()
+	dir := t.TempDir()
+	script := filepath.Join(dir, "tau")
+	body := "#!/bin/sh\nprintf '%s\\n' '" + output + "'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestRecoverReflection_Success(t *testing.T) {
+	c := newTestCompany(t)
+	a := &Agent{Provider: "tau", Model: "test"}
+	task := &Task{ID: "1", Title: "test task"}
+	ws := t.TempDir()
+
+	output := `{"content": "{\"summary\":\"recovered summary\",\"state_delta\":\"\",\"task_status\":\"in_progress\",\"next\":\"continue\",\"cadence_signal\":\"working\"}"}`
+	installFakeTau(t, output)
+
+	r := c.recoverReflection(a, task, ws)
+	if r == nil {
+		t.Fatal("recoverReflection should return a reflection on valid output")
+	}
+	if r.Summary != "recovered summary" {
+		t.Errorf("summary = %q, want %q", r.Summary, "recovered summary")
+	}
+	if r.TaskStatus != "in_progress" {
+		t.Errorf("task_status = %q, want in_progress", r.TaskStatus)
+	}
+}
+
+func TestRecoverReflection_ParseFailure(t *testing.T) {
+	c := newTestCompany(t)
+	a := &Agent{Provider: "tau", Model: "test"}
+	task := &Task{ID: "2", Title: "test task"}
+	ws := t.TempDir()
+
+	// tau returns prose with no parseable reflection JSON.
+	installFakeTau(t, `{"content": "not a reflection"}`)
+
+	r := c.recoverReflection(a, task, ws)
+	if r != nil {
+		t.Errorf("recoverReflection should return nil for unparseable content, got %+v", r)
+	}
+}
+
+func TestRecoverReflection_SelfHealHook(t *testing.T) {
+	c := newTestCompany(t)
+	a := &Agent{Provider: "tau", Model: "test"}
+	task := &Task{ID: "3", Title: "test task"}
+	ws := t.TempDir()
+
+	// Even if the fake tau would produce a valid reflection, the forced-failure hook
+	// short-circuits the recovery so runTick falls through to the self-heal path.
+	t.Setenv("MAGO_TEST_BAD_REFLECTION", "2")
+	installFakeTau(t, `{"content": "{\"summary\":\"ignored\"}"}`)
+
+	r := c.recoverReflection(a, task, ws)
+	if r != nil {
+		t.Errorf("MAGO_TEST_BAD_REFLECTION=2 should force nil, got %+v", r)
+	}
+}
