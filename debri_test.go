@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -174,5 +175,27 @@ func TestWriteDebriPromptFile(t *testing.T) {
 	cleanup()
 	if _, err := os.ReadFile(path); err == nil {
 		t.Error("cleanup should have removed the temp file")
+	}
+}
+
+// TestRunDebri_Success exercises the full tick path with a fake debri binary on PATH.
+// A v1.1.0+ debri emits NDJSON and reports a done event; runDebri should return the
+// done content without error.
+func TestRunDebri_Success(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "debri")
+	body := "#!/bin/sh\necho '{\"event\":\"done\",\"content\":\"reflection result\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	a := &Agent{Model: "SWE-1.6"}
+	got, err := runDebri(t.TempDir(), a, "system prompt", "user prompt")
+	if err != nil {
+		t.Fatalf("runDebri: unexpected error: %v", err)
+	}
+	if got != "reflection result" {
+		t.Errorf("got %q, want %q", got, "reflection result")
 	}
 }
