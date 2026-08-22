@@ -233,3 +233,47 @@ func TestPrShippedForTask_MalformedJSON(t *testing.T) {
 		t.Error("prShippedForTask should fail open on malformed JSON")
 	}
 }
+
+func TestGithubBackendFindTask(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "view" ]; then
+		echo '{"number":7,"title":"find me","state":"open","body":"body","labels":[{"name":"agent:dev"},{"name":"project:web"}],"comments":[{"author":{"login":"qa"},"body":"ok"}]}'
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task, err := b.FindTask("7")
+	if err != nil {
+		t.Fatalf("FindTask: %v", err)
+	}
+	if task.ID != "7" {
+		t.Errorf("ID = %q, want 7", task.ID)
+	}
+	if task.Title != "find me" {
+		t.Errorf("Title = %q, want find me", task.Title)
+	}
+	if task.Assignee != "dev" {
+		t.Errorf("Assignee = %q, want dev", task.Assignee)
+	}
+	if task.Project != "web" {
+		t.Errorf("Project = %q, want web", task.Project)
+	}
+	if !strings.Contains(task.Body, "### qa") || !strings.Contains(task.Body, "ok") {
+		t.Errorf("Body missing expected comment text: %q", task.Body)
+	}
+}
+
+func TestGithubBackendViewIssueMalformed(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "view" ]; then echo "not json"; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	_, err := b.viewIssue("8")
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "parse issue 8") {
+		t.Errorf("error %q does not mention parse issue 8", err.Error())
+	}
+}
