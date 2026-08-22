@@ -392,3 +392,27 @@ func TestGithubBackendSetStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestGithubBackendRecordProgress(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "comment" ]; then
+		printf '%s' "$7" > "$0.body"
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task := &Task{ID: "7"}
+	if err := b.RecordProgress(task, "cto", "made progress"); err != nil {
+		t.Fatalf("RecordProgress: %v", err)
+	}
+	body, err := os.ReadFile(fake + "/gh.body")
+	if err != nil {
+		t.Fatalf("reading recorded body: %v", err)
+	}
+	got := string(body)
+	if !strings.Contains(got, "**cto** _(mago agent)_") || !strings.Contains(got, "made progress") {
+		t.Errorf("comment body missing expected text: %q", got)
+	}
+}
