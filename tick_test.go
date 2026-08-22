@@ -65,6 +65,24 @@ func TestTauConfigHasKey(t *testing.T) {
 	})
 }
 
+func TestRunTick_NoTask(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\n---\n")
+
+	res, err := runTick(c, "dev")
+	if err != nil {
+		t.Fatalf("runTick error: %v", err)
+	}
+	if res.worked {
+		t.Error("runTick with no actionable task should report no work")
+	}
+	if res.signal != "idle" {
+		t.Errorf("signal = %q, want idle", res.signal)
+	}
+}
+
 func TestWarnIfNoProviderKey(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
