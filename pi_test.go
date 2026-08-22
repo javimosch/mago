@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -73,5 +74,26 @@ func TestEmitProgressPi(t *testing.T) {
 	}
 	if got := string(out); got != "hello" {
 		t.Errorf("emitProgressPi wrote %q, want %q", got, "hello")
+	}
+}
+
+// runPi streams the pi CLI and extracts the final assistant content.
+func TestRunPi(t *testing.T) {
+	tmp := t.TempDir()
+	piBin := filepath.Join(tmp, "pi")
+	json := `{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"hello from pi"}]}]}`
+	script := "#!/bin/sh\nprintf '%s\\n' '" + json + `'` + "\n"
+	if err := os.WriteFile(piBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	a := &Agent{Model: "openrouter/test"}
+	got, err := runPi(tmp, a, "system prompt", "user prompt")
+	if err != nil {
+		t.Fatalf("runPi error: %v", err)
+	}
+	if got != "hello from pi" {
+		t.Errorf("runPi returned %q, want %q", got, "hello from pi")
 	}
 }
