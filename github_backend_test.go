@@ -324,3 +324,40 @@ func TestGithubBackendAddTask(t *testing.T) {
 		t.Errorf("Status = %q, want open", task.Status)
 	}
 }
+
+func TestGhWrapperPassesToken(t *testing.T) {
+	fake := fakeGh(t, `if [ "$1" = "issue" ] && [ "$2" = "list" ]; then
+		echo "GH_TOKEN=${GH_TOKEN}"
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_GH_TOKEN", "tok_123")
+
+	out, err := gh("issue", "list")
+	if err != nil {
+		t.Fatalf("gh: %v", err)
+	}
+	if !strings.Contains(out, "GH_TOKEN=tok_123") {
+		t.Errorf("gh did not pass GH_TOKEN; got %q", out)
+	}
+}
+
+func TestGhWrapperNonAuthError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+		echo "network timeout" >&2
+		exit 1
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	_, err := gh("issue", "view", "1")
+	if err == nil {
+		t.Fatal("expected error from gh")
+	}
+	want := "gh issue view 1: network timeout"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
