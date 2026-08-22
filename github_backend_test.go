@@ -361,3 +361,34 @@ func TestGhWrapperNonAuthError(t *testing.T) {
 		t.Errorf("error = %q, want %q", err.Error(), want)
 	}
 }
+
+func TestGithubBackendSetStatus(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ]; then
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	cases := []struct {
+		status string
+		want   string
+	}{
+		{"done", "done"},
+		{"blocked", "blocked"},
+		{"in_progress", "in_progress"},
+		{"anything", "in_progress"},
+	}
+	for _, c := range cases {
+		t.Run(c.status, func(t *testing.T) {
+			task := &Task{ID: "7", Status: "open"}
+			if err := b.SetStatus(task, c.status); err != nil {
+				t.Fatalf("SetStatus(%q): %v", c.status, err)
+			}
+			if task.Status != c.want {
+				t.Errorf("status = %q, want %q", task.Status, c.want)
+			}
+		})
+	}
+}
