@@ -23,3 +23,10 @@ func TestWorkerID_FallbackToHostname(t *testing.T) {
 		t.Errorf("workerID() = %q, want hostname %q", got, h)
 	}
 }
+
+func TestWorkerID_TrimSpace(t *testing.T) {
+	t.Setenv("MAGO_WORKER_ID", "  edge-runner-01  ")
+	if got := workerID(); got != "edge-runner-01" {
+		t.Errorf("workerID() = %q, want trimmed env value %q", got, "edge-runner-01")
+	}
+}
