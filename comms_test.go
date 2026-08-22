@@ -94,3 +94,54 @@ func TestAgentCompleteClaude(t *testing.T) {
 		t.Errorf("agentComplete = %q, want done", got)
 	}
 }
+
+func TestAgentCompleteDispatch(t *testing.T) {
+	bin := t.TempDir()
+	scripts := []struct {
+		name string
+		body string
+	}{
+		{
+			"claude",
+			"#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\": \"claude\", \"is_error\": false, \"subtype\": \"\"}'\n",
+		},
+		{
+			"tau",
+			"#!/bin/sh\necho '{\"content\": \"tau\"}'\n",
+		},
+		{
+			"pi",
+			"#!/bin/sh\necho '{\"type\": \"turn_end\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"pi\"}]}}'\n",
+		},
+		{
+			"debri",
+			"#!/bin/sh\necho '{\"content\": \"debri\"}'\n",
+		},
+	}
+	for _, s := range scripts {
+		if err := os.WriteFile(filepath.Join(bin, s.name), []byte(s.body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	cases := []struct {
+		provider string
+		want     string
+	}{
+		{"claude", "claude"},
+		{"tau", "tau"},
+		{"pi", "pi"},
+		{"debri", "debri"},
+		{"", "tau"}, // default harness is tau
+	}
+	for _, tc := range cases {
+		got, err := agentComplete(&Agent{Provider: tc.provider}, "prompt")
+		if err != nil {
+			t.Fatalf("agentComplete(%q): %v", tc.provider, err)
+		}
+		if got != tc.want {
+			t.Errorf("agentComplete(%q) = %q, want %q", tc.provider, got, tc.want)
+		}
+	}
+}
