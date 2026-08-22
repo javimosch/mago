@@ -209,3 +209,32 @@ func TestRecoverReflection_SelfHealHook(t *testing.T) {
 		t.Errorf("MAGO_TEST_BAD_REFLECTION=2 should force nil, got %+v", r)
 	}
 }
+
+func TestCmdRun(t *testing.T) {
+	t.Run("missing agent", func(t *testing.T) {
+		err := cmdRun([]string{})
+		if err == nil {
+			t.Fatal("expected error for missing agent argument")
+		}
+		if !strings.Contains(err.Error(), "usage") {
+			t.Errorf("error = %v, want usage message", err)
+		}
+	})
+
+	t.Run("idle", func(t *testing.T) {
+		c := newTestCompany(t)
+		writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\n---\n")
+		t.Setenv("MAGO_GH_REPO", "")
+
+		var err error
+		out := captureStdout(t, func() {
+			err = cmdRun([]string{"-C", c.Dir, "dev"})
+		})
+		if err != nil {
+			t.Fatalf("cmdRun error: %v", err)
+		}
+		if !strings.Contains(out, "nothing to do") {
+			t.Errorf("output = %q, want 'nothing to do'", out)
+		}
+	})
+}
