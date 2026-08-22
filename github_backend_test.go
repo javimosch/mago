@@ -277,3 +277,21 @@ func TestGithubBackendViewIssueMalformed(t *testing.T) {
 		t.Errorf("error %q does not mention parse issue 8", err.Error())
 	}
 }
+
+func TestGithubBackendPendingHITL(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo '[{"number":5,"title":"blocked on you","state":"open","labels":[{"name":"mago:hitl"}]}]'
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	got, err := b.PendingHITL()
+	if err != nil {
+		t.Fatalf("PendingHITL: %v", err)
+	}
+	if len(got) != 1 || got[0] != "#5 blocked on you" {
+		t.Errorf("PendingHITL = %v, want [#5 blocked on you]", got)
+	}
+}
