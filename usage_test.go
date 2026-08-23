@@ -92,4 +92,28 @@ func TestUsageContext(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("error", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &cliConfig{PlatformURL: srv.URL, Token: "token"}
+		if err := os.MkdirAll(filepath.Join(home, ".mago"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := json.Marshal(cfg)
+		if err := os.WriteFile(filepath.Join(home, ".mago", "config.json"), b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		c := &Company{ghRepo: "acme/web"}
+		if got := c.usageContext(); got != "" {
+			t.Errorf("usageContext() on error = %q, want empty", got)
+		}
+	})
 }
