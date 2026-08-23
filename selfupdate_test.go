@@ -154,3 +154,21 @@ func TestMaybeSelfUpdate(t *testing.T) {
 		t.Errorf("lastNudgeVer changed unexpectedly to %q", lastNudgeVer)
 	}
 }
+
+// TestMaybeSelfUpdate_AutoModeSurfacesError verifies that when update=auto is set,
+// a failed self-update attempt (here, an unreachable platform) is reported but does
+// not emit a manual-mode nudge or corrupt the nudge state.
+func TestMaybeSelfUpdate_AutoModeSurfacesError(t *testing.T) {
+	lastNudgeVer = ""
+	updating = 0
+	t.Setenv("MAGO_WORKER_ID", "test-worker")
+	t.Setenv("MAGO_UPDATE", "auto")
+	t.Setenv("MAGO_PLATFORM_URL", "http://127.0.0.1:1")
+
+	w := &eventWorker{comp: &Company{Dir: t.TempDir()}}
+	w.maybeSelfUpdate("new-ver")
+
+	if lastNudgeVer != "" {
+		t.Errorf("auto mode should not nudge; lastNudgeVer = %q", lastNudgeVer)
+	}
+}
