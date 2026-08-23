@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +58,31 @@ func TestVerifyPR_Disabled(t *testing.T) {
 	res := c.verifyPR("owner/repo", 1)
 	if res.ran || res.ok || res.detail != "" {
 		t.Errorf("verifyPR disabled = %+v, want zero verifyResult", res)
+	}
+}
+
+// TestVerifyPR_FetchFailure verifies that verifyPR reports a clear detail when the
+// PR fetch fails after the clone directory is already present.
+func TestVerifyPR_FetchFailure(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+
+	// Pre-seed the verify clone with a .git dir so ensureClone is a no-op, then give it a
+	// bogus remote so the fetch of pull/1/head fails.
+	verifyDir := filepath.Join(dir, ".mago", "verify", "owner-repo")
+	if err := os.MkdirAll(verifyDir, 0o755); err != nil {
+		t.Fatalf("mkdir verify dir: %v", err)
+	}
+	gitRunT(t, verifyDir, "init", "-q")
+	gitRunT(t, verifyDir, "remote", "add", "origin", "http://localhost/no-such-repo")
+
+	t.Setenv("MAGO_VERIFY_CMD", "true")
+	c := &Company{Dir: dir, Name: "t"}
+	res := c.verifyPR("owner/repo", 1)
+	if res.ran || res.ok || !strings.Contains(res.detail, "could not fetch PR for verification") {
+		t.Errorf("verifyPR fetch failure = %+v, want a fetch-failure detail", res)
 	}
 }
 
