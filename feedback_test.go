@@ -27,6 +27,14 @@ func TestParseFeedbackArgs(t *testing.T) {
 	if m, _ := parseFeedbackArgs(nil); m != "" {
 		t.Errorf("empty args -> empty msg, got %q", m)
 	}
+	msg, ftype = parseFeedbackArgs([]string{"--kind", "bug", "relay", "fails"})
+	if msg != "relay fails" || ftype != "bug" {
+		t.Errorf("--kind parse: msg=%q type=%q", msg, ftype)
+	}
+	msg, ftype = parseFeedbackArgs([]string{"-k", "feature", "csv", "export"})
+	if msg != "csv export" || ftype != "feature" {
+		t.Errorf("-k parse: msg=%q type=%q", msg, ftype)
+	}
 }
 
 func TestParseContext(t *testing.T) {
@@ -84,6 +92,12 @@ func TestCmdFeedback_WhenOffline(t *testing.T) {
 	}
 }
 
+func TestCmdFeedback_EmptyMessage(t *testing.T) {
+	if err := cmdFeedback([]string{}); err == nil {
+		t.Fatal("expected error for empty feedback message")
+	}
+}
+
 func TestPostFeedback(t *testing.T) {
 	body := map[string]any{"message": "hello"}
 
@@ -114,5 +128,9 @@ func TestPostFeedback(t *testing.T) {
 
 	if postFeedback(failSrv.URL, body) {
 		t.Error("postFeedback on 500 should return false")
+	}
+
+	if postFeedback("http://[::1]:0/invalid", body) {
+		t.Error("postFeedback on invalid URL should return false")
 	}
 }
