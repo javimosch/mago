@@ -58,3 +58,31 @@ func TestGithubBackendClaim(t *testing.T) {
 		t.Errorf("comment body missing expected text: %q", body)
 	}
 }
+
+func TestGithubBackendClaimIssueEditFailure(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "label" ] && [ "$4" = "create" ]; then
+		exit 0
+	elif [ "$3" = "issue" ] && [ "$4" = "edit" ]; then
+		echo "edit failed" >&2
+		exit 1
+	elif [ "$3" = "issue" ] && [ "$4" = "comment" ]; then
+		echo "should not reach comment" > "$0.body"
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task := &Task{ID: "7", Status: "open"}
+	err := b.Claim(task, "dev")
+	if err == nil {
+		t.Fatal("expected error when gh issue edit fails")
+	}
+	if !strings.Contains(err.Error(), "edit failed") {
+		t.Errorf("error = %q, want gh issue edit error containing 'edit failed'", err.Error())
+	}
+	if _, statErr := os.Stat(fake + "/gh.body"); !os.IsNotExist(statErr) {
+		t.Error("comment should not be posted when issue edit fails")
+	}
+}
