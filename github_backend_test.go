@@ -325,6 +325,65 @@ func TestGithubBackendAddTask(t *testing.T) {
 	}
 }
 
+func TestGithubBackendAddTaskWithTaskLabelAndProject(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "label" ] && [ "$4" = "create" ]; then
+		printf '%s\n' "$*" >> "$0.labels"
+		exit 0
+	elif [ "$3" = "issue" ] && [ "$4" = "create" ]; then
+		printf '%s\n' "$*" >> "$0.create"
+		echo "https://github.com/acme/web/issues/9"
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web", taskLabel: "mago:backlog"}
+	task, err := b.AddTask("new task", "supercli")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if task.ID != "9" {
+		t.Errorf("ID = %q, want 9", task.ID)
+	}
+
+	labels, err := os.ReadFile(fake + "/gh.labels")
+	if err != nil {
+		t.Fatalf("reading recorded labels: %v", err)
+	}
+	if !strings.Contains(string(labels), "mago:backlog") || !strings.Contains(string(labels), "project:supercli") {
+		t.Errorf("labels missing expected entries: %q", labels)
+	}
+
+	create, err := os.ReadFile(fake + "/gh.create")
+	if err != nil {
+		t.Fatalf("reading recorded create args: %v", err)
+	}
+	s := string(create)
+	if !strings.Contains(s, "--label") || !strings.Contains(s, "mago:backlog") || !strings.Contains(s, "project:supercli") {
+		t.Errorf("create args missing expected labels: %q", s)
+	}
+}
+
+func TestGithubBackendAddTaskCreateError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "create" ]; then
+		echo "create failed" >&2
+		exit 1
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	_, err := b.AddTask("new task", "")
+	if err == nil {
+		t.Fatal("expected error from AddTask")
+	}
+	if !strings.Contains(err.Error(), "create failed") {
+		t.Errorf("error = %q, want to contain 'create failed'", err.Error())
+	}
+}
+
 func TestGhWrapperPassesToken(t *testing.T) {
 	fake := fakeGh(t, `if [ "$1" = "issue" ] && [ "$2" = "list" ]; then
 		echo "GH_TOKEN=${GH_TOKEN}"
