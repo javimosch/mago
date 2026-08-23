@@ -218,6 +218,30 @@ func TestCmdMode_ShowAndSet(t *testing.T) {
 	}
 }
 
+// TestCmdMode_UnknownToken verifies cmdMode returns a clear error when given an
+// unrecognised mode token, instead of silently ignoring it or dumping usage.
+func TestCmdMode_UnknownToken(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_COMMS", "")
+	t.Setenv("MAGO_PROACTIVE", "")
+	t.Setenv("MAGO_PR_CAP", "")
+	t.Setenv("MAGO_ISSUE_CAP", "")
+	t.Setenv("MAGO_UPDATE", "")
+
+	err := cmdMode([]string{"-C", c.Dir, "bogus"})
+	if err == nil {
+		t.Fatal("expected error for unknown mode token")
+	}
+	if !strings.Contains(err.Error(), "unknown mode token") {
+		t.Errorf("error = %q, want 'unknown mode token'", err.Error())
+	}
+}
+
 func TestLoadSaveMode(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
