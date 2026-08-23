@@ -476,3 +476,43 @@ func TestGithubBackendBounce(t *testing.T) {
 		t.Errorf("comment body missing bounce text: %q", body)
 	}
 }
+
+func TestGithubBackendClearClarify(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "edit" ]; then
+		printf '%s\n' "$*" >> "$0.edits"
+		exit 0
+	elif [ "$3" = "issue" ] && [ "$4" = "comment" ]; then
+		printf '%s' "$7" > "$0.body"
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task := &Task{ID: "7", Assignee: "planner", Status: "needs_human"}
+	if err := b.ClearClarify(task); err != nil {
+		t.Fatalf("ClearClarify: %v", err)
+	}
+	if task.Assignee != "" {
+		t.Errorf("Assignee = %q, want empty", task.Assignee)
+	}
+	if task.Status != "open" {
+		t.Errorf("Status = %q, want open", task.Status)
+	}
+	edits, err := os.ReadFile(fake + "/gh.edits")
+	if err != nil {
+		t.Fatalf("reading recorded edits: %v", err)
+	}
+	s := string(edits)
+	if !strings.Contains(s, labClarify) || !strings.Contains(s, labHITL) || !strings.Contains(s, labInProgress) || !strings.Contains(s, "agent:planner") {
+		t.Errorf("edits missing expected labels: %q", s)
+	}
+	body, err := os.ReadFile(fake + "/gh.body")
+	if err != nil {
+		t.Fatalf("reading recorded body: %v", err)
+	}
+	if !strings.Contains(string(body), "mago:go") {
+		t.Errorf("comment body missing mago:go text: %q", body)
+	}
+}
