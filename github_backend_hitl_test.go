@@ -44,3 +44,28 @@ func TestGithubBackendRaiseHITL(t *testing.T) {
 		t.Errorf("edits missing expected labels: %q", s)
 	}
 }
+
+func TestGithubBackendRaiseHITLCommentFailure(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "comment" ]; then
+		echo "comment failed" >&2
+		exit 1
+	elif [ "$3" = "issue" ] && [ "$4" = "edit" ]; then
+		echo "should not reach edit" > "$0.edits"
+		exit 0
+	fi
+	exit 1`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task := &Task{ID: "7", Status: "in_progress"}
+	err := b.RaiseHITL(task, "dev", "what should I do?")
+	if err == nil {
+		t.Fatal("expected error when gh issue comment fails")
+	}
+	if !strings.Contains(err.Error(), "comment failed") {
+		t.Errorf("error = %q, want gh issue comment error containing 'comment failed'", err.Error())
+	}
+	if _, statErr := os.Stat(fake + "/gh.edits"); !os.IsNotExist(statErr) {
+		t.Error("issue edit should not be called when comment fails")
+	}
+}
