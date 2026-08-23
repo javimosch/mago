@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -225,6 +226,74 @@ Do stuff
 	}
 	if !strings.Contains(s.ActivityLog, "entry one") || !strings.Contains(s.ActivityLog, "entry three") {
 		t.Errorf("unexpected ActivityLog: %q", s.ActivityLog)
+	}
+}
+
+// TestCompactStateOverThreshold exercises the compaction path that rewrites
+// STATE.md when the activity log exceeds the threshold, keeping only a small
+// tail of recent entries and synthesising the structured sections via tau.
+func TestCompactStateOverThreshold(t *testing.T) {
+	bindir := t.TempDir()
+	tauScript := filepath.Join(bindir, "tau")
+
+	synthesis := `{"mission":"keep mission","shipped":"- shipped A","in_flight":"- in flight B","decisions":"- decide C"}`
+	out, _ := json.Marshal(map[string]string{"content": synthesis})
+	body := fmt.Sprintf("#!/bin/sh\ncat <<'JSON'\n%s\nJSON\n", out)
+	if err := os.WriteFile(tauScript, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	stateFile := c.stateFile()
+
+	var logLines []string
+	for i := 1; i <= stateCompactThreshold+1; i++ {
+		logLines = append(logLines, fmt.Sprintf("- 2024-01-%02d [cto] did work %d", i%30+1, i))
+	}
+
+	content := fmt.Sprintf(`# test — company state
+
+## Mission
+Keep mission.
+
+## Shipped
+(none)
+
+## In flight
+(none)
+
+## Decisions
+(none)
+
+## Activity log
+%s
+`, strings.Join(logLines, "\n"))
+	if err := os.WriteFile(stateFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("write STATE.md: %v", err)
+	}
+
+	if err := c.compactState(); err != nil {
+		t.Fatalf("compactState: %v", err)
+	}
+
+	got, err := os.ReadFile(stateFile)
+	if err != nil {
+		t.Fatalf("read compacted STATE.md: %v", err)
+	}
+	s := string(got)
+
+	if !strings.Contains(s, "## Shipped\n- shipped A") {
+		t.Errorf("compacted Shipped section missing synthesis; got:\n%s", s)
+	}
+	if !strings.Contains(s, "## In flight\n- in flight B") {
+		t.Errorf("compacted In flight section missing synthesis; got:\n%s", s)
+	}
+	if !strings.Contains(s, "## Decisions\n- decide C") {
+		t.Errorf("compacted Decisions section missing synthesis; got:\n%s", s)
+	}
+	if n := strings.Count(s, "[cto] did work"); n != stateCompactKeepRecent {
+		t.Errorf("expected %d recent log entries, got %d", stateCompactKeepRecent, n)
 	}
 }
 
