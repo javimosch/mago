@@ -167,3 +167,20 @@ func TestDefaultBranch_Fallback(t *testing.T) {
 		t.Errorf("defaultBranch = %q, want main fallback", got)
 	}
 }
+
+// TestPushState_NoSync verifies that pushState is a no-op when MAGO_STATE_SYNC is not enabled,
+// leaving the company directory untouched (no local git repo is created).
+func TestPushState_NoSync(t *testing.T) {
+	companyDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(companyDir, "STATE.md"), []byte("# state\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Company{Dir: companyDir, Name: "test", ghRepo: "owner/repo"}
+	t.Setenv("MAGO_STATE_SYNC", "")
+	c.pushState("sync message")
+
+	if _, err := os.Stat(filepath.Join(companyDir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("expected no .git with state sync disabled, got err=%v", err)
+	}
+}
