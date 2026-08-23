@@ -325,7 +325,7 @@ func TestGithubBackendAddTask(t *testing.T) {
 	}
 }
 
-func TestGithubBackendAddTaskWithTaskLabel(t *testing.T) {
+func TestGithubBackendAddTaskWithTaskLabelAndProject(t *testing.T) {
 	fake := fakeGh(t, `if [ "$3" = "label" ] && [ "$4" = "create" ]; then
 		printf '%s\n' "$*" >> "$0.labels"
 		exit 0
