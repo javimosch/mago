@@ -157,6 +157,73 @@ func TestCmdDigestGroupsPRsByProject(t *testing.T) {
 	}
 }
 
+// TestCmdDigestLocalNoProjects exercises the other main branch of cmdDigest: a single,
+// local-only company with no configured GitHub repo or projects, an unset/placeholder
+// mission, and no daily budget cap. It verifies the digest still renders a readable
+// summary without attempting any gh network calls.
+func TestCmdDigestLocalNoProjects(t *testing.T) {
+	dir := t.TempDir()
+	for _, sub := range []string{".mago/agents", "tasks"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatalf("setup: mkdir %s: %v", sub, err)
+		}
+	}
+	state := `# testco — company state
+
+## Mission
+(Set by the CEO. Edit me.)
+
+## Shipped
+Nothing yet.
+
+## In flight
+Nothing yet.
+
+## Decisions
+None yet.
+
+## Activity log
+`
+	if err := os.WriteFile(filepath.Join(dir, "STATE.md"), []byte(state), 0o644); err != nil {
+		t.Fatalf("write STATE.md: %v", err)
+	}
+
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_DAILY_BUDGET", "")
+	os.Unsetenv("MAGO_GH_REPO")
+	os.Unsetenv("MAGO_DAILY_BUDGET")
+
+	comp, err := loadCompany(dir)
+	if err != nil {
+		t.Fatalf("loadCompany: %v", err)
+	}
+	if comp.ghRepo != "" {
+		t.Fatalf("expected no ghRepo, got %q", comp.ghRepo)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Mission: (unset") {
+		t.Errorf("digest should report unset mission, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Backlog (local):") {
+		t.Errorf("digest should show local backlog, got:\n%s", out)
+	}
+	if strings.Contains(out, "Pull requests") {
+		t.Errorf("local-only digest should not query or print pull requests, got:\n%s", out)
+	}
+	if !strings.Contains(out, "no MAGO_DAILY_BUDGET cap set") {
+		t.Errorf("digest should report no budget cap, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Needs you (HITL): none") {
+		t.Errorf("digest should report no HITL items, got:\n%s", out)
+	}
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()

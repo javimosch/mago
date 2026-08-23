@@ -178,6 +178,27 @@ func TestWriteDebriPromptFile(t *testing.T) {
 	}
 }
 
+// TestRunDebri_ErrorEvent verifies that runDebri surfaces a debri-level {"event":"error"}
+// as a real error rather than treating it as an empty-but-successful tick.
+func TestRunDebri_ErrorEvent(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "debri")
+	body := "#!/bin/sh\necho '{\"event\":\"error\",\"error\":\"tmux session disappeared\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	a := &Agent{Model: "SWE-1.6"}
+	_, err := runDebri(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runDebri: expected an error for an error event, got nil")
+	}
+	if !strings.Contains(err.Error(), "tmux session disappeared") {
+		t.Errorf("runDebri should surface debri's own error message, got: %v", err)
+	}
+}
+
 // TestRunDebri_Success exercises the full tick path with a fake debri binary on PATH.
 // A v1.1.0+ debri emits NDJSON and reports a done event; runDebri should return the
 // done content without error.
