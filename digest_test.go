@@ -53,6 +53,29 @@ func TestSortedProjectNames(t *testing.T) {
 	}
 }
 
+func TestGhCount(t *testing.T) {
+	dir := t.TempDir()
+	ghPath := filepath.Join(dir, "gh")
+	script := `#!/bin/sh
+if [ "$1" = "-R" ] && [ "$2" = "acme/web" ] && [ "$3" = "pr" ] && [ "$6" = "open" ]; then
+	echo "5"
+	exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(ghPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	if got := ghCount("acme/web", "pr", "list", "--state", "open", "--json", "number", "--jq", "length"); got != 5 {
+		t.Errorf("ghCount success = %d, want 5", got)
+	}
+	if got := ghCount("acme/web", "pr", "list", "--state", "merged"); got != -1 {
+		t.Errorf("ghCount failure = %d, want -1", got)
+	}
+}
+
 func TestNumOr(t *testing.T) {
 	if got := numOr(-1); got != "?" {
 		t.Errorf("numOr(-1) = %q, want %q", got, "?")
