@@ -106,3 +106,19 @@ func TestCompanyLoadMirrors(t *testing.T) {
 		t.Errorf("loadMirrors()[TASK-1] = %d, want 42", got["TASK-1"])
 	}
 }
+
+// TestValidateProjectsConfig_Malformed verifies a corrupted projects.json is
+// rejected with an actionable error that names the file and suggests recovery.
+func TestValidateProjectsConfig_Malformed(t *testing.T) {
+	c := newTestCompany(t)
+	if err := os.WriteFile(c.projectsConfigFile(), []byte("{not json"), 0o644); err != nil {
+		t.Fatalf("write malformed projects.json: %v", err)
+	}
+	err := c.validateProjectsConfig()
+	if err == nil {
+		t.Fatal("expected error for malformed projects.json")
+	}
+	if !strings.Contains(err.Error(), "not valid JSON") {
+		t.Errorf("error = %q, want 'not valid JSON'", err.Error())
+	}
+}
