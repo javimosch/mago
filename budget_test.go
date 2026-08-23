@@ -53,3 +53,34 @@ func TestBudget(t *testing.T) {
 		t.Fatal("stale day should not be over budget")
 	}
 }
+
+func TestBudget_InvalidCap(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "t"}
+
+	cases := []struct {
+		label string
+		value string
+	}{
+		{"empty", ""},
+		{"invalid", "abc"},
+		{"negative", "-5"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.label, func(t *testing.T) {
+			t.Setenv("MAGO_DAILY_BUDGET", tc.value)
+			if c.overBudget() {
+				t.Fatalf("%q cap should not be over budget", tc.value)
+			}
+			c.recordAction()
+			if c.overBudget() {
+				t.Fatalf("%q cap should remain unlimited after recordAction", tc.value)
+			}
+			if _, err := os.Stat(c.usageFile()); err == nil {
+				t.Fatalf("%q cap should not write usage.json", tc.value)
+			}
+		})
+	}
+}
