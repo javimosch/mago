@@ -184,3 +184,100 @@ func TestPushState_NoSync(t *testing.T) {
 		t.Fatalf("expected no .git with state sync disabled, got err=%v", err)
 	}
 }
+
+// TestPushState_WithSync exercises the full MAGO_STATE_SYNC=1 path: it creates a local
+// company with runtime exhaust and agent definitions, redirects the hardcoded GitHub SSH
+// URL to a local bare repo, and verifies that pushState publishes both mago-state and main.
+func TestPushState_WithSync(t *testing.T) {
+	bareDir := t.TempDir()
+	gitRunT(t, "", "init", "-q", "--bare", bareDir)
+
+	ghRepo := "example/push-state-repo"
+	redirectGithubRepo(t, ghRepo, bareDir)
+
+	companyDir := t.TempDir()
+	for _, p := range []string{".mago/agents", ".mago/runs", ".mago/skills", ".mago/memory", ".mago/inbox"} {
+		if err := os.MkdirAll(filepath.Join(companyDir, p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, "STATE.md"), []byte("# company state\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "agents", "cto.md"), []byte("cto agent\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "skills", "foo.md"), []byte("skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "runs", "run.md"), []byte("run\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "config.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "projects.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Company{Dir: companyDir, Name: "test", ghRepo: ghRepo}
+	t.Setenv("MAGO_STATE_SYNC", "1")
+	c.pushState("state update")
+
+	// HEAD should end up on the mago-state branch.
+	if head := strings.TrimSpace(gitRunT(t, companyDir, "symbolic-ref", "--short", "HEAD")); head != "mago-state" {
+		t.Fatalf("expected HEAD on mago-state, got %q", head)
+	}
+
+	// Both mago-state and main should now exist on the "remote" bare repo.
+	out := gitRunT(t, "", "ls-remote", "--heads", bareDir)
+	if !strings.Contains(out, "refs/heads/mago-state") {
+		t.Fatalf("expected mago-state branch on remote, got:\n%s", out)
+	}
+	if !strings.Contains(out, "refs/heads/main") {
+		t.Fatalf("expected main branch on remote, got:\n%s", out)
+	}
+}
+
+// TestPushState_Idempotent verifies that a second pushState with unchanged content is a
+// no-op: the runtime branch has no staged changes and the definitions worktree has nothing new
+// to commit, so both calls complete without error and without creating extra commits.
+func TestPushState_Idempotent(t *testing.T) {
+	bareDir := t.TempDir()
+	gitRunT(t, "", "init", "-q", "--bare", bareDir)
+
+	ghRepo := "example/idempotent-repo"
+	redirectGithubRepo(t, ghRepo, bareDir)
+
+	companyDir := t.TempDir()
+	for _, p := range []string{".mago/agents", ".mago/skills"} {
+		if err := os.MkdirAll(filepath.Join(companyDir, p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, "STATE.md"), []byte("# state\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "agents", "cto.md"), []byte("cto\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "skills", "foo.md"), []byte("skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "config.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "projects.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Company{Dir: companyDir, Name: "test", ghRepo: ghRepo}
+	t.Setenv("MAGO_STATE_SYNC", "1")
+	c.pushState("first")
+	c.pushState("second")
+
+	out := gitRunT(t, "", "ls-remote", "--heads", bareDir)
+	if !strings.Contains(out, "refs/heads/mago-state") || !strings.Contains(out, "refs/heads/main") {
+		t.Fatalf("expected mago-state and main branches on remote, got:\n%s", out)
+	}
+}
