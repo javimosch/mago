@@ -40,3 +40,25 @@ func TestGithubBackendAnswerHITL(t *testing.T) {
 		t.Errorf("edits missing expected labels: %q", s)
 	}
 }
+
+func TestGithubBackendAnswerHITL_CommentError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "comment" ]; then
+		echo "comment failed" >&2
+		exit 1
+	fi
+	exit 1`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	err := b.AnswerHITL("7", "ship it")
+	if err == nil {
+		t.Fatal("expected error from AnswerHITL")
+	}
+	if !strings.Contains(err.Error(), "comment failed") {
+		t.Errorf("error = %q, want to contain 'comment failed'", err.Error())
+	}
+
+	if _, statErr := os.Stat(fake + "/gh.edits"); statErr == nil {
+		t.Error("expected no issue edit when comment fails")
+	}
+}
