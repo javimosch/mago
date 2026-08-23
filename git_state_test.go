@@ -168,6 +168,21 @@ func TestDefaultBranch_Fallback(t *testing.T) {
 	}
 }
 
+func TestDefaultBranch_EmptyOutput(t *testing.T) {
+	bin := t.TempDir()
+	gh := filepath.Join(bin, "gh")
+	// gh succeeds but returns only whitespace, so we must fall back to main.
+	body := "#!/bin/sh\nif [ \"$1\" = \"repo\" ] && [ \"$2\" = \"view\" ]; then\n  printf '\\n'\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(gh, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	if got := defaultBranch("owner/repo"); got != "main" {
+		t.Errorf("defaultBranch = %q, want main fallback on empty output", got)
+	}
+}
+
 // TestPushState_NoSync verifies that pushState is a no-op when MAGO_STATE_SYNC is not enabled,
 // leaving the company directory untouched (no local git repo is created).
 func TestPushState_NoSync(t *testing.T) {
