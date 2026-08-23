@@ -416,3 +416,24 @@ func TestGithubBackendRecordProgress(t *testing.T) {
 		t.Errorf("comment body missing expected text: %q", got)
 	}
 }
+
+func TestGithubBackendEnsureAgentLabel(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "label" ] && [ "$4" = "create" ]; then
+		printf '%s' "$5" > "$0.label"
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	b.ensureAgentLabel("dev")
+
+	got, err := os.ReadFile(fake + "/gh.label")
+	if err != nil {
+		t.Fatalf("expected ensureAgentLabel to create an agent label: %v", err)
+	}
+	if string(got) != "agent:dev" {
+		t.Errorf("label name = %q, want agent:dev", got)
+	}
+}
