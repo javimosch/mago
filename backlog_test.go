@@ -246,3 +246,20 @@ func TestProposeBacklog(t *testing.T) {
 		}
 	})
 }
+
+func TestOrNone(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", "(none)"},
+		{"   ", "(none)"},
+		{"\t\n", "(none)"},
+		{"hello", "hello"},
+		{"  hello  ", "  hello  "},
+	}
+	for _, c := range cases {
+		if got := orNone(c.in); got != c.want {
+			t.Errorf("orNone(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
