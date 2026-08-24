@@ -194,6 +194,22 @@ func TestWriteDebriPromptFile(t *testing.T) {
 	}
 }
 
+func TestWriteDebriPromptFile_CreateTempError(t *testing.T) {
+	// If os.CreateTemp cannot create a file (e.g. TMPDIR points at a missing directory),
+	// writeDebriPromptFile must surface the error with a nil cleanup and no partial state.
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "does-not-exist"))
+	path, cleanup, err := writeDebriPromptFile("hello")
+	if err == nil {
+		t.Fatal("expected an error when temp dir is missing, got nil")
+	}
+	if path != "" {
+		t.Errorf("expected empty path on error, got %q", path)
+	}
+	if cleanup != nil {
+		t.Error("expected nil cleanup on error")
+	}
+}
+
 // TestRunDebri_ErrorEvent verifies that runDebri surfaces a debri-level {"event":"error"}
 // as a real error rather than treating it as an empty-but-successful tick.
 func TestRunDebri_ErrorEvent(t *testing.T) {
