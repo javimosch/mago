@@ -261,3 +261,34 @@ func TestCmdServe_StopNoWorker(t *testing.T) {
 		t.Errorf("error = %q, want 'no worker running'", err.Error())
 	}
 }
+
+// TestCmdServe_InvalidStartDelay verifies cmdServe rejects a malformed --start-delay
+// before starting the worker. This keeps fleet-stagger typos from silently degrading
+// to a 0s delay and then binding a listener.
+func TestCmdServe_InvalidStartDelay(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+
+	err := cmdServe([]string{"-C", c.Dir, "--start-delay", "not-a-duration"})
+	if err == nil {
+		t.Fatal("cmdServe with invalid --start-delay should error")
+	}
+	if !strings.Contains(err.Error(), "must be a duration") {
+		t.Errorf("error = %q, want 'must be a duration'", err.Error())
+	}
+}
+
+// TestCmdServe_InvalidUntil verifies cmdServe rejects a malformed --until value
+// before it starts the event loop or binds a listener.
+func TestCmdServe_InvalidUntil(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+
+	err := cmdServe([]string{"-C", c.Dir, "--until", "bad"})
+	if err == nil {
+		t.Fatal("cmdServe with invalid --until should error")
+	}
+	if !strings.Contains(err.Error(), "HH:MM") {
+		t.Errorf("error = %q, want 'HH:MM'", err.Error())
+	}
+}
