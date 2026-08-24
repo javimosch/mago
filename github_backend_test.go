@@ -108,6 +108,28 @@ func TestGhIssueStatusClosed(t *testing.T) {
 	}
 }
 
+func TestGhIssueStatusNeedsHuman(t *testing.T) {
+	payload := []byte(`{"number":3,"title":"hitl","state":"open","labels":[{"name":"mago:hitl"}]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if gi.status() != "needs_human" {
+		t.Errorf("status() = %q, want needs_human", gi.status())
+	}
+}
+
+func TestGhIssueStatusBlocked(t *testing.T) {
+	payload := []byte(`{"number":4,"title":"stuck","state":"open","labels":[{"name":"mago:blocked"}]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if gi.status() != "blocked" {
+		t.Errorf("status() = %q, want blocked", gi.status())
+	}
+}
+
 func TestGhIssueEmptyLabels(t *testing.T) {
 	payload := []byte(`{"number":3,"title":"plain","state":"open","labels":[]}`)
 	var gi ghIssue
