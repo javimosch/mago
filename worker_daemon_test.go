@@ -225,3 +225,25 @@ func TestSuperviseWorker_CleanExit(t *testing.T) {
 		t.Fatalf("superviseWorker: %v", err)
 	}
 }
+
+func TestWorkerStatus_InvalidCompany(t *testing.T) {
+	dir := t.TempDir()
+	err := workerStatus(dir)
+	if err == nil {
+		t.Fatal("workerStatus should error for a non-company directory")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
+
+func TestWorkerStop_InvalidCompany(t *testing.T) {
+	dir := t.TempDir()
+	err := workerStop(dir)
+	if err == nil {
+		t.Fatal("workerStop should error for a non-company directory")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
