@@ -107,3 +107,120 @@ func TestStoreLookups(t *testing.T) {
 		t.Errorf("GetByLicense(no-such) = %+v, want nil", got)
 	}
 }
+
+func TestFirstEvent(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if !st.FirstEvent("evt-1") {
+		t.Errorf("FirstEvent(evt-1) first insert = false, want true")
+	}
+	if st.FirstEvent("evt-1") {
+		t.Errorf("FirstEvent(evt-1) second insert = true, want false")
+	}
+	if !st.FirstEvent("evt-2") {
+		t.Errorf("FirstEvent(evt-2) = false, want true")
+	}
+	if st.FirstEvent("") {
+		t.Errorf("FirstEvent(\"\") = true, want false")
+	}
+}
+
+func TestRepoGrants(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if got := st.EntitledRepos(u.ID); len(got) != 0 {
+		t.Errorf("EntitledRepos before grants = %v, want empty", got)
+	}
+
+	if err := st.GrantRepo(u.ID, "owner/repo-a"); err != nil {
+		t.Fatalf("GrantRepo: %v", err)
+	}
+	if err := st.GrantRepo(u.ID, "owner/repo-b"); err != nil {
+		t.Fatalf("GrantRepo: %v", err)
+	}
+
+	got := st.EntitledRepos(u.ID)
+	if !got["owner/repo-a"] || !got["owner/repo-b"] || len(got) != 2 {
+		t.Errorf("EntitledRepos after grants = %v, want [owner/repo-a owner/repo-b]", got)
+	}
+
+	if err := st.RevokeRepo(u.ID, "owner/repo-a"); err != nil {
+		t.Fatalf("RevokeRepo: %v", err)
+	}
+	got = st.EntitledRepos(u.ID)
+	if got["owner/repo-a"] {
+		t.Errorf("EntitledRepos after revoke still contains owner/repo-a")
+	}
+	if !got["owner/repo-b"] {
+		t.Errorf("EntitledRepos after revoke missing owner/repo-b")
+	}
+
+	if err := st.RevokeRepo(u.ID, "not-granted"); err != nil {
+		t.Errorf("RevokeRepo on missing repo = %v, want nil", err)
+	}
+}
+
+func TestInstallations(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := st.UpsertInstallation(1, "org-a", []string{"repo2", "repo1"}); err != nil {
+		t.Fatalf("UpsertInstallation: %v", err)
+	}
+
+	have := st.installRepos(1)
+	want := map[string]bool{"repo1": true, "repo2": true}
+	if len(have) != 2 || !want[have[0]] || !want[have[1]] {
+		t.Errorf("installRepos after upsert = %v, want repo1+repo2", have)
+	}
+
+	if err := st.MutateInstallationRepos(1, "org-a", []string{"repo3"}, []string{"repo1"}); err != nil {
+		t.Fatalf("MutateInstallationRepos: %v", err)
+	}
+	have = st.installRepos(1)
+	want = map[string]bool{"repo2": true, "repo3": true}
+	if len(have) != 2 || !want[have[0]] || !want[have[1]] {
+		t.Errorf("installRepos after mutate = %v, want repo2+repo3", have)
+	}
+
+	if err := st.ClaimInstallation(1, u.ID); err != nil {
+		t.Fatalf("ClaimInstallation: %v", err)
+	}
+
+	ins := st.InstallationsForAccount(u.ID)
+	if len(ins) != 1 || ins[0].ID != 1 || ins[0].GithubLogin != "org-a" {
+		t.Errorf("InstallationsForAccount = %+v, want one org-a installation", ins)
+	}
+
+	if err := st.DeleteInstallation(1); err != nil {
+		t.Fatalf("DeleteInstallation: %v", err)
+	}
+	if got := st.installRepos(1); len(got) != 0 {
+		t.Errorf("installRepos after delete = %v, want empty", got)
+	}
+
+	if err := st.ClaimInstallation(99, u.ID); err == nil {
+		t.Errorf("ClaimInstallation on missing id = nil, want error")
+	}
+}
