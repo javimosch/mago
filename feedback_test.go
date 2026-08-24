@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -63,6 +65,25 @@ func TestGenFeedbackID(t *testing.T) {
 	if len(id1) == 0 || id1 == id2 {
 		t.Errorf("genFeedbackID returned empty or duplicate: %q, %q", id1, id2)
 	}
+}
+
+func TestGenFeedbackID_EntropyFailure(t *testing.T) {
+	orig := rand.Reader
+	rand.Reader = &failReader{err: errors.New("entropy failure")}
+	defer func() { rand.Reader = orig }()
+
+	id := genFeedbackID()
+	if len(id) != 32 {
+		t.Errorf("fallback id length = %d, want 32", len(id))
+	}
+}
+
+type failReader struct {
+	err error
+}
+
+func (r *failReader) Read(p []byte) (int, error) {
+	return 0, r.err
 }
 
 // TestCmdFeedback_WhenOffline verifies the full `mago feedback` command is
