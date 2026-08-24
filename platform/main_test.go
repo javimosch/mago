@@ -102,6 +102,22 @@ func TestReadJSON(t *testing.T) {
 	}
 }
 
+func TestWriteJSON(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeJSON(rec, 201, map[string]string{"ok": "true"})
+
+	if rec.Code != 201 {
+		t.Errorf("status = %d, want 201", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"ok":"true"`) {
+		t.Errorf("body = %q, want ok:true", body)
+	}
+}
+
 func TestLoadDotenv(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/.env"
