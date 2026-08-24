@@ -108,6 +108,28 @@ func TestGhIssueStatusClosed(t *testing.T) {
 	}
 }
 
+func TestGhIssueStatusNeedsHuman(t *testing.T) {
+	payload := []byte(`{"number":3,"title":"hitl","state":"open","labels":[{"name":"mago:hitl"}]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if gi.status() != "needs_human" {
+		t.Errorf("status() = %q, want needs_human", gi.status())
+	}
+}
+
+func TestGhIssueStatusBlocked(t *testing.T) {
+	payload := []byte(`{"number":4,"title":"stuck","state":"open","labels":[{"name":"mago:blocked"}]}`)
+	var gi ghIssue
+	if err := json.Unmarshal(payload, &gi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if gi.status() != "blocked" {
+		t.Errorf("status() = %q, want blocked", gi.status())
+	}
+}
+
 func TestGhIssueEmptyLabels(t *testing.T) {
 	payload := []byte(`{"number":3,"title":"plain","state":"open","labels":[]}`)
 	var gi ghIssue
@@ -166,6 +188,20 @@ func TestGithubBackendListTasksMalformed(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "parse issue list") {
 		t.Errorf("error %q does not mention parse issue list", err.Error())
+	}
+}
+
+func TestGithubBackendListTasksWithTaskLabel(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ] && [ "${11}" = "--label" ] && [ "${12}" = "backlog" ]; then echo '[{"number":7,"title":"scoped","state":"open","labels":[{"name":"backlog"}]}]'; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web", taskLabel: "backlog"}
+	tasks, err := b.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != "7" {
+		t.Errorf("got %d tasks, want 1 with ID 7", len(tasks))
 	}
 }
 
