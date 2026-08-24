@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -290,5 +291,38 @@ func TestCmdServe_InvalidUntil(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "HH:MM") {
 		t.Errorf("error = %q, want 'HH:MM'", err.Error())
+	}
+}
+
+// TestEventWorkerRun_PausesAtBudgetCap verifies eventWorker.run continues when
+// the daily budget cap is hit, skipping the heavy work (propose/review/tick/reconcile)
+// without panicking or hanging.
+func TestEventWorkerRun_PausesAtBudgetCap(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_DAILY_BUDGET", "1")
+	c := newTestCompany(t)
+	c.saveUsage(budgetUsage{Day: utcDay(), Actions: 1})
+
+	w := &eventWorker{comp: c, wake: make(chan wakeEvent, 4)}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		w.run()
+	}()
+
+	w.wake <- wakeEvent{reason: "proactive cadence", proactive: true}
+	w.wake <- wakeEvent{reason: "PR merged", prRepo: "acme/repo", prNum: 1, prTitle: "t", comms: true}
+	w.wake <- wakeEvent{reason: "human comment on #1", target: "foo"}
+	w.wake <- wakeEvent{reason: "startup"}
+	w.wake <- wakeEvent{reason: "heartbeat"}
+	close(w.wake)
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("eventWorker.run did not return after the wake channel closed")
 	}
 }
