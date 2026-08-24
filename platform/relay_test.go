@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"hash/fnv"
 	"sort"
 	"strings"
 	"testing"
@@ -65,5 +66,24 @@ func TestValidGithubSig(t *testing.T) {
 	}
 	if validGithubSig("", good, body) {
 		t.Error("validGithubSig accepted a signature with an empty secret")
+	}
+}
+
+func TestRepoHash(t *testing.T) {
+	cases := []string{"owner/repo", "a/b", "javimosch/mago"}
+	for _, repo := range cases {
+		got := repoHash(repo)
+		h := fnv.New32a()
+		h.Write([]byte(repo))
+		want := h.Sum32()
+		if got != want {
+			t.Errorf("repoHash(%q) = %d, want %d", repo, got, want)
+		}
+	}
+
+	// Different repos should almost certainly produce different hashes.
+	a, b := repoHash("foo/bar"), repoHash("bar/foo")
+	if a == b {
+		t.Errorf("repoHash collisions: foo/bar and bar/foo both hash to %d", a)
 	}
 }
