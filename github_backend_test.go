@@ -611,3 +611,24 @@ func TestGithubBackendClearClarify(t *testing.T) {
 		t.Errorf("comment body missing mago:go text: %q", body)
 	}
 }
+
+// TestGithubBackendListTasks_GhError verifies that a gh CLI failure during issue
+// listing is surfaced as a clear error rather than being swallowed or misreported.
+func TestGithubBackendListTasks_GhError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+	echo "network timeout" >&2
+	exit 1
+else
+	exit 1
+fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	_, err := b.ListTasks()
+	if err == nil {
+		t.Fatal("expected error when gh issue list fails")
+	}
+	if !strings.Contains(err.Error(), "issue list") || !strings.Contains(err.Error(), "network timeout") {
+		t.Errorf("error %q should mention the failing gh subcommand and stderr", err.Error())
+	}
+}
