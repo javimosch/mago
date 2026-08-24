@@ -35,6 +35,26 @@ func TestApplyModelOverrides(t *testing.T) {
 			t.Fatalf("Model = %q, want %q", a.Model, "openai/gpt-4")
 		}
 	})
+
+	t.Run("padded provider is trimmed", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "  pi  ")
+		t.Setenv("MAGO_MODEL", "")
+		a := &Agent{Provider: "tau", Model: "deepseek-v4"}
+		applyModelOverrides(a)
+		if a.Provider != "pi" {
+			t.Fatalf("Provider = %q, want %q", a.Provider, "pi")
+		}
+	})
+
+	t.Run("padded model is trimmed", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "")
+		t.Setenv("MAGO_MODEL", "  openai/gpt-4  ")
+		a := &Agent{Provider: "tau", Model: "deepseek-v4"}
+		applyModelOverrides(a)
+		if a.Model != "openai/gpt-4" {
+			t.Fatalf("Model = %q, want %q", a.Model, "openai/gpt-4")
+		}
+	})
 }
 
 func TestTauConfigHasKey(t *testing.T) {
@@ -137,6 +157,26 @@ func TestWarnIfNoProviderKey(t *testing.T) {
 	t.Run("flash model warns", func(t *testing.T) {
 		t.Setenv("MAGO_PROVIDER", "opencode-go")
 		t.Setenv("MAGO_MODEL", "openrouter/flash-v1")
+		t.Setenv("OPENCODE_API_KEY", "secret")
+		out := capture(warnIfNoProviderKey)
+		if !strings.Contains(out, "flash variant") {
+			t.Errorf("flash model stderr = %q, want flash warning", out)
+		}
+	})
+
+	t.Run("padded provider still maps to key", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "  opencode-go  ")
+		t.Setenv("MAGO_MODEL", "")
+		t.Setenv("OPENCODE_API_KEY", "")
+		out := capture(warnIfNoProviderKey)
+		if !strings.Contains(out, "no API key for provider") {
+			t.Errorf("missing key stderr = %q, want key warning", out)
+		}
+	})
+
+	t.Run("padded flash model still warns", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "opencode-go")
+		t.Setenv("MAGO_MODEL", "  openrouter/flash-v1  ")
 		t.Setenv("OPENCODE_API_KEY", "secret")
 		out := capture(warnIfNoProviderKey)
 		if !strings.Contains(out, "flash variant") {

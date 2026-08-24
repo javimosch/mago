@@ -101,7 +101,7 @@ func providerCheckNames(provider string) []string {
 // Prints a pass/fail line per check with a fix hint on failure.
 // Exits 101 if any check fails (integration error per AGENTS.md exit code map).
 func workerDoctor() {
-	provider := os.Getenv("MAGO_PROVIDER")
+	provider := strings.TrimSpace(os.Getenv("MAGO_PROVIDER"))
 
 	var checks []diagCheck
 	if provider == "claude" {
