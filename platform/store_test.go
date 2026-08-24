@@ -107,3 +107,24 @@ func TestStoreLookups(t *testing.T) {
 		t.Errorf("GetByLicense(no-such) = %+v, want nil", got)
 	}
 }
+
+func TestFirstEvent(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if !st.FirstEvent("evt-1") {
+		t.Errorf("FirstEvent(evt-1) first insert = false, want true")
+	}
+	if st.FirstEvent("evt-1") {
+		t.Errorf("FirstEvent(evt-1) second insert = true, want false")
+	}
+	if !st.FirstEvent("evt-2") {
+		t.Errorf("FirstEvent(evt-2) = false, want true")
+	}
+	if st.FirstEvent("") {
+		t.Errorf("FirstEvent(\"\") = true, want false")
+	}
+}
