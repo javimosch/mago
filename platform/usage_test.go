@@ -1,7 +1,9 @@
 package main
 
 import (
+	"io"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -110,5 +112,30 @@ func TestAgoStr(t *testing.T) {
 				t.Errorf("agoStr(%d) = %q, want match %q", c.ts, got, c.pattern)
 			}
 		})
+	}
+}
+
+func TestCmdUsageEmpty(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "empty.db")
+	t.Setenv("DB_PATH", db)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+
+	err = cmdUsage([]string{"3"})
+	w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Errorf("cmdUsage = %v, want nil", err)
+	}
+
+	out, _ := io.ReadAll(r)
+	if !strings.Contains(string(out), "no relayed GitHub activity in the last 3d") {
+		t.Errorf("output = %q, want empty-usage message", string(out))
 	}
 }
