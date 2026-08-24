@@ -505,3 +505,23 @@ func TestCmdAccountStatus(t *testing.T) {
 		t.Errorf("expected license in output, got: %q", out)
 	}
 }
+
+// TestCmdAccount_UsageError verifies cmdAccount rejects any args other than
+// "status" with a clear usage message instead of silently doing nothing.
+func TestCmdAccount_UsageError(t *testing.T) {
+	err := cmdAccount([]string{"billing"})
+	if err == nil {
+		t.Fatal("expected error for non-status account subcommand")
+	}
+	if !strings.Contains(err.Error(), "usage: mago account status") {
+		t.Errorf("error = %q, want usage message", err.Error())
+	}
+
+	err = cmdAccount([]string{})
+	if err == nil {
+		t.Fatal("expected error for empty account args")
+	}
+	if !strings.Contains(err.Error(), "usage: mago account status") {
+		t.Errorf("error = %q, want usage message", err.Error())
+	}
+}
