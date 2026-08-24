@@ -128,3 +128,47 @@ func TestFirstEvent(t *testing.T) {
 		t.Errorf("FirstEvent(\"\") = true, want false")
 	}
 }
+
+func TestRepoGrants(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if got := st.EntitledRepos(u.ID); len(got) != 0 {
+		t.Errorf("EntitledRepos before grants = %v, want empty", got)
+	}
+
+	if err := st.GrantRepo(u.ID, "owner/repo-a"); err != nil {
+		t.Fatalf("GrantRepo: %v", err)
+	}
+	if err := st.GrantRepo(u.ID, "owner/repo-b"); err != nil {
+		t.Fatalf("GrantRepo: %v", err)
+	}
+
+	got := st.EntitledRepos(u.ID)
+	if !got["owner/repo-a"] || !got["owner/repo-b"] || len(got) != 2 {
+		t.Errorf("EntitledRepos after grants = %v, want [owner/repo-a owner/repo-b]", got)
+	}
+
+	if err := st.RevokeRepo(u.ID, "owner/repo-a"); err != nil {
+		t.Fatalf("RevokeRepo: %v", err)
+	}
+	got = st.EntitledRepos(u.ID)
+	if got["owner/repo-a"] {
+		t.Errorf("EntitledRepos after revoke still contains owner/repo-a")
+	}
+	if !got["owner/repo-b"] {
+		t.Errorf("EntitledRepos after revoke missing owner/repo-b")
+	}
+
+	if err := st.RevokeRepo(u.ID, "not-granted"); err != nil {
+		t.Errorf("RevokeRepo on missing repo = %v, want nil", err)
+	}
+}
