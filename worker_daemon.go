@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// executablePath returns the path to the current executable. It is a variable so
+// tests can substitute a stub supervisor/worker without launching the real binary.
+var executablePath = os.Executable
+
 // worker_daemon.go gives the worker a native lifecycle: `mago serve --daemon` detaches a supervisor
 // (per-company pidfile + logfile) that keeps the worker up — restarting it on crash, but exiting
 // cleanly when the worker stops on its own (e.g. `--until`) or on `mago serve stop`. Per-company so a
@@ -40,7 +44,7 @@ func daemonizeWorker(c *Company, cleanArgs []string) error {
 	if pid, alive := readWorkerPid(c); alive {
 		return fmt.Errorf("worker already running for %q (pid %d) — `mago serve stop` first", c.Name, pid)
 	}
-	exe, err := os.Executable()
+	exe, err := executablePath()
 	if err != nil {
 		return err
 	}
@@ -67,7 +71,7 @@ func daemonizeWorker(c *Company, cleanArgs []string) error {
 // real foreground worker) and restarts it on crash, with backoff. A clean worker exit (code 0, e.g.
 // --until) or SIGTERM stops the supervisor too. workerArgs is the serve args with --supervise removed.
 func superviseWorker(workerArgs []string) error {
-	exe, err := os.Executable()
+	exe, err := executablePath()
 	if err != nil {
 		return err
 	}

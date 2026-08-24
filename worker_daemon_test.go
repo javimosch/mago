@@ -163,3 +163,65 @@ func TestClassifyServeProc(t *testing.T) {
 		}
 	}
 }
+
+// writeStubExe creates an executable shell script at a temp path. The script is
+// used in place of the mago binary so daemon/supervisor tests do not recurse
+// into a real worker.
+func writeStubExe(t *testing.T, script string) string {
+	t.Helper()
+	dir := t.TempDir()
+	f := filepath.Join(dir, "mago-stub.sh")
+	if err := os.WriteFile(f, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	return f
+}
+
+func TestDaemonizeWorker_AlreadyRunning(t *testing.T) {
+	c := newTestCompany(t)
+	if err := os.WriteFile(workerPidFile(c), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	err := daemonizeWorker(c, []string{})
+	if err == nil {
+		t.Fatal("expected error for running worker")
+	}
+	if !strings.Contains(err.Error(), "already running") {
+		t.Errorf("error = %q, want 'already running'", err.Error())
+	}
+}
+
+func TestDaemonizeWorker_StartsSupervisor(t *testing.T) {
+	c := newTestCompany(t)
+	stub := writeStubExe(t, "exit 0")
+
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return stub, nil }
+
+	out := captureStdout(t, func() {
+		if err := daemonizeWorker(c, []string{}); err != nil {
+			t.Fatalf("daemonizeWorker: %v", err)
+		}
+	})
+	if !strings.Contains(out, "mago worker started") {
+		t.Errorf("output = %q, want 'mago worker started'", out)
+	}
+	// The stub exits immediately, so just make sure we wrote a pidfile.
+	if _, err := os.Stat(workerPidFile(c)); err != nil {
+		t.Errorf("pidfile not written: %v", err)
+	}
+	os.Remove(workerPidFile(c))
+}
+
+func TestSuperviseWorker_CleanExit(t *testing.T) {
+	stub := writeStubExe(t, "exit 0")
+
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return stub, nil }
+
+	if err := superviseWorker([]string{}); err != nil {
+		t.Fatalf("superviseWorker: %v", err)
+	}
+}
