@@ -9,3 +9,6 @@ platform/.env
 *.db-shm
 *.out
 /dist/
+.devin/
+.claude/
+.am-summary

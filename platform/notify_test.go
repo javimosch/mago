@@ -1,6 +1,10 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -84,4 +88,76 @@ func TestNotifyOnEvent_Unconfigured(t *testing.T) {
 	if len(firstConnectSince) != 0 {
 		t.Errorf("firstConnectSince should remain empty, got %d entries", len(firstConnectSince))
 	}
+}
+
+// roundTripperFunc is a simple http.RoundTripper adapter for tests.
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+// TestSendTelegramMessage verifies the Telegram POST is well-formed and HTTP
+// errors and transport failures are surfaced.
+func TestSendTelegramMessage(t *testing.T) {
+	orig := http.DefaultClient
+	defer func() { http.DefaultClient = orig }()
+
+	t.Run("success", func(t *testing.T) {
+		http.DefaultClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != "POST" {
+				t.Errorf("want POST, got %s", req.Method)
+			}
+			if req.URL.Host != "api.telegram.org" {
+				t.Errorf("want host api.telegram.org, got %s", req.URL.Host)
+			}
+			if got, want := req.URL.Path, "/bottoken/sendMessage"; got != want {
+				t.Errorf("path = %q, want %q", got, want)
+			}
+
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			_ = req.Body.Close()
+			s := string(body)
+			if !strings.Contains(s, "chat123") || !strings.Contains(s, "hello") {
+				t.Errorf("body missing chat or text: %s", s)
+			}
+
+			return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+		})}
+
+		if err := sendTelegramMessage(context.Background(), "token", "chat123", "hello"); err != nil {
+			t.Fatalf("sendTelegramMessage: %v", err)
+		}
+	})
+
+	t.Run("http error", func(t *testing.T) {
+		http.DefaultClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusInternalServerError, Body: http.NoBody, Request: req}, nil
+		})}
+
+		err := sendTelegramMessage(context.Background(), "token", "chat123", "hello")
+		if err == nil {
+			t.Fatal("expected error for 500 response")
+		}
+		if !strings.Contains(err.Error(), "telegram: HTTP 500") {
+			t.Errorf("error = %q, want 'telegram: HTTP 500'", err.Error())
+		}
+	})
+
+	t.Run("transport error", func(t *testing.T) {
+		http.DefaultClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			return nil, errors.New("network down")
+		})}
+
+		err := sendTelegramMessage(context.Background(), "token", "chat123", "hello")
+		if err == nil {
+			t.Fatal("expected error for transport failure")
+		}
+		if !strings.Contains(err.Error(), "network down") {
+			t.Errorf("error = %q, want 'network down'", err.Error())
+		}
+	})
 }

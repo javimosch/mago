@@ -58,3 +58,47 @@ func TestHandleLandingNotFound(t *testing.T) {
 		t.Errorf("status = %d, want 404", rec.Code)
 	}
 }
+
+func TestHandleOperators(t *testing.T) {
+	s := &server{appURL: "http://localhost:9100"}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/operators", nil)
+
+	s.handleOperators(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want text/html", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Operator guide") {
+		t.Errorf("body missing title, got: %q", body)
+	}
+	if !strings.Contains(body, "http://localhost:9100") {
+		t.Errorf("body missing appURL, got: %q", body)
+	}
+}
+
+func TestHandleLLMs(t *testing.T) {
+	s := &server{appURL: "http://localhost:9100"}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/llms.txt", nil)
+
+	s.handleLLMs(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/plain") {
+		t.Errorf("Content-Type = %q, want text/plain", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "## Prerequisites") {
+		t.Errorf("body missing heading, got: %q", body)
+	}
+	if !strings.Contains(body, "http://localhost:9100") {
+		t.Errorf("body missing appURL, got: %q", body)
+	}
+}
