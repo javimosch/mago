@@ -122,3 +122,39 @@ func TestValidateProjectsConfig_Malformed(t *testing.T) {
 		t.Errorf("error = %q, want 'not valid JSON'", err.Error())
 	}
 }
+
+// TestValidateGHRepo verifies the MAGO_GH_REPO sanity checks: valid bare owner/repo,
+// empty (unset), common URL/remote mistakes, missing owner or repo, and trailing .git.
+func TestValidateGHRepo(t *testing.T) {
+	tests := []struct {
+		repo string
+		want string // expected substring in error; empty means no error
+	}{
+		{"", ""},
+		{"acme/backlog", ""},
+		{"https://github.com/acme/backlog", "looks like a URL or git remote"},
+		{"git@github.com:acme/backlog.git", "looks like a URL or git remote"},
+		{"github.com/acme/backlog", "looks like a URL or git remote"},
+		{"backlog", "missing an owner or repo"},
+		{"/acme/backlog", "missing an owner or repo"},
+		{"acme/", "missing an owner or repo"},
+		{"acme/backlog/extra", "missing an owner or repo"},
+		{"acme/backlog.git", "trailing .git"},
+	}
+	for _, tc := range tests {
+		err := validateGHRepo(tc.repo)
+		if tc.want == "" {
+			if err != nil {
+				t.Errorf("validateGHRepo(%q) = %v, want nil", tc.repo, err)
+			}
+			continue
+		}
+		if err == nil {
+			t.Errorf("validateGHRepo(%q) = nil, want error containing %q", tc.repo, tc.want)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("validateGHRepo(%q) = %q, want containing %q", tc.repo, err.Error(), tc.want)
+		}
+	}
+}
