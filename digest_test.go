@@ -224,6 +224,52 @@ None yet.
 	}
 }
 
+// TestCmdDigestSingleProject exercises the single-project (MAGO_GH_REPO-only) branch of
+// cmdDigest: when the company has one adopted backlog repo and no projects.json, the digest
+// should print company-repo backlog counts and PR throughput without gh network calls.
+func TestCmdDigestSingleProject(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("setup: mkdir .mago: %v", err)
+	}
+
+	// Fake gh that returns empty issue lists and a fixed PR count.
+	ghDir := t.TempDir()
+	script := `#!/bin/sh
+if echo "$*" | grep -q issue; then
+	echo "[]"
+	exit 0
+fi
+if echo "$*" | grep -q pr; then
+	echo "3"
+	exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(filepath.Join(ghDir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake gh: %v", err)
+	}
+	t.Setenv("PATH", ghDir+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_GH_REPO", "acme/repo")
+	t.Setenv("MAGO_TASK_LABEL", "")
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Backlog (acme/repo):") {
+		t.Errorf("digest should label backlog with the company repo, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Pull requests (last 24h):") {
+		t.Errorf("digest should print PR throughput for a single project, got:\n%s", out)
+	}
+	if !strings.Contains(out, "shipped by mago") {
+		t.Errorf("digest should include the mago-shipped metric, got:\n%s", out)
+	}
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()

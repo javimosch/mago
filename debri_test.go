@@ -95,6 +95,22 @@ func TestExtractDebriFinalContent_FallbackChunks(t *testing.T) {
 	}
 }
 
+func TestExtractDebriFinalContent_ChunksNoDone(t *testing.T) {
+	// If debri exits without ever emitting a {"event":"done"} line, but it did stream
+	// chunks, we should still return the concatenated output rather than discarding it.
+	lines := []string{
+		`{"event":"chunk","content":"hel"}`,
+		`{"event":"chunk","content":"lo"}`,
+	}
+	got, err := extractDebriFinalContent(lines)
+	if err != nil {
+		t.Fatalf("unexpected error for chunk-only output: %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("got %q, want %q", got, "hello")
+	}
+}
+
 func TestExtractDebriFinalContent_ErrorEvent(t *testing.T) {
 	// Critical behavior enabled by debri v1.1.0: a crashed/killed devin session is a real
 	// {"event":"error"}, not a false {"event":"done"} with empty content — the caller must
@@ -175,6 +191,22 @@ func TestWriteDebriPromptFile(t *testing.T) {
 	cleanup()
 	if _, err := os.ReadFile(path); err == nil {
 		t.Error("cleanup should have removed the temp file")
+	}
+}
+
+func TestWriteDebriPromptFile_CreateTempError(t *testing.T) {
+	// If os.CreateTemp cannot create a file (e.g. TMPDIR points at a missing directory),
+	// writeDebriPromptFile must surface the error with a nil cleanup and no partial state.
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "does-not-exist"))
+	path, cleanup, err := writeDebriPromptFile("hello")
+	if err == nil {
+		t.Fatal("expected an error when temp dir is missing, got nil")
+	}
+	if path != "" {
+		t.Errorf("expected empty path on error, got %q", path)
+	}
+	if cleanup != nil {
+		t.Error("expected nil cleanup on error")
 	}
 }
 
