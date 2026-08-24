@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -67,4 +70,44 @@ func TestParseStartFlags(t *testing.T) {
 			t.Error("mixed daemon = false, want true")
 		}
 	})
+}
+
+// TestReadPid verifies missing/malformed pidfiles return not-alive, and the
+// current process is recognized as alive.
+func TestReadPid(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Missing pidfile: not alive.
+	if pid, alive := readPid(); pid != 0 || alive {
+		t.Errorf("missing pidfile: got pid=%d alive=%v, want 0/false", pid, alive)
+	}
+
+	// Malformed pidfile: not alive.
+	pidPath := pidFile()
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(pidPath, []byte("not-a-number\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	if pid, alive := readPid(); pid != 0 || alive {
+		t.Errorf("malformed pidfile: got pid=%d alive=%v, want 0/false", pid, alive)
+	}
+
+	// Current process is alive.
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	if pid, alive := readPid(); pid != os.Getpid() || !alive {
+		t.Errorf("current pid: got pid=%d alive=%v, want %d/true", pid, alive, os.Getpid())
+	}
+
+	// Non-existent process: not alive.
+	if err := os.WriteFile(pidPath, []byte("999999\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+	if pid, alive := readPid(); pid != 999999 || alive {
+		t.Errorf("non-existent pid: got pid=%d alive=%v, want 999999/false", pid, alive)
+	}
 }
