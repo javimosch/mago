@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -16,5 +18,38 @@ func TestUsage(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("usage() missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// TestMain_Dispatch exercises the top-level command router for commands that
+// return without calling os.Exit: version, help, and a simple init. This keeps
+// the dispatch switch covered as new commands are added.
+func TestMain_Dispatch(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	// version just prints the version and returns.
+	os.Args = []string{"mago", "version"}
+	out := captureStdout(t, main)
+	if !strings.Contains(out, version) {
+		t.Errorf("version output = %q, want %q", out, version)
+	}
+
+	// help prints usage and returns.
+	os.Args = []string{"mago", "help"}
+	out = captureStdout(t, main)
+	if !strings.Contains(out, "mago init") {
+		t.Errorf("help output missing 'mago init':\n%s", out)
+	}
+
+	// init creates a company and returns without an error.
+	dir := t.TempDir()
+	os.Args = []string{"mago", "init", dir}
+	out = captureStdout(t, main)
+	if !strings.Contains(out, "initialized mago company") {
+		t.Errorf("init output = %q, want 'initialized mago company'", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".mago")); err != nil {
+		t.Errorf("init did not create .mago/: %v", err)
 	}
 }
