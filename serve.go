@@ -14,6 +14,13 @@ import (
 	"time"
 )
 
+// webhookSecret returns the configured GitHub webhook HMAC secret, trimming
+// accidental whitespace from $MAGO_WEBHOOK_SECRET so copy-pasted secrets do not
+// fail signature verification.
+func webhookSecret() string {
+	return strings.TrimSpace(os.Getenv("MAGO_WEBHOOK_SECRET"))
+}
+
 // cmdServe runs the worker as an event-driven daemon: a GitHub webhook (delivered
 // directly, via a tunnel, or relayed by the platform) wakes it in real time instead of
 // polling. An optional --heartbeat keeps a fallback cadence so missed events still land.
@@ -32,7 +39,7 @@ func cmdServe(args []string) error {
 		}
 	}
 	addr := ":8099"
-	secret := os.Getenv("MAGO_WEBHOOK_SECRET")
+	secret := webhookSecret()
 	heartbeat := 0
 	relay := false
 	daemon := false    // --daemon: detach a supervisor (pidfile/log; restarts on crash)
