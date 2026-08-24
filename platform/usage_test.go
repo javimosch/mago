@@ -1,8 +1,10 @@
 package main
 
 import (
+	"net/http/httptest"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,6 +61,31 @@ func TestUsageAggregation(t *testing.T) {
 	// an account with no activity rolls up to zero, not a panic
 	if z := st.UsageForAccount(999, 7); z.Total != 0 || len(z.Repos) != 0 {
 		t.Errorf("empty account should be zero: %+v", z)
+	}
+}
+
+func TestHandleUsageUnauthorized(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	s := &server{store: st, jwtSecret: "test-secret"}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/usage", nil)
+
+	s.handleUsage(rec, req)
+
+	if rec.Code != 401 {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "unauthorized") {
+		t.Errorf("body = %q, want unauthorized", body)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 }
 
