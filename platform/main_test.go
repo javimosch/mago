@@ -156,3 +156,28 @@ INVALID
 	os.Unsetenv("FOO")
 	os.Unsetenv("BAZ")
 }
+
+func TestLoadEnv(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/.env"
+	if err := os.WriteFile(path, []byte("LOAD_ENV_FOO=from-mago\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Highest priority source wins.
+	t.Setenv("MAGO_PLATFORM_ENV", path)
+	os.Unsetenv("LOAD_ENV_FOO")
+	loadEnv()
+	if got := os.Getenv("LOAD_ENV_FOO"); got != "from-mago" {
+		t.Errorf("LOAD_ENV_FOO = %q, want from-mago", got)
+	}
+
+	// Already-set values are not overridden by later files.
+	t.Setenv("LOAD_ENV_FOO", "preset")
+	loadEnv()
+	if got := os.Getenv("LOAD_ENV_FOO"); got != "preset" {
+		t.Errorf("LOAD_ENV_FOO was overridden to %q", got)
+	}
+
+	os.Unsetenv("LOAD_ENV_FOO")
+}
