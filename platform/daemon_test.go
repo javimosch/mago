@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -70,6 +71,41 @@ func TestParseStartFlags(t *testing.T) {
 			t.Error("mixed daemon = false, want true")
 		}
 	})
+}
+
+// TestCmdStatus verifies the platform daemon status command prints stopped when
+// no pidfile exists and running when the pidfile points to a live process.
+func TestCmdStatus(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// No pidfile: stopped.
+	out := captureStdout(t, func() {
+		if err := cmdStatus(); err != nil {
+			t.Fatalf("cmdStatus stopped: %v", err)
+		}
+	})
+	if !strings.Contains(out, "stopped") {
+		t.Errorf("expected 'stopped', got: %q", out)
+	}
+
+	// Current process: running.
+	pidPath := pidFile()
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+
+	out = captureStdout(t, func() {
+		if err := cmdStatus(); err != nil {
+			t.Fatalf("cmdStatus running: %v", err)
+		}
+	})
+	if !strings.Contains(out, "running") || !strings.Contains(out, strconv.Itoa(os.Getpid())) {
+		t.Errorf("expected 'running' with pid, got: %q", out)
+	}
 }
 
 // TestReadPid verifies missing/malformed pidfiles return not-alive, and the
