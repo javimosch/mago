@@ -131,10 +131,10 @@ func (c *Company) recoverReflection(a *Agent, t *Task, ws string) *Reflection {
 // applyModelOverrides lets the smoke test switch provider/model via env without
 // editing agent files (e.g. MAGO_PROVIDER=opencode-go).
 func applyModelOverrides(a *Agent) {
-	if p := os.Getenv("MAGO_PROVIDER"); p != "" {
+	if p := strings.TrimSpace(os.Getenv("MAGO_PROVIDER")); p != "" {
 		a.Provider = p
 	}
-	if m := os.Getenv("MAGO_MODEL"); m != "" {
+	if m := strings.TrimSpace(os.Getenv("MAGO_MODEL")); m != "" {
 		a.Model = m
 	}
 }
@@ -152,12 +152,12 @@ var providerKeyEnv = map[string]string{
 // Also warns when a "flash" model variant is configured, since those often emit DSML tool-call
 // markup instead of the required reflection JSON.
 func warnIfNoProviderKey() {
-	prov := os.Getenv("MAGO_PROVIDER") // the override operators actually use (e.g. opencode-go)
+	prov := strings.TrimSpace(os.Getenv("MAGO_PROVIDER")) // the override operators actually use (e.g. opencode-go)
 	keyEnv, ok := providerKeyEnv[prov]
 	if !ok {
 		return
 	}
-	if m := os.Getenv("MAGO_MODEL"); strings.Contains(m, "flash") {
+	if m := strings.TrimSpace(os.Getenv("MAGO_MODEL")); strings.Contains(m, "flash") {
 		fmt.Fprintf(os.Stderr, "[warn] model %q is a flash variant — these can emit DSML tool-call markup "+
 			"instead of reflection JSON. Consider using a more reliable model (e.g. deepseek-v4).\n", m)
 	}
