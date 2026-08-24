@@ -326,3 +326,40 @@ func TestEventWorkerRun_PausesAtBudgetCap(t *testing.T) {
 		t.Fatal("eventWorker.run did not return after the wake channel closed")
 	}
 }
+
+// TestHeartbeatLoop verifies that heartbeatLoop emits periodic "heartbeat" wake events
+// on a short ticker without overflowing the queue.
+func TestHeartbeatLoop(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	w := &eventWorker{comp: c, wake: make(chan wakeEvent, 8)}
+
+	go w.heartbeatLoop(50 * time.Millisecond)
+	time.Sleep(130 * time.Millisecond)
+
+	if got := len(w.wake); got < 2 {
+		t.Errorf("got %d heartbeat events, want at least 2", got)
+	}
+}
+
+// TestProactiveLoop verifies that proactiveLoop emits a "proactive cadence" wake event
+// when the company mode has a positive proactive cadence.
+func TestProactiveLoop(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	if err := c.saveMode(workerMode{Proactive: 1, Merge: "on"}); err != nil {
+		t.Fatalf("saveMode: %v", err)
+	}
+
+	w := &eventWorker{comp: c, wake: make(chan wakeEvent, 8)}
+	go w.proactiveLoop()
+
+	select {
+	case ev := <-w.wake:
+		if ev.reason != "proactive cadence" || !ev.proactive {
+			t.Errorf("unexpected wake event: %+v", ev)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("proactiveLoop did not emit a proactive cadence event")
+	}
+}

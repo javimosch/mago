@@ -8,6 +8,28 @@ import (
 	"time"
 )
 
+func TestOverloadish(t *testing.T) {
+	cases := []struct {
+		msg  string
+		want bool
+	}{
+		{"overloaded, try again later", true},
+		{"rate limit exceeded", true},
+		{"timeout waiting for model", true},
+		{"timed out after 30s", true},
+		{"503 service unavailable", true},
+		{"529 server is overloaded", true},
+		{"connection reset by peer", true},
+		{"unknown genuine error", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := overloadish(c.msg); got != c.want {
+			t.Errorf("overloadish(%q) = %v, want %v", c.msg, got, c.want)
+		}
+	}
+}
+
 func TestClaudeModel(t *testing.T) {
 	// Explicit model is respected.
 	if got := claudeModel(&Agent{Model: "opus"}); got != "opus" {
