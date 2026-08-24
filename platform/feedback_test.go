@@ -55,6 +55,48 @@ func TestHandleFeedback_Unauthorized(t *testing.T) {
 	}
 }
 
+// TestHandleFeedback_Valid records a feedback event and returns ok when the
+// message is non-empty and the request is authenticated.
+func TestHandleFeedback_Valid(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "feedback.db")
+	st, err := openStore(db)
+	if err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	secret := "test-secret"
+	s := &server{store: st, jwtSecret: secret}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/feedback", strings.NewReader(`{"message":"  hello\nworld  ","type":"bug","version":"1.2.3","os":"linux"}`))
+	req.Header.Set("Authorization", "Bearer "+jwtSign(secret, u.ID, u.Email))
+	s.handleFeedback(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"ok":true`) {
+		t.Errorf("body missing ok=true: %q", body)
+	}
+	if !strings.Contains(body, `"issue_url":""`) {
+		t.Errorf("body missing empty issue_url: %q", body)
+	}
+
+	// The clipped log event should be recorded.
+	var n int
+	err = st.db.QueryRow("SELECT COUNT(*) FROM events WHERE kind='feedback' AND user_id=? AND detail LIKE '%bug%hello world%'", u.ID).Scan(&n)
+	if err != nil || n != 1 {
+		t.Fatalf("event not recorded as expected: err=%v count=%d", err, n)
+	}
+}
+
 // TestHandleFeedback_EmptyMessage verifies that a request with only whitespace
 // in the message body is rejected with a 400 error.
 func TestHandleFeedback_EmptyMessage(t *testing.T) {
