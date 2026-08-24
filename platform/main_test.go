@@ -181,3 +181,47 @@ func TestLoadEnv(t *testing.T) {
 
 	os.Unsetenv("LOAD_ENV_FOO")
 }
+
+func TestHandleSubscribed(t *testing.T) {
+	cases := []struct {
+		name   string
+		query  string
+		want   string
+		nowant string
+	}{
+		{
+			name:   "success",
+			query:  "",
+			want:   "Subscription active",
+			nowant: "cancelled",
+		},
+		{
+			name:   "cancelled",
+			query:  "?cancelled=1",
+			want:   "Checkout cancelled",
+			nowant: "active",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", "/subscribed"+c.query, nil)
+			handleSubscribed(rec, req)
+
+			if rec.Code != 200 {
+				t.Errorf("status = %d, want 200", rec.Code)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, c.want) {
+				t.Errorf("body missing %q: %q", c.want, body)
+			}
+			if strings.Contains(body, c.nowant) {
+				t.Errorf("body should not contain %q: %q", c.nowant, body)
+			}
+			if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+				t.Errorf("Content-Type = %q, want text/html", ct)
+			}
+		})
+	}
+}
