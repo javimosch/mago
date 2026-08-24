@@ -42,6 +42,22 @@ func TestValidSignature(t *testing.T) {
 	}
 }
 
+func TestWebhookSecret(t *testing.T) {
+	t.Run("env value is trimmed", func(t *testing.T) {
+		t.Setenv("MAGO_WEBHOOK_SECRET", "  shhh  ")
+		if got := webhookSecret(); got != "shhh" {
+			t.Errorf("webhookSecret() = %q, want %q", got, "shhh")
+		}
+	})
+
+	t.Run("empty env returns empty", func(t *testing.T) {
+		t.Setenv("MAGO_WEBHOOK_SECRET", "")
+		if got := webhookSecret(); got != "" {
+			t.Errorf("webhookSecret() = %q, want empty", got)
+		}
+	})
+}
+
 func TestUntilDuration(t *testing.T) {
 	// Valid HH:MM → a duration in (0, 24h].
 	d, err := untilDuration("09:00")

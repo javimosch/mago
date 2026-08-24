@@ -8,6 +8,14 @@ import (
 	"strings"
 )
 
+// mergeUnverifiedEnabled reports whether the operator has opted into merging
+// approved PRs even when no verification check ran. The value is read from
+// $MAGO_MERGE_UNVERIFIED and trimmed so accidental surrounding whitespace does
+// not silently disable the opt-in.
+func mergeUnverifiedEnabled() bool {
+	return strings.TrimSpace(os.Getenv("MAGO_MERGE_UNVERIFIED")) == "1"
+}
+
 // findReviewer returns the company's designated reviewer agent (reviews: true), or nil.
 func (c *Company) findReviewer() *Agent {
 	names, _ := c.loadAgentNames()
@@ -103,7 +111,7 @@ func (c *Company) reviewPR(prRepo string, prNum int) bool {
 	// trustworthy, not just a diff the model liked. Runs only when the merge mode is "verified".
 	vr := c.verifyPR(prRepo, prNum)
 	merge := c.modeMerge() // live mode: review | verified | on
-	mergeUnverified := os.Getenv("MAGO_MERGE_UNVERIFIED") == "1"
+	mergeUnverified := mergeUnverifiedEnabled()
 
 	approved := verdict == "approve"
 

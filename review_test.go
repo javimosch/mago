@@ -163,6 +163,36 @@ func TestDecideMerge(t *testing.T) {
 	}
 }
 
+func TestMergeUnverifiedEnabled(t *testing.T) {
+	t.Run("opted in", func(t *testing.T) {
+		t.Setenv("MAGO_MERGE_UNVERIFIED", "1")
+		if !mergeUnverifiedEnabled() {
+			t.Error("mergeUnverifiedEnabled() = false, want true")
+		}
+	})
+
+	t.Run("padded value is trimmed", func(t *testing.T) {
+		t.Setenv("MAGO_MERGE_UNVERIFIED", "  1  ")
+		if !mergeUnverifiedEnabled() {
+			t.Error("mergeUnverifiedEnabled() = false, want true for padded value")
+		}
+	})
+
+	t.Run("unset is false", func(t *testing.T) {
+		t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+		if mergeUnverifiedEnabled() {
+			t.Error("mergeUnverifiedEnabled() = true, want false")
+		}
+	})
+
+	t.Run("other value is false", func(t *testing.T) {
+		t.Setenv("MAGO_MERGE_UNVERIFIED", "yes")
+		if mergeUnverifiedEnabled() {
+			t.Error("mergeUnverifiedEnabled() = true, want false")
+		}
+	})
+}
+
 // --- findReviewer ---
 
 func TestFindReviewer_NoAgents(t *testing.T) {
