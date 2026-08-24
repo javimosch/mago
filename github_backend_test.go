@@ -191,6 +191,20 @@ func TestGithubBackendListTasksMalformed(t *testing.T) {
 	}
 }
 
+func TestGithubBackendListTasksWithTaskLabel(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ] && [ "${11}" = "--label" ] && [ "${12}" = "backlog" ]; then echo '[{"number":7,"title":"scoped","state":"open","labels":[{"name":"backlog"}]}]'; else exit 1; fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web", taskLabel: "backlog"}
+	tasks, err := b.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != "7" {
+		t.Errorf("got %d tasks, want 1 with ID 7", len(tasks))
+	}
+}
+
 func TestRepoOpenMagoPRs(t *testing.T) {
 	fake := fakeGh(t, `if [ "$3" = "pr" ] && [ "$4" = "list" ] && [ "${10}" = "headRefName" ]; then
 		echo '[{"headRefName":"mago/task-1"},{"headRefName":"feature/x"},{"headRefName":"mago/task-2"}]'
