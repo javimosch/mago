@@ -343,9 +343,9 @@ func TestEventWorkerRun_PausesAtBudgetCap(t *testing.T) {
 	}
 }
 
-// TestHeartbeatLoop verifies that heartbeatLoop emits periodic "heartbeat" wake events
+// TestHeartbeatLoop_Serve verifies that heartbeatLoop emits periodic "heartbeat" wake events
 // on a short ticker without overflowing the queue.
-func TestHeartbeatLoop(t *testing.T) {
+func TestHeartbeatLoop_Serve(t *testing.T) {
 	t.Setenv("MAGO_GH_REPO", "")
 	c := newTestCompany(t)
 	w := &eventWorker{comp: c, wake: make(chan wakeEvent, 8)}
@@ -358,9 +358,9 @@ func TestHeartbeatLoop(t *testing.T) {
 	}
 }
 
-// TestProactiveLoop verifies that proactiveLoop emits a "proactive cadence" wake event
+// TestProactiveLoop_Serve verifies that proactiveLoop emits a "proactive cadence" wake event
 // when the company mode has a positive proactive cadence.
-func TestProactiveLoop(t *testing.T) {
+func TestProactiveLoop_Serve(t *testing.T) {
 	t.Setenv("MAGO_GH_REPO", "")
 	c := newTestCompany(t)
 	if err := c.saveMode(workerMode{Proactive: 1, Merge: "on"}); err != nil {
