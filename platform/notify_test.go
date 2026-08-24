@@ -65,3 +65,23 @@ func TestIsFirstWorkerConnect(t *testing.T) {
 		t.Error("isFirstWorkerConnect after 1+ hour should return true")
 	}
 }
+
+// TestNotifyOnEvent_Unconfigured verifies that when Telegram is not configured
+// the function returns before doing any work and does not touch the worker-connect cache.
+func TestNotifyOnEvent_Unconfigured(t *testing.T) {
+	firstConnectMu.Lock()
+	firstConnectSince = map[int64]time.Time{}
+	firstConnectMu.Unlock()
+
+	t.Setenv("TELEGRAM_BOT_TOKEN", "")
+	t.Setenv("TELEGRAM_CHAT_ID", "")
+
+	notifyOnEvent("signup", 1, "a@example.com", "one-click login")
+	notifyOnEvent("worker_connect", 2, "b@example.com", "worker-1")
+
+	firstConnectMu.Lock()
+	defer firstConnectMu.Unlock()
+	if len(firstConnectSince) != 0 {
+		t.Errorf("firstConnectSince should remain empty, got %d entries", len(firstConnectSince))
+	}
+}
