@@ -483,6 +483,47 @@ func TestCmdWorkerMode_Success(t *testing.T) {
 	}
 }
 
+// TestCmdWorkerMode_NoMatch verifies the command prints a clear "no connected worker
+// matched" message when the platform reports zero updated workers.
+func TestCmdWorkerMode_NoMatch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/api/worker/control" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"updated": 0,
+			"workers": []string{},
+		})
+	}))
+	defer srv.Close()
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+	if err := os.MkdirAll(filepath.Join(home, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+	b, _ := json.Marshal(&cliConfig{Token: "token"})
+	if err := os.WriteFile(filepath.Join(home, ".mago", "config.json"), b, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdWorkerMode([]string{"reactive", "--worker", "w1"}); err != nil {
+			t.Errorf("cmdWorkerMode: %v", err)
+		}
+	})
+	if !strings.Contains(out, "no connected worker matched") {
+		t.Errorf("output missing no-match message:\n%s", out)
+	}
+	if !strings.Contains(out, "w1") {
+		t.Errorf("output missing worker id:\n%s", out)
+	}
+}
+
 // TestWorkerDoctor_FailuresExit101 verifies that workerDoctor exits with code 101
 // (integration error per AGENTS.md) when any diagnostic check fails. Because
 // workerDoctor calls os.Exit, the test runs it in a subprocess so the main test
