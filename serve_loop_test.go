@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// TestHeartbeatLoop verifies the heartbeat ticker wakes the worker with a
+// TestHeartbeatLoop_ServeLoop verifies the heartbeat ticker wakes the worker with a
 // coalescable "heartbeat" event. A short ticker keeps the test fast.
-func TestHeartbeatLoop(t *testing.T) {
+func TestHeartbeatLoop_ServeLoop(t *testing.T) {
 	w := &eventWorker{comp: &Company{Name: "test"}, wake: make(chan wakeEvent, 4)}
 	go w.heartbeatLoop(1 * time.Millisecond)
 
@@ -21,9 +21,9 @@ func TestHeartbeatLoop(t *testing.T) {
 	}
 }
 
-// TestProactiveLoop verifies proactive planning wakes the worker with a
+// TestProactiveLoop_ServeLoop verifies proactive planning wakes the worker with a
 // "proactive cadence" event when the live mode has a positive cadence.
-func TestProactiveLoop(t *testing.T) {
+func TestProactiveLoop_ServeLoop(t *testing.T) {
 	c := newTestCompany(t)
 	if err := c.saveMode(workerMode{Proactive: 1, Merge: "review"}); err != nil {
 		t.Fatalf("saveMode: %v", err)
