@@ -211,3 +211,19 @@ func TestCmdTick_NoAgents(t *testing.T) {
 		t.Errorf("error should mention 'no agents', got: %v", err)
 	}
 }
+
+// TestReconcileOnce_AgentWithNoTasks verifies that reconcileOnce runs through an
+// agent roster, finds nothing to do, and returns cleanly without touching a model.
+func TestReconcileOnce_AgentWithNoTasks(t *testing.T) {
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "cto", "---\ntitle: CTO\nimplements: true\n---\n")
+
+	worked, err := reconcileOnce(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if worked {
+		t.Error("reconcileOnce with no tasks should return worked=false")
+	}
+}
