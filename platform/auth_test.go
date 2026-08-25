@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -95,5 +97,85 @@ func TestHashPasswordAndCheck(t *testing.T) {
 	// An empty hash can never match a login.
 	if checkPassword("hunter2", "") {
 		t.Error("checkPassword accepted an empty hash")
+	}
+}
+
+// TestHandleLogin verifies successful and failed login attempts.
+func TestHandleLogin(t *testing.T) {
+	dir := t.TempDir()
+	st, err := openStore(filepath.Join(dir, "login.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", hashPassword("hunter2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secret := "test-secret"
+	srv := &server{store: st, jwtSecret: secret}
+
+	t.Run("success", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/login", strings.NewReader(`{"email":"dev@example.com","password":"hunter2"}`))
+		srv.handleLogin(rec, req)
+
+		if rec.Code != 200 {
+			t.Errorf("status = %d, want 200", rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `"token":"`) {
+			t.Errorf("body missing token: %q", body)
+		}
+	})
+
+	t.Run("wrong password", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/login", strings.NewReader(`{"email":"dev@example.com","password":"wrong"}`))
+		srv.handleLogin(rec, req)
+
+		if rec.Code != 401 {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "invalid credentials") {
+			t.Errorf("body = %q, want invalid credentials", rec.Body.String())
+		}
+	})
+
+	t.Run("unknown email", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/login", strings.NewReader(`{"email":"missing@example.com","password":"hunter2"}`))
+		srv.handleLogin(rec, req)
+
+		if rec.Code != 401 {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/login", strings.NewReader(`not json`))
+		srv.handleLogin(rec, req)
+
+		if rec.Code != 400 {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+	})
+
+	t.Run("empty password", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/login", strings.NewReader(`{"email":"dev@example.com","password":""}`))
+		srv.handleLogin(rec, req)
+
+		if rec.Code != 401 {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+
+	// Sanity check the created user matches expectations.
+	if u.ID == 0 {
+		t.Error("created user has zero id")
 	}
 }
