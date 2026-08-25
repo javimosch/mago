@@ -77,6 +77,27 @@ func TestEmitProgressPi(t *testing.T) {
 	}
 }
 
+// piComplete is the no-tools lightweight completion path.
+func TestPiComplete(t *testing.T) {
+	tmp := t.TempDir()
+	piBin := filepath.Join(tmp, "pi")
+	json := `{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"complete result"}]}]}`
+	script := "#!/bin/sh\nprintf '%s\\n' '" + json + `'` + "\n"
+	if err := os.WriteFile(piBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	a := &Agent{Model: "openrouter/test"}
+	got, err := piComplete(a, "prompt")
+	if err != nil {
+		t.Fatalf("piComplete error: %v", err)
+	}
+	if got != "complete result" {
+		t.Errorf("piComplete returned %q, want %q", got, "complete result")
+	}
+}
+
 // runPi streams the pi CLI and extracts the final assistant content.
 func TestRunPi(t *testing.T) {
 	tmp := t.TempDir()
