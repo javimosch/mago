@@ -179,3 +179,76 @@ func TestHandleLogin(t *testing.T) {
 		t.Error("created user has zero id")
 	}
 }
+
+// TestHandleAccount verifies the /api/account handler returns user details for
+// valid sessions and rejects missing or invalid bearer tokens.
+func TestHandleAccount(t *testing.T) {
+	dir := t.TempDir()
+	st, err := openStore(filepath.Join(dir, "account.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", hashPassword("hunter2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Update(u.ID, func(uu *User) { uu.Plan = "founding" })
+
+	secret := "test-secret"
+	srv := &server{store: st, jwtSecret: secret}
+
+	t.Run("success", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/account", nil)
+		req.Header.Set("Authorization", "Bearer "+jwtSign(secret, u.ID, u.Email))
+		srv.handleAccount(rec, req)
+
+		if rec.Code != 200 {
+			t.Errorf("status = %d, want 200", rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `"email":"dev@example.com"`) {
+			t.Errorf("body missing email: %q", body)
+		}
+		if !strings.Contains(body, `"plan":"founding"`) {
+			t.Errorf("body missing plan: %q", body)
+		}
+		if !strings.Contains(body, `"active":true`) {
+			t.Errorf("body missing active: %q", body)
+		}
+	})
+
+	t.Run("missing token", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/account", nil)
+		srv.handleAccount(rec, req)
+
+		if rec.Code != 401 {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/account", nil)
+		req.Header.Set("Authorization", "Bearer not-a-token")
+		srv.handleAccount(rec, req)
+
+		if rec.Code != 401 {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+
+	t.Run("tampered token", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/account", nil)
+		req.Header.Set("Authorization", "Bearer "+jwtSign(secret, u.ID, u.Email)+"x")
+		srv.handleAccount(rec, req)
+
+		if rec.Code != 401 {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+}
