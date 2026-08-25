@@ -252,3 +252,106 @@ func TestHandleAccount(t *testing.T) {
 		}
 	})
 }
+
+// TestHandleSignup verifies validation, duplicate detection, and both the trial
+// and founding signup flows.
+func TestHandleSignup(t *testing.T) {
+	dir := t.TempDir()
+	st, err := openStore(filepath.Join(dir, "signup.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	secret := "test-secret"
+	srv := &server{store: st, jwtSecret: secret}
+
+	t.Run("success external", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/signup", strings.NewReader(`{"email":"dev@startup.io","password":"hunter2000"}`))
+		srv.handleSignup(rec, req)
+
+		if rec.Code != 200 {
+			t.Errorf("status = %d, want 200", rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `"token":"`) {
+			t.Errorf("body missing token: %q", body)
+		}
+
+		u := st.GetByEmail("dev@startup.io")
+		if u == nil {
+			t.Fatal("user not created")
+		}
+		if u.Plan != "founding" {
+			t.Errorf("plan = %q, want founding for first external signup", u.Plan)
+		}
+		if u.LicenseKey == "" {
+			t.Error("license key not set")
+		}
+	})
+
+	t.Run("success internal", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/signup", strings.NewReader(`{"email":"dev@example.com","password":"hunter2000"}`))
+		srv.handleSignup(rec, req)
+
+		if rec.Code != 200 {
+			t.Errorf("status = %d, want 200", rec.Code)
+		}
+
+		u := st.GetByEmail("dev@example.com")
+		if u == nil {
+			t.Fatal("user not created")
+		}
+		if u.Plan != "trial" {
+			t.Errorf("plan = %q, want trial for internal signup", u.Plan)
+		}
+	})
+
+	t.Run("duplicate email", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/signup", strings.NewReader(`{"email":"dev@example.com","password":"hunter2000"}`))
+		srv.handleSignup(rec, req)
+
+		if rec.Code != 409 {
+			t.Errorf("status = %d, want 409", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "email") {
+			t.Errorf("body = %q, want duplicate email error", rec.Body.String())
+		}
+	})
+
+	t.Run("missing email", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/signup", strings.NewReader(`{"email":"   ","password":"hunter2000"}`))
+		srv.handleSignup(rec, req)
+
+		if rec.Code != 400 {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+	})
+
+	t.Run("short password", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/signup", strings.NewReader(`{"email":"new@startup.io","password":"short"}`))
+		srv.handleSignup(rec, req)
+
+		if rec.Code != 400 {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "at least 8") {
+			t.Errorf("body = %q, want password length error", rec.Body.String())
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/signup", strings.NewReader(`not json`))
+		srv.handleSignup(rec, req)
+
+		if rec.Code != 400 {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+	})
+}
