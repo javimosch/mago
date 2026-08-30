@@ -91,6 +91,40 @@ func TestHandleUsageUnauthorized(t *testing.T) {
 	}
 }
 
+func TestHandleUsageAuthorized(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("alice@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.RecordGHEvent(u.ID, "a/b", "issues", "opened")
+	st.RecordGHEvent(u.ID, "a/b", "pull_request", "opened")
+
+	secret := "test-secret"
+	s := &server{store: st, jwtSecret: secret}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/usage?days=7", nil)
+	req.Header.Set("Authorization", "Bearer "+jwtSign(secret, u.ID, u.Email))
+
+	s.handleUsage(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"total"`) {
+		t.Errorf("body = %q, want usage rollup", body)
+	}
+	if !strings.Contains(body, "\"total\":2") {
+		t.Errorf("body = %q, want 2 total events", body)
+	}
+}
+
 func TestAgoStr(t *testing.T) {
 	cases := []struct {
 		name    string

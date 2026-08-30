@@ -61,4 +61,10 @@ func TestFoundingEntitlementAndSlots(t *testing.T) {
 	if (&User{Plan: "trial", TrialEnds: 1}).entitled() {
 		t.Error("expired trial must not be entitled")
 	}
+
+	// Over-claiming founders (e.g. manual DB edits) must not produce a negative slot count.
+	st.db.Exec("INSERT INTO users (email, password_hash, plan, created_at) VALUES ('overflow@x.com','h','founding',0),('overflow2@x.com','h','founding',0),('overflow3@x.com','h','founding',0),('overflow4@x.com','h','founding',0),('overflow5@x.com','h','founding',0),('overflow6@x.com','h','founding',0),('overflow7@x.com','h','founding',0),('overflow8@x.com','h','founding',0)")
+	if got := st.FoundingSlotsLeft(); got != 0 {
+		t.Errorf("SlotsLeft=%d, want 0 when count exceeds cap", got)
+	}
 }

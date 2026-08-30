@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -22,6 +24,32 @@ func TestHandleDownloadUnsupported(t *testing.T) {
 	}
 	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
 		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestHandleDownloadSuccess(t *testing.T) {
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "mago-linux-amd64")
+	if err := os.WriteFile(binPath, []byte("fake binary bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MAGO_CLI_DIR", dir)
+
+	s := &server{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/dl/mago?os=linux&arch=amd64", nil)
+
+	s.handleDownload(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/octet-stream" {
+		t.Errorf("Content-Type = %q, want application/octet-stream", ct)
+	}
+	body := rec.Body.String()
+	if body != "fake binary bytes" {
+		t.Errorf("body = %q, want fake binary bytes", body)
 	}
 }
 
