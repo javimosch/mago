@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -225,5 +227,50 @@ func TestReconcileOnce_AgentWithNoTasks(t *testing.T) {
 	}
 	if worked {
 		t.Error("reconcileOnce with no tasks should return worked=false")
+	}
+}
+
+// TestReconcileOnce_ReviewerBouncesTask verifies that an open task routed to a
+// review-only agent is immediately bounced and the tick reports work, without
+// ever calling runTau for that agent.
+func TestReconcileOnce_ReviewerBouncesTask(t *testing.T) {
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	// tauComplete returns the last JSON object with a "content" field.
+	// A single line with the reviewer name makes routeTask pick it.
+	body := "#!/bin/sh\nprintf '%s\\n' '{\"content\":\"rev\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "rev", "---\nname: rev\ntitle: Head of Org Engineering\nreviews: true\n---\n")
+
+	if _, err := c.tasks.AddTask("Triage the review backlog", ""); err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+
+	worked, err := reconcileOnce(c)
+	if err != nil {
+		t.Fatalf("reconcileOnce: %v", err)
+	}
+	if !worked {
+		t.Error("reconcileOnce should report worked=true when a task is bounced")
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(ts) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(ts))
+	}
+	if ts[0].Assignee != "" {
+		t.Errorf("bounced task should be unassigned, got assignee %q", ts[0].Assignee)
+	}
+	if ts[0].Status != "open" {
+		t.Errorf("bounced task should be open, got status %q", ts[0].Status)
 	}
 }
