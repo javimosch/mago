@@ -87,7 +87,7 @@ func (c *Company) prepProjectWorkspace(t *Task, repo string) (string, error) {
 // stray `mago-state`/`main` branches and polluted the repo. State always lives locally in the company
 // dir regardless; this only controls the extra cross-machine sync, which a mago-owned company opts into.
 func (c *Company) stateSyncEnabled() bool {
-	return c.ghRepo != "" && os.Getenv("MAGO_STATE_SYNC") == "1"
+	return c.ghRepo != "" && strings.TrimSpace(os.Getenv("MAGO_STATE_SYNC")) == "1"
 }
 
 // pushState publishes the company's state when MAGO_STATE_SYNC=1: runtime exhaust (STATE.md +

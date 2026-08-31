@@ -194,6 +194,26 @@ func TestCheckOpenCodeAPIKey_PassWithKey(t *testing.T) {
 	}
 }
 
+// TestCheckOpenCodeAPIKey_WhitespaceFails verifies whitespace-only values are not
+// reported as set, matching the MAGO_PROVIDER/MAGO_MODEL trimming behavior.
+func TestCheckOpenCodeAPIKey_WhitespaceFails(t *testing.T) {
+	t.Setenv("OPENCODE_API_KEY", "   ")
+	c := checkOpenCodeAPIKey()
+	if c.ok {
+		t.Error("checkOpenCodeAPIKey: whitespace-only value should be treated as unset")
+	}
+}
+
+// TestCheckGHToken_WhitespaceFails verifies whitespace-only MAGO_GH_TOKEN is not
+// treated as a configured token.
+func TestCheckGHToken_WhitespaceFails(t *testing.T) {
+	t.Setenv("MAGO_GH_TOKEN", "\t\n")
+	c := checkGHToken()
+	if c.ok {
+		t.Error("checkGHToken: whitespace-only value should be treated as unset")
+	}
+}
+
 // TestCheckGHToken_FailWithoutToken verifies failure when MAGO_GH_TOKEN is unset.
 func TestCheckGHToken_FailWithoutToken(t *testing.T) {
 	t.Setenv("MAGO_GH_TOKEN", "")

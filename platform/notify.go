@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -14,8 +15,8 @@ import (
 // notifyOnEvent sends a Telegram message for high-signal onboarding events.
 // Runs fire-and-forget in a goroutine with a short timeout to avoid blocking.
 func notifyOnEvent(kind string, uid int64, email, detail string) {
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	chatID := os.Getenv("TELEGRAM_CHAT_ID")
+	botToken := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
+	chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID"))
 	if botToken == "" || chatID == "" {
 		return // Telegram not configured; skip.
 	}

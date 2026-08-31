@@ -70,6 +70,25 @@ func TestIsFirstWorkerConnect(t *testing.T) {
 	}
 }
 
+// TestNotifyOnEvent_WhitespaceToken verifies whitespace-only Telegram env values
+// are treated as unconfigured, so the worker-connect cache is not touched.
+func TestNotifyOnEvent_WhitespaceToken(t *testing.T) {
+	firstConnectMu.Lock()
+	firstConnectSince = map[int64]time.Time{}
+	firstConnectMu.Unlock()
+
+	t.Setenv("TELEGRAM_BOT_TOKEN", "   ")
+	t.Setenv("TELEGRAM_CHAT_ID", "\t\n")
+
+	notifyOnEvent("worker_connect", 3, "c@example.com", "worker-2")
+
+	firstConnectMu.Lock()
+	defer firstConnectMu.Unlock()
+	if len(firstConnectSince) != 0 {
+		t.Errorf("firstConnectSince should remain empty with whitespace token, got %d entries", len(firstConnectSince))
+	}
+}
+
 // TestNotifyOnEvent_Unconfigured verifies that when Telegram is not configured
 // the function returns before doing any work and does not touch the worker-connect cache.
 func TestNotifyOnEvent_Unconfigured(t *testing.T) {
