@@ -208,6 +208,36 @@ func TestFrontmatterRoundTripPreservesOrder(t *testing.T) {
 	}
 }
 
+// TestAtoiSafe verifies that the helper parses integers after trimming whitespace and
+// falls back to 0 for malformed or empty input, which is how MAGO_* numeric env vars are read.
+func TestAtoiSafe(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int
+	}{
+		{"42", 42},
+		{"  7  ", 7},
+		{"0", 0},
+		{"", 0},
+		{"not-a-number", 0},
+	}
+	for _, tc := range cases {
+		if got := atoiSafe(tc.in); got != tc.want {
+			t.Errorf("atoiSafe(%q) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestFmtID verifies that task/PR numbers are rendered as plain decimal strings.
+func TestFmtID(t *testing.T) {
+	if got := fmtID(123); got != "123" {
+		t.Errorf("fmtID(123) = %q, want %q", got, "123")
+	}
+	if got := fmtID(0); got != "0" {
+		t.Errorf("fmtID(0) = %q, want %q", got, "0")
+	}
+}
+
 // TestValidateAgentFrontmatter verifies that valid agent frontmatter is accepted,
 // unknown keys are rejected with a helpful message, and boolean keys are validated.
 func TestValidateAgentFrontmatter(t *testing.T) {
