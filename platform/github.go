@@ -169,13 +169,13 @@ func cmdWebhook(args []string) error {
 		}
 	}
 	if secret == "" {
-		secret = os.Getenv("GITHUB_WEBHOOK_SECRET")
+		secret = strings.TrimSpace(os.Getenv("GITHUB_WEBHOOK_SECRET"))
 	}
 
 	switch sub {
 	case "add":
 		if urlFlag == "" {
-			urlFlag = os.Getenv("APP_URL")
+			urlFlag = strings.TrimSpace(os.Getenv("APP_URL"))
 		}
 		if urlFlag == "" {
 			return fmt.Errorf("--url <public-platform-host> required (where GitHub delivers webhooks)")

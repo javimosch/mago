@@ -111,7 +111,7 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 // recoverReflection salvages a tick whose main output didn't parse, by asking the
 // model (no tools) to emit just the reflection given the task and workspace state.
 func (c *Company) recoverReflection(a *Agent, t *Task, ws string) *Reflection {
-	if os.Getenv("MAGO_TEST_BAD_REFLECTION") == "2" {
+	if strings.TrimSpace(os.Getenv("MAGO_TEST_BAD_REFLECTION")) == "2" {
 		return nil // test hook: simulate recovery ALSO failing -> self-heal path
 	}
 	prompt := "You just finished a work tick on this task:\nTITLE: " + t.Title +
