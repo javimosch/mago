@@ -39,12 +39,29 @@ func TestReadCreds(t *testing.T) {
 		t.Errorf("env password = %q / %q, want env@example.com / envpass", email, password)
 	}
 
+	// Env value is trimmed before it is used as the password.
+	t.Setenv("MAGO_PASSWORD", "  envpass  ")
+	email, password, err = readCreds(nil, "  ENV2@EXAMPLE.COM  ")
+	if err != nil {
+		t.Fatalf("padded env password: %v", err)
+	}
+	if email != "env2@example.com" || password != "envpass" {
+		t.Errorf("padded env password = %q / %q, want env2@example.com / envpass", email, password)
+	}
+
 	// Missing password with no env falls through to the interactive prompt; in tests stdin
 	// is not a tty so prompt returns an error instead of blocking.
 	t.Setenv("MAGO_PASSWORD", "")
 	_, _, err = readCreds([]string{"--email", "dev@example.com"}, "")
 	if err == nil {
 		t.Errorf("missing password: expected error, got nil")
+	}
+
+	// Whitespace-only env value is treated as unset.
+	t.Setenv("MAGO_PASSWORD", "   ")
+	_, _, err = readCreds([]string{"--email", "dev@example.com"}, "")
+	if err == nil {
+		t.Errorf("whitespace-only MAGO_PASSWORD: expected error, got nil")
 	}
 }
 

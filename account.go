@@ -121,8 +121,9 @@ func readCreds(rest []string, knownEmail string) (email, password string, err er
 			}
 		}
 	}
+	password = strings.TrimSpace(password)
 	if password == "" {
-		password = os.Getenv("MAGO_PASSWORD")
+		password = strings.TrimSpace(os.Getenv("MAGO_PASSWORD"))
 	}
 	if email == "" {
 		email, err = prompt("Email: ", false)
