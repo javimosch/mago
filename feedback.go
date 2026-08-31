@@ -122,7 +122,7 @@ func cmdFeedback(args []string) error {
 
 	// Write 2: relay (best-effort, honor FEEDBACK_RELAY=off)
 	relayed := 0
-	relayURL := os.Getenv("FEEDBACK_RELAY")
+	relayURL := strings.TrimSpace(os.Getenv("FEEDBACK_RELAY"))
 	if relayURL == "" {
 		relayURL = defaultRelayURL
 	}
