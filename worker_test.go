@@ -559,7 +559,7 @@ func TestWorkerDoctor_FailuresExit101(t *testing.T) {
 	}
 
 	cmd := exec.Command(os.Args[0], "-test.run=TestWorkerDoctor_FailuresExit101")
-	cmd.Env = append(os.Environ(), "MAGO_TEST_WORKER_DOCTOR_CHILD=1")
+	cmd.Env = append(os.Environ(), "MAGO_TEST_WORKER_DOCTOR_CHILD= 1")
 	err := cmd.Run()
 	exit, ok := err.(*exec.ExitError)
 	if !ok {
