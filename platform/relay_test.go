@@ -71,6 +71,89 @@ func TestValidGithubSig(t *testing.T) {
 	}
 }
 
+func TestRelayHub(t *testing.T) {
+	h := newRelayHub()
+
+	c1 := &relayConn{
+		license: "lic-1",
+		worker:  "w1",
+		key:     "lic-1\x00w1",
+		repos:   map[string]bool{"owner/repo": true},
+		ch:      make(chan relayMsg, 1),
+	}
+
+	// First registration returns nil and stores the worker.
+	if old := h.register(c1); old != nil {
+		t.Fatalf("register first conn returned %v, want nil", old)
+	}
+
+	// Routing a matching event delivers it.
+	if got := h.route("owner/repo", relayMsg{Event: "issues"}); got != 1 {
+		t.Fatalf("route returned %d, want 1", got)
+	}
+	select {
+	case msg := <-c1.ch:
+		if msg.Event != "issues" {
+			t.Errorf("routed msg.Event = %q, want issues", msg.Event)
+		}
+	default:
+		t.Error("routed message was not delivered to the worker channel")
+	}
+
+	// Routing to an unknown repo returns 0.
+	if got := h.route("unknown/repo", relayMsg{Event: "push"}); got != 0 {
+		t.Fatalf("route(unknown) returned %d, want 0", got)
+	}
+
+	// Registering a second worker with the same key displaces the first.
+	c2 := &relayConn{
+		license: "lic-1",
+		worker:  "w1",
+		key:     "lic-1\x00w1",
+		repos:   map[string]bool{"owner/repo": true},
+		ch:      make(chan relayMsg, 1),
+	}
+	if old := h.register(c2); old != c1 {
+		t.Fatalf("register replacement returned %v, want c1", old)
+	}
+	if _, ok := <-c1.ch; ok {
+		t.Error("displaced worker channel was not closed")
+	}
+
+	// Unregister only removes the current connection for the key.
+	h.unregister(c2)
+	if got := h.route("owner/repo", relayMsg{Event: "pull_request"}); got != 0 {
+		t.Fatalf("route after unregister returned %d, want 0", got)
+	}
+
+	// controlMode sends to all workers for a license.
+	c3 := &relayConn{
+		license: "lic-2",
+		worker:  "w2",
+		key:     "lic-2\x00w2",
+		repos:   map[string]bool{},
+		ch:      make(chan relayMsg, 1),
+	}
+	h.register(c3)
+	hit := h.controlMode("lic-2", "", true, relayMsg{Event: "control"})
+	if len(hit) != 1 || hit[0] != "w2" {
+		t.Fatalf("controlMode(all) hit = %v, want [w2]", hit)
+	}
+	select {
+	case msg := <-c3.ch:
+		if msg.Event != "control" {
+			t.Errorf("control msg.Event = %q, want control", msg.Event)
+		}
+	default:
+		t.Error("control message was not delivered")
+	}
+
+	// controlMode for a different worker returns empty.
+	if hit := h.controlMode("lic-2", "w3", false, relayMsg{}); len(hit) != 0 {
+		t.Fatalf("controlMode(other) hit = %v, want empty", hit)
+	}
+}
+
 func TestRepoHash(t *testing.T) {
 	cases := []string{"owner/repo", "a/b", "javimosch/mago"}
 	for _, repo := range cases {
