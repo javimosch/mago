@@ -177,7 +177,7 @@ func checkGhAuth() diagCheck {
 }
 
 func checkOpenCodeAPIKey() diagCheck {
-	if os.Getenv("OPENCODE_API_KEY") == "" {
+	if strings.TrimSpace(os.Getenv("OPENCODE_API_KEY")) == "" {
 		return diagCheck{
 			label: "OPENCODE_API_KEY set",
 			ok:    false,
@@ -239,7 +239,7 @@ func checkClaudeAuth() diagCheck {
 // An absent token means mago falls back to gh's own auth, which may silently
 // fail in CI or on a fresh machine. This check makes the missing token explicit.
 func checkGHToken() diagCheck {
-	if os.Getenv("MAGO_GH_TOKEN") == "" {
+	if strings.TrimSpace(os.Getenv("MAGO_GH_TOKEN")) == "" {
 		return diagCheck{
 			label: "MAGO_GH_TOKEN set",
 			ok:    false,
