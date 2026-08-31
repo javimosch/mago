@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"hash/fnv"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -85,5 +87,35 @@ func TestRepoHash(t *testing.T) {
 	a, b := repoHash("foo/bar"), repoHash("bar/foo")
 	if a == b {
 		t.Errorf("repoHash collisions: foo/bar and bar/foo both hash to %d", a)
+	}
+}
+
+func TestCliVersionTrimsMAGOCLIDir(t *testing.T) {
+	dir := t.TempDir()
+	plat := "linux-amd64"
+	bin := filepath.Join(dir, "mago-"+plat)
+	payload := []byte("fake-cli-binary")
+	if err := os.WriteFile(bin, payload, 0o644); err != nil {
+		t.Fatalf("write fake binary: %v", err)
+	}
+
+	// Reset the per-platform version cache so a previous run cannot mask the bug.
+	cliVerMu.Lock()
+	cliVerCache = map[string]cliVerEntry{}
+	cliVerMu.Unlock()
+
+	// Whitespace around MAGO_CLI_DIR must be ignored; without trimming,
+	// filepath.Join would try a path that does not exist.
+	t.Setenv("MAGO_CLI_DIR", " "+dir+" ")
+	got := cliVersion(plat)
+	if got == "" {
+		t.Fatal("cliVersion returned empty for a whitespace-padded MAGO_CLI_DIR")
+	}
+
+	h := sha256.New()
+	h.Write(payload)
+	want := hex.EncodeToString(h.Sum(nil))[:12]
+	if got != want {
+		t.Errorf("cliVersion(%q) = %q, want %q", plat, got, want)
 	}
 }
