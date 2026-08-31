@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // supportedPlatforms is the set of client builds published at /dl/mago (os-arch).
@@ -51,10 +52,10 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bin := ""
-	if dir := os.Getenv("MAGO_CLI_DIR"); dir != "" {
+	if dir := strings.TrimSpace(os.Getenv("MAGO_CLI_DIR")); dir != "" {
 		bin = filepath.Join(dir, "mago-"+plat) // plat is allowlisted above — no traversal
 	} else if plat == "linux-amd64" {
-		bin = os.Getenv("MAGO_CLI_BINARY") // legacy single-binary fallback
+		bin = strings.TrimSpace(os.Getenv("MAGO_CLI_BINARY")) // legacy single-binary fallback
 	}
 	if bin == "" {
 		httpErr(w, 503, "cli binary not published for "+plat)

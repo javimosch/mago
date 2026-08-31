@@ -53,6 +53,42 @@ func TestHandleDownloadSuccess(t *testing.T) {
 	}
 }
 
+func TestHandleDownloadTrimsWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "mago-linux-amd64")
+	if err := os.WriteFile(binPath, []byte("fake binary bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &server{}
+
+	// A whitespace-only MAGO_CLI_DIR falls through to the linux-amd64 legacy
+	// fallback, and a padded MAGO_CLI_BINARY is trimmed before opening.
+	t.Setenv("MAGO_CLI_DIR", "   ")
+	t.Setenv("MAGO_CLI_BINARY", "  "+binPath+"  ")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/dl/mago?os=linux&arch=amd64", nil)
+	s.handleDownload(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != "fake binary bytes" {
+		t.Errorf("body = %q, want fake binary bytes", rec.Body.String())
+	}
+
+	// Whitespace-only values are treated as unset, so the handler reports not published.
+	t.Setenv("MAGO_CLI_DIR", "   ")
+	t.Setenv("MAGO_CLI_BINARY", "   ")
+
+	rec = httptest.NewRecorder()
+	s.handleDownload(rec, req)
+	if rec.Code != 503 {
+		t.Errorf("whitespace-only env status = %d, want 503", rec.Code)
+	}
+}
+
 func TestHandleInstall(t *testing.T) {
 	s := &server{appURL: "http://localhost:9100"}
 	rec := httptest.NewRecorder()
