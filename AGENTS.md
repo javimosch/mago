@@ -118,6 +118,9 @@ authenticated; fail with a clear `100–109` integration error, not a crash, whe
 - Proactive planning is not enough: when `mago serve`'s proactive wake files issues
   (`proposeBacklog() > 0`), the same wake must drive `reconcileOnce()` so the worker routes
   and claims them before idling.
+- Environment values that gate enabled/disabled checks must be read with `strings.TrimSpace`
+  so whitespace-only values are treated as unset. Match existing handling in `mode.go`,
+  `review.go`, `verify.go`, and `worker.go`.
 
 ## Open issue / PR triage
 
