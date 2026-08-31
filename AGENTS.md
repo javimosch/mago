@@ -59,6 +59,9 @@ cd platform && go vet ./...
 
 No output from `gofmt -l .` or `go vet` means green.
 
+Delete coverage artifacts (`cover.out`, `cover.html`, etc.) before staging; although `*.out`
+is gitignored, the generated files should never be committed.
+
 ## Daemon / process surface
 
 `mago-platform` (operator) has the daemon lifecycle: `start [--daemon] [--port]`, `stop`,
