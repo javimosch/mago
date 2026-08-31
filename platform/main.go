@@ -92,12 +92,12 @@ func runServer(port string) {
 		priceID:         os.Getenv("STRIPE_PRICE_MAGO"),
 		appURL:          env("APP_URL", "http://localhost:"+port),
 		ghWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
-		ghAppID:         os.Getenv("GITHUB_APP_ID"),
+		ghAppID:         strings.TrimSpace(os.Getenv("GITHUB_APP_ID")),
 		hub:             newRelayHub(),
 	}
 	// Enforce repo entitlement whenever we're multi-tenant: a GitHub App is configured, or the
 	// operator opts in (webhook-provisioned path). Off by default for local/single-tenant dev.
-	s.enforceEntitlement = s.ghAppID != "" || os.Getenv("GITHUB_ENFORCE_ENTITLEMENT") == "1"
+	s.enforceEntitlement = s.ghAppID != "" || strings.TrimSpace(os.Getenv("GITHUB_ENFORCE_ENTITLEMENT")) == "1"
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") })

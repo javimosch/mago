@@ -262,7 +262,7 @@ func platOf(osName, arch string) string {
 // cliVersion returns sha256[:12] of the published CLI binary for plat (mago-<plat> in MAGO_CLI_DIR),
 // or "" if it can't be read. Cached per file mtime so it isn't re-hashed on every ping frame.
 func cliVersion(plat string) string {
-	dir := os.Getenv("MAGO_CLI_DIR")
+	dir := strings.TrimSpace(os.Getenv("MAGO_CLI_DIR"))
 	if dir == "" {
 		return ""
 	}
