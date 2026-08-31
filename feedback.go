@@ -59,7 +59,7 @@ func genFeedbackID() string {
 }
 
 func reporter() string {
-	if u := os.Getenv("USER"); u != "" {
+	if u := strings.TrimSpace(os.Getenv("USER")); u != "" {
 		return u
 	}
 	return "agent"
