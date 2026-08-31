@@ -2,12 +2,18 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 )
 
 // rewriteTransport redirects requests aimed at api.stripe.com to the test server
@@ -208,5 +214,56 @@ func TestHandleCheckoutFallsBackToCreatingCustomer(t *testing.T) {
 	json.NewDecoder(bytes.NewReader(w.Body.Bytes())).Decode(&out)
 	if out.URL != "https://checkout.stripe.com/test" {
 		t.Fatalf("checkout url=%q", out.URL)
+	}
+}
+
+func TestVerifyStripeSig(t *testing.T) {
+	secret := "whsec_test_secret"
+	body := []byte(`{"id":"evt_123"}`)
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(ts + "." + string(body)))
+	want := hex.EncodeToString(mac.Sum(nil))
+	goodHeader := fmt.Sprintf("t=%s,v1=%s", ts, want)
+
+	if !verifyStripeSig(secret, goodHeader, body) {
+		t.Error("verifyStripeSig should accept a valid Stripe signature")
+	}
+
+	if verifyStripeSig("wrong_secret", goodHeader, body) {
+		t.Error("verifyStripeSig should reject a signature with the wrong secret")
+	}
+
+	if verifyStripeSig(secret, goodHeader, []byte(`{"id":"evt_456"}`)) {
+		t.Error("verifyStripeSig should reject a signature over a different body")
+	}
+
+	if verifyStripeSig(secret, "t="+ts+",v1=deadbeef", body) {
+		t.Error("verifyStripeSig should reject an invalid v1 value")
+	}
+
+	if verifyStripeSig(secret, "t="+ts, body) {
+		t.Error("verifyStripeSig should reject a header with no v1")
+	}
+
+	if verifyStripeSig(secret, "v1="+want, body) {
+		t.Error("verifyStripeSig should reject a header with no t")
+	}
+
+	if verifyStripeSig("", goodHeader, body) {
+		t.Error("verifyStripeSig should reject an empty secret")
+	}
+
+	// Stripe headers can contain extra signed fields after v1; the function should
+	// ignore unknown comma-separated parts and still verify.
+	extraHeader := goodHeader + ",v0=ignored"
+	if !verifyStripeSig(secret, extraHeader, body) {
+		t.Error("verifyStripeSig should accept a valid signature with extra fields")
+	}
+
+	// Whitespace around keys (t and v1) should be tolerated.
+	spacedHeader := "  t  =" + ts + ",  v1  =" + want
+	if !verifyStripeSig(secret, spacedHeader, body) {
+		t.Error("verifyStripeSig should tolerate whitespace around key names")
 	}
 }

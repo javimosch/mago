@@ -549,7 +549,7 @@ func TestCmdWorkerMode_NoMatch(t *testing.T) {
 // workerDoctor calls os.Exit, the test runs it in a subprocess so the main test
 // process isn't terminated.
 func TestWorkerDoctor_FailuresExit101(t *testing.T) {
-	if os.Getenv("MAGO_TEST_WORKER_DOCTOR_CHILD") == "1" {
+	if strings.TrimSpace(os.Getenv("MAGO_TEST_WORKER_DOCTOR_CHILD")) == "1" {
 		t.Setenv("MAGO_PROVIDER", "")
 		t.Setenv("MAGO_GH_REPO", "")
 		t.Setenv("OPENCODE_API_KEY", "")
@@ -559,7 +559,7 @@ func TestWorkerDoctor_FailuresExit101(t *testing.T) {
 	}
 
 	cmd := exec.Command(os.Args[0], "-test.run=TestWorkerDoctor_FailuresExit101")
-	cmd.Env = append(os.Environ(), "MAGO_TEST_WORKER_DOCTOR_CHILD=1")
+	cmd.Env = append(os.Environ(), "MAGO_TEST_WORKER_DOCTOR_CHILD= 1")
 	err := cmd.Run()
 	exit, ok := err.(*exec.ExitError)
 	if !ok {
