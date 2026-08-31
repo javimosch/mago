@@ -84,6 +84,15 @@ func TestTauConfigHasKey(t *testing.T) {
 			t.Fatal("tauConfigHasKey with per-provider key = false, want true")
 		}
 	})
+
+	t.Run("malformed config returns false", func(t *testing.T) {
+		cfg := filepath.Join(dir, ".config", "tau")
+		ensureDir(cfg)
+		os.WriteFile(filepath.Join(cfg, "config.json"), []byte(`{not json`), 0o600)
+		if tauConfigHasKey("opencode-go") {
+			t.Fatal("tauConfigHasKey with malformed config = true, want false")
+		}
+	})
 }
 
 func TestRunTick_NoTask(t *testing.T) {
