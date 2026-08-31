@@ -78,7 +78,7 @@ func runShell(dir, command string, timeout time.Duration) (string, error) {
 	// A worker can run under a stripped PATH (e.g. a minimal run.sh), which would make verification
 	// fail with "command not found" even for a fine PR. Ensure the standard Go toolchain locations
 	// are on PATH so auto-detected `go build/test` works; other tools should be on the worker's PATH.
-	newPath := "/usr/local/go/bin:" + filepath.Join(os.Getenv("HOME"), "go", "bin") + ":" + os.Getenv("PATH")
+	newPath := verificationPath(os.Getenv("HOME"), os.Getenv("PATH"))
 	var env []string
 	for _, e := range os.Environ() {
 		if !strings.HasPrefix(e, "PATH=") {
@@ -88,6 +88,12 @@ func runShell(dir, command string, timeout time.Duration) (string, error) {
 	cmd.Env = append(env, "PATH="+newPath)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// verificationPath returns the PATH string for runShell, prepending the standard Go toolchain
+// locations. It trims whitespace from HOME and PATH so a padded env value doesn't break lookups.
+func verificationPath(home, path string) string {
+	return "/usr/local/go/bin:" + filepath.Join(strings.TrimSpace(home), "go", "bin") + ":" + strings.TrimSpace(path)
 }
 
 // lastLines returns the last n non-empty-trimmed lines of s (for a compact failure excerpt).

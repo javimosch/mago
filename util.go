@@ -73,10 +73,11 @@ func oneLine(s string) string {
 
 func truncate(s string, n int) string {
 	s = strings.TrimSpace(s)
-	if len(s) <= n {
+	r := []rune(s)
+	if len(r) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	return string(r[:n]) + "…"
 }
 
 func ensureDir(p string) error { return os.MkdirAll(p, 0o755) }

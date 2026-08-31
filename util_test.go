@@ -47,6 +47,8 @@ func TestTruncate(t *testing.T) {
 		{"trims then truncates", "  hello world  ", 5, "hello…"},
 		{"zero limit", "abc", 0, "…"},
 		{"empty input", "", 5, ""},
+		{"multibyte runes", "café", 3, "caf…"},
+		{"emoji", "👋 hello", 3, "👋 h…"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
