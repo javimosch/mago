@@ -161,7 +161,7 @@ func warnIfNoProviderKey() {
 		fmt.Fprintf(os.Stderr, "[warn] model %q is a flash variant — these can emit DSML tool-call markup "+
 			"instead of reflection JSON. Consider using a more reliable model (e.g. deepseek-v4).\n", m)
 	}
-	if os.Getenv(keyEnv) != "" || tauConfigHasKey(prov) {
+	if strings.TrimSpace(os.Getenv(keyEnv)) != "" || tauConfigHasKey(prov) {
 		return // key provided via env or the tau config file
 	}
 	fmt.Fprintf(os.Stderr, "[warn] no API key for provider %q — tau will use a rate-limited keyless/builtin "+

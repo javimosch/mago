@@ -41,7 +41,7 @@ func loadConfig() *cliConfig {
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, c)
 	}
-	if u := os.Getenv("MAGO_PLATFORM_URL"); u != "" {
+	if u := strings.TrimSpace(os.Getenv("MAGO_PLATFORM_URL")); u != "" {
 		c.PlatformURL = u
 	}
 	if c.PlatformURL == "" {

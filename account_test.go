@@ -172,6 +172,24 @@ func TestLoadConfigAndSave(t *testing.T) {
 	}
 }
 
+func TestLoadConfigTrimsWhitespace(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	t.Setenv("MAGO_PLATFORM_URL", "  http://env.example  ")
+	c := loadConfig()
+	if c.PlatformURL != "http://env.example" {
+		t.Errorf("padded env PlatformURL = %q, want %q", c.PlatformURL, "http://env.example")
+	}
+
+	// Whitespace-only is treated as unset and the default is kept.
+	t.Setenv("MAGO_PLATFORM_URL", "   ")
+	c = loadConfig()
+	if c.PlatformURL != defaultPlatformURL {
+		t.Errorf("whitespace-only env PlatformURL = %q, want default %q", c.PlatformURL, defaultPlatformURL)
+	}
+}
+
 func TestCliConfigPlatformDo(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
