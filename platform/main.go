@@ -125,7 +125,7 @@ func runServer(port string) {
 }
 
 func env(k, def string) string {
-	if v := os.Getenv(k); v != "" {
+	if v := strings.TrimSpace(os.Getenv(k)); v != "" {
 		return v
 	}
 	return def
@@ -144,7 +144,7 @@ func expand(p string) string {
 // directory of the executable (how it's found in a hotify deploy), and the cwd. Earlier files
 // win since loadDotenv never overrides an already-set var.
 func loadEnv() {
-	if p := os.Getenv("MAGO_PLATFORM_ENV"); p != "" {
+	if p := strings.TrimSpace(os.Getenv("MAGO_PLATFORM_ENV")); p != "" {
 		loadDotenv(expand(p))
 	}
 	loadDotenv("platform/.env") // dev: run from the repo root
@@ -173,7 +173,7 @@ func loadDotenv(path string) {
 		}
 		k = strings.TrimSpace(k)
 		v = strings.Trim(strings.TrimSpace(v), `"'`)
-		if os.Getenv(k) == "" {
+		if strings.TrimSpace(os.Getenv(k)) == "" {
 			os.Setenv(k, v)
 		}
 	}

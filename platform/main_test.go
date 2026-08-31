@@ -16,6 +16,10 @@ func TestEnv(t *testing.T) {
 	if got := env("MAGO_TEST_MISSING", "fallback"); got != "fallback" {
 		t.Errorf("env(missing) = %q, want %q", got, "fallback")
 	}
+	t.Setenv("MAGO_TEST_WHITESPACE", "   ")
+	if got := env("MAGO_TEST_WHITESPACE", "fallback"); got != "fallback" {
+		t.Errorf("env(whitespace) = %q, want %q", got, "fallback")
+	}
 }
 
 func TestExpand(t *testing.T) {
@@ -153,6 +157,14 @@ INVALID
 		t.Errorf("FOO was overridden to %q", os.Getenv("FOO"))
 	}
 
+	// Whitespace-only existing values are treated as unset and may be set by the file.
+	t.Setenv("FOO", "   ")
+	os.WriteFile(path, []byte("FOO=from-dotenv\n"), 0o644)
+	loadDotenv(path)
+	if got := os.Getenv("FOO"); got != "from-dotenv" {
+		t.Errorf("whitespace-only FOO should be overridden by dotenv, got %q", got)
+	}
+
 	os.Unsetenv("FOO")
 	os.Unsetenv("BAZ")
 }
@@ -177,6 +189,14 @@ func TestLoadEnv(t *testing.T) {
 	loadEnv()
 	if got := os.Getenv("LOAD_ENV_FOO"); got != "preset" {
 		t.Errorf("LOAD_ENV_FOO was overridden to %q", got)
+	}
+
+	// Whitespace-only MAGO_PLATFORM_ENV is treated as unset, so no file is loaded.
+	os.Unsetenv("LOAD_ENV_FOO")
+	t.Setenv("MAGO_PLATFORM_ENV", "   ")
+	loadEnv()
+	if got := os.Getenv("LOAD_ENV_FOO"); got != "" {
+		t.Errorf("whitespace MAGO_PLATFORM_ENV should not load a file, got %q", got)
 	}
 
 	os.Unsetenv("LOAD_ENV_FOO")
