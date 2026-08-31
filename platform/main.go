@@ -87,11 +87,11 @@ func runServer(port string) {
 	s := &server{
 		store:           st,
 		jwtSecret:       env("JWT_SECRET", "dev-insecure-change-me"),
-		stripeKey:       os.Getenv("STRIPE_SECRET_KEY"),
-		webhookSecret:   os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		priceID:         os.Getenv("STRIPE_PRICE_MAGO"),
+		stripeKey:       strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
+		webhookSecret:   strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
+		priceID:         strings.TrimSpace(os.Getenv("STRIPE_PRICE_MAGO")),
 		appURL:          env("APP_URL", "http://localhost:"+port),
-		ghWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		ghWebhookSecret: strings.TrimSpace(os.Getenv("GITHUB_WEBHOOK_SECRET")),
 		ghAppID:         strings.TrimSpace(os.Getenv("GITHUB_APP_ID")),
 		hub:             newRelayHub(),
 	}
