@@ -52,6 +52,23 @@ func TestRunShell(t *testing.T) {
 	}
 }
 
+func TestVerificationPath(t *testing.T) {
+	cases := []struct {
+		home, path, want string
+	}{
+		{"/root", "/bin:/usr/bin", "/usr/local/go/bin:/root/go/bin:/bin:/usr/bin"},
+		{"  /root  ", "  /bin  ", "/usr/local/go/bin:/root/go/bin:/bin"},
+		{"  /home/user  ", "  /opt/bin:/opt/sbin  ", "/usr/local/go/bin:/home/user/go/bin:/opt/bin:/opt/sbin"},
+		{"", "", "/usr/local/go/bin:" + filepath.Join("", "go", "bin") + ":"},
+	}
+	for _, c := range cases {
+		got := verificationPath(c.home, c.path)
+		if got != c.want {
+			t.Errorf("verificationPath(%q, %q) = %q, want %q", c.home, c.path, got, c.want)
+		}
+	}
+}
+
 func TestVerifyPR_Disabled(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
