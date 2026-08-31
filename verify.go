@@ -92,9 +92,14 @@ func runShell(dir, command string, timeout time.Duration) (string, error) {
 
 // lastLines returns the last n non-empty-trimmed lines of s (for a compact failure excerpt).
 func lastLines(s string, n int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
+	var kept []string
+	for _, line := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
+		if strings.TrimSpace(line) != "" {
+			kept = append(kept, line)
+		}
 	}
-	return strings.Join(lines, "\n")
+	if len(kept) > n {
+		kept = kept[len(kept)-n:]
+	}
+	return strings.Join(kept, "\n")
 }

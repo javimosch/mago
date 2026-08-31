@@ -34,6 +34,12 @@ func TestLastLines(t *testing.T) {
 	if got := lastLines("only", 5); got != "only" {
 		t.Errorf("lastLines short = %q", got)
 	}
+	if got := lastLines("\na\n\nb\n\n", 1); got != "b" {
+		t.Errorf("lastLines skip blanks = %q, want %q", got, "b")
+	}
+	if got := lastLines("   \n\t\n", 3); got != "" {
+		t.Errorf("lastLines only blanks = %q, want empty", got)
+	}
 }
 
 func TestRunShell(t *testing.T) {
