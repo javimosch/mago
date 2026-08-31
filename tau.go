@@ -15,7 +15,7 @@ import (
 // the agent's only knowledge of the past is the injected briefing. Returns the
 // final content (which, under --schema, is the reflection JSON).
 func runTau(workspace string, a *Agent, systemPrompt, userPrompt string) (string, error) {
-	if os.Getenv("MAGO_TEST_BAD_REFLECTION") != "" {
+	if strings.TrimSpace(os.Getenv("MAGO_TEST_BAD_REFLECTION")) != "" {
 		// Test hook: simulate the model emitting unparseable tool-call markup instead of
 		// a reflection, to exercise the recovery/self-heal path deterministically.
 		return "<｜｜DSML｜｜tool_calls> name=bash command=ls (no reflection json here)", nil
