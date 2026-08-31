@@ -54,6 +54,22 @@ func TestBudget(t *testing.T) {
 	}
 }
 
+// TestBudget_TrimmedCap verifies that whitespace around MAGO_DAILY_BUDGET does not
+// prevent the cap from being applied, matching the TrimSpace invariant used elsewhere.
+func TestBudget_TrimmedCap(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "t"}
+
+	t.Setenv("MAGO_DAILY_BUDGET", "  2  ")
+	c.saveUsage(budgetUsage{Day: utcDay()})
+	c.recordAction()
+	c.recordAction()
+	if !c.overBudget() {
+		t.Fatal("whitespace-padded cap of 2 should be over budget after 2 actions")
+	}
+}
+
 func TestBudget_InvalidCap(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)

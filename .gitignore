@@ -8,6 +8,7 @@ platform/.env
 *.db-wal
 *.db-shm
 *.out
+cover.html
 /dist/
 .devin/
 .claude/
