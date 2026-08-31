@@ -57,6 +57,10 @@ func TestReporter(t *testing.T) {
 	if got := reporter(); got != "agent" {
 		t.Errorf("reporter without USER = %q", got)
 	}
+	t.Setenv("USER", "   ")
+	if got := reporter(); got != "agent" {
+		t.Errorf("reporter with whitespace-only USER = %q, want agent", got)
+	}
 }
 
 func TestGenFeedbackID(t *testing.T) {

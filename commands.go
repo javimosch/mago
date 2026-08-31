@@ -12,7 +12,7 @@ import (
 // value is rejected so it isn't silently swallowed as a positional argument.
 func parseCompanyDir(args []string) (string, []string, error) {
 	dir := "."
-	if d := os.Getenv("MAGO_COMPANY"); d != "" {
+	if d := strings.TrimSpace(os.Getenv("MAGO_COMPANY")); d != "" {
 		dir = d
 	}
 	var rest []string
