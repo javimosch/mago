@@ -154,6 +154,16 @@ func TestWarnIfNoProviderKey(t *testing.T) {
 		}
 	})
 
+	t.Run("whitespace-only env key warns", func(t *testing.T) {
+		t.Setenv("MAGO_PROVIDER", "opencode-go")
+		t.Setenv("MAGO_MODEL", "")
+		t.Setenv("OPENCODE_API_KEY", "   ")
+		out := capture(warnIfNoProviderKey)
+		if !strings.Contains(out, "no API key for provider") {
+			t.Errorf("whitespace-only key stderr = %q, want key warning", out)
+		}
+	})
+
 	t.Run("flash model warns", func(t *testing.T) {
 		t.Setenv("MAGO_PROVIDER", "opencode-go")
 		t.Setenv("MAGO_MODEL", "openrouter/flash-v1")
