@@ -112,7 +112,7 @@ func runClaude(workspace string, a *Agent, systemPrompt, userPrompt string) (str
 		// Claude Code refuses bypassPermissions when running as root ("...cannot be used with root/sudo
 		// privileges"). A dedicated worker box often runs as root and has explicitly opted into autonomous
 		// tool use, so signal a sandboxed context to let the agent use its tools. (Honors explicit IS_SANDBOX.)
-		if os.Geteuid() == 0 && os.Getenv("IS_SANDBOX") == "" {
+		if os.Geteuid() == 0 && strings.TrimSpace(os.Getenv("IS_SANDBOX")) == "" {
 			cmd.Env = append(cmd.Env, "IS_SANDBOX=1")
 		}
 		// Feed the prompt through stdin to avoid shell arg length limits. Using a
