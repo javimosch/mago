@@ -199,6 +199,94 @@ func TestLocalBackendListTasks_SkipsNonMarkdown(t *testing.T) {
 	}
 }
 
+func TestLocalBackendPickActiveTask(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	if err := ensureDir(c.tasksDir()); err != nil {
+		t.Fatalf("ensure tasks dir: %v", err)
+	}
+	b := &localBackend{c: c}
+
+	// No tasks -> nothing to pick.
+	if picked, err := b.PickActiveTask("dev"); err != nil || picked != nil {
+		t.Fatalf("PickActiveTask with no tasks = %v, %v; want nil", picked, err)
+	}
+
+	// Open tasks assigned to someone else are not picked.
+	other, err := b.AddTask("other task", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := b.Assign(other, "other"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if picked, _ := b.PickActiveTask("dev"); picked != nil {
+		t.Fatalf("PickActiveTask should not pick task assigned to other agent")
+	}
+	// Block it so the remaining assertions aren't biased by a task owned by "other".
+	if err := b.SetStatus(other, "blocked"); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+
+	// Open task assigned to the agent is picked.
+	mine, err := b.AddTask("my task", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := b.Assign(mine, "dev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if picked, err := b.PickActiveTask("dev"); err != nil || picked == nil || picked.ID != mine.ID {
+		t.Fatalf("PickActiveTask(dev) = %v, %v; want %s", picked, err, mine.ID)
+	}
+
+	// In-progress work with a matching assignee wins over open tasks.
+	if err := b.Claim(mine, "dev"); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if picked, err := b.PickActiveTask("dev"); err != nil || picked == nil || picked.ID != mine.ID {
+		t.Fatalf("PickActiveTask(dev) after claim = %v, %v; want %s", picked, err, mine.ID)
+	}
+
+	// In-progress task with no assignee can be picked by any agent.
+	unassigned, err := b.AddTask("unassigned in-progress", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	unassigned.Status = "in_progress"
+	unassigned.Assignee = ""
+	if err := b.save(unassigned); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	// mine is still in-progress and assigned to dev, so it should still win.
+	if picked, err := b.PickActiveTask("dev"); err != nil || picked == nil || picked.ID != mine.ID {
+		t.Fatalf("PickActiveTask(dev) should prefer assigned in-progress = %v, %v", picked, err)
+	}
+
+	// Fallback to an unrouted open task when no in-progress work exists.
+	if err := b.Bounce(mine); err != nil {
+		t.Fatalf("Bounce: %v", err)
+	}
+	if picked, err := b.PickActiveTask("dev"); err != nil || picked == nil || picked.ID != unassigned.ID {
+		t.Fatalf("PickActiveTask(dev) fallback = %v, %v; want %s", picked, err, unassigned.ID)
+	}
+
+	// A different agent cannot pick work assigned to dev; unassigned open tasks are
+	// the fallback, so make sure none remain for this final assertion.
+	if err := b.Bounce(unassigned); err != nil {
+		t.Fatalf("Bounce: %v", err)
+	}
+	if err := b.Assign(unassigned, "dev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if err := b.Assign(mine, "dev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if picked, _ := b.PickActiveTask("other"); picked != nil {
+		t.Fatalf("other agent should not pick tasks assigned to dev")
+	}
+}
+
 func taskIDs(tasks []*Task) []string {
 	out := make([]string, len(tasks))
 	for i, t := range tasks {
