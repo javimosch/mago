@@ -138,3 +138,7 @@ requests, not issues. Triage the open PR queue rather than inventing new work:
 - Close bundle/duplicate PRs, especially those that reintroduce regressions such as
   removing `strings.TrimSpace` from an environment-value check.
 - Only after the open queue is clear should dev pick small, unclaimed test-coverage wins.
+- Respect open AM PR file claims. Before starting new work, review the panel's
+  "Files claimed by open PRs" notice and `gh pr view <n> --json files` for every open
+  AM pull request. Avoid editing those paths unless the assigned objective explicitly
+  requires it, and never open a competing style or duplicate test-coverage PR.
