@@ -253,3 +253,31 @@ func TestSelfUpdate_ProbeRejected(t *testing.T) {
 		t.Errorf("selfUpdate left stale temp file %q after probe rejection", tmp)
 	}
 }
+
+// TestSelfUpdate_DownloadError verifies that selfUpdate reports a failed download
+// cleanly and does not leave a temp file when the platform returns a non-200 status.
+func TestSelfUpdate_DownloadError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", ts.URL)
+
+	_, err := selfUpdate("any-hash")
+	if err == nil {
+		t.Fatal("selfUpdate with 404 download should fail")
+	}
+	if !strings.Contains(err.Error(), "HTTP 404") {
+		t.Errorf("error should mention HTTP 404, got: %v", err)
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	tmp := fmt.Sprintf("%s.new.%d", exe, os.Getpid())
+	if _, err := os.Stat(tmp); err == nil {
+		t.Errorf("selfUpdate left stale temp file %q after download error", tmp)
+	}
+}
