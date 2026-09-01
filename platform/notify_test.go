@@ -89,6 +89,49 @@ func TestNotifyOnEvent_WhitespaceToken(t *testing.T) {
 	}
 }
 
+// TestNotifyOnEvent_FiresHighSignal verifies that a configured Telegram
+// client receives a well-formed request for high-signal events.
+func TestNotifyOnEvent_FiresHighSignal(t *testing.T) {
+	firstConnectMu.Lock()
+	firstConnectSince = map[int64]time.Time{}
+	firstConnectMu.Unlock()
+
+	t.Setenv("TELEGRAM_BOT_TOKEN", "bot-token")
+	t.Setenv("TELEGRAM_CHAT_ID", "chat123")
+
+	orig := http.DefaultClient
+	defer func() { http.DefaultClient = orig }()
+
+	reqCh := make(chan *http.Request, 1)
+	http.DefaultClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		reqCh <- req
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+	})}
+
+	notifyOnEvent("signup", 1, "a@example.com", "one-click login")
+
+	select {
+	case req := <-reqCh:
+		if req.URL.Host != "api.telegram.org" {
+			t.Errorf("host = %q, want api.telegram.org", req.URL.Host)
+		}
+		if got, want := req.URL.Path, "/botbot-token/sendMessage"; got != want {
+			t.Errorf("path = %q, want %q", got, want)
+		}
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		_ = req.Body.Close()
+		s := string(body)
+		if !strings.Contains(s, "chat123") || !strings.Contains(s, "one-click login") {
+			t.Errorf("body missing chat or detail: %s", s)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no Telegram request received")
+	}
+}
+
 // TestNotifyOnEvent_Unconfigured verifies that when Telegram is not configured
 // the function returns before doing any work and does not touch the worker-connect cache.
 func TestNotifyOnEvent_Unconfigured(t *testing.T) {
