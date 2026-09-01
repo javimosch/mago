@@ -346,6 +346,40 @@ func TestApplyTaskStatus(t *testing.T) {
 	}
 }
 
+// TestApplyTaskStatus_NeedsHumanFallsBackToNext verifies that when a reflection
+// asks for human input but provides no explicit question, the "Next" field is
+// used as the HITL question body.
+func TestApplyTaskStatus_NeedsHumanFallsBackToNext(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+	c := &Company{Dir: dir}
+	c.tasks = &localBackend{c: c}
+
+	task, err := c.tasks.AddTask("HITL fallback", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+
+	r := &Reflection{TaskStatus: "needs_human", Summary: "blocked", Next: "cover fallback", HitlQuestion: ""}
+	c.applyTaskStatus(task, &Agent{Name: "dev"}, r)
+
+	if task.Status != "needs_human" {
+		t.Errorf("status = %q, want needs_human", task.Status)
+	}
+	if !strings.Contains(task.Body, "NEEDS HUMAN: cover fallback") {
+		t.Errorf("task body should use Next as question, got:\n%s", task.Body)
+	}
+
+	inbox, err := os.ReadFile(filepath.Join(c.inboxDir(), "task-"+task.ID+".md"))
+	if err != nil {
+		t.Fatalf("inbox file missing: %v", err)
+	}
+	if !strings.Contains(string(inbox), "cover fallback") {
+		t.Errorf("inbox should contain Next fallback, got:\n%s", string(inbox))
+	}
+}
+
 func TestWritebackWriteRawFailure(t *testing.T) {
 	c := &Company{Dir: t.TempDir()}
 	a := &Agent{Name: "dev"}
