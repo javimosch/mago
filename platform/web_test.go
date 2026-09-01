@@ -89,6 +89,25 @@ func TestHandleDownloadTrimsWhitespace(t *testing.T) {
 	}
 }
 
+func TestHandleDownloadMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("MAGO_CLI_DIR", dir)
+
+	s := &server{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/dl/mago?os=linux&arch=amd64", nil)
+
+	s.handleDownload(rec, req)
+
+	if rec.Code != 404 {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "cli binary unavailable") {
+		t.Errorf("body = %q, want 'cli binary unavailable'", body)
+	}
+}
+
 func TestHandleInstall(t *testing.T) {
 	s := &server{appURL: "http://localhost:9100"}
 	rec := httptest.NewRecorder()
