@@ -51,6 +51,9 @@ func TestSuggestCommand(t *testing.T) {
 		{"completely-unrelated", ""},
 		{"xyz", ""},
 		{"", ""},
+		// single short character that is not a prefix of any known command
+		{"x", ""},
+		{"ab", ""},
 		// exact command still maps to itself (harmless; dispatch handles real ones)
 		{"task", "task"},
 	}
