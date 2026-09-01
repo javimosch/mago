@@ -307,3 +307,34 @@ func TestSelfUpdate_DownloadError(t *testing.T) {
 		t.Errorf("selfUpdate left stale temp file %q after download error", tmp)
 	}
 }
+
+// TestSelfUpdate_DownloadErrorCleansStaleTemp verifies that selfUpdate removes a
+// pre-existing per-PID temp file when a download fails, so a previous crash or
+// close-error cannot leave a stray .new.<pid> behind.
+func TestSelfUpdate_DownloadErrorCleansStaleTemp(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", ts.URL)
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	tmp := fmt.Sprintf("%s.new.%d", exe, os.Getpid())
+	if err := os.WriteFile(tmp, []byte("stale-download"), 0o644); err != nil {
+		t.Fatalf("write stale temp: %v", err)
+	}
+	defer os.Remove(tmp)
+
+	_, err = selfUpdate("any-hash")
+	if err == nil {
+		t.Fatal("selfUpdate with 404 download should fail")
+	}
+
+	if _, err := os.Stat(tmp); err == nil {
+		t.Errorf("selfUpdate left stale temp file %q after download error", tmp)
+	}
+}
