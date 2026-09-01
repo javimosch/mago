@@ -123,6 +123,34 @@ func TestHandleLandingNotFound(t *testing.T) {
 	}
 }
 
+func TestHandleLanding(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "landing.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	s := &server{appURL: "http://localhost:9100", store: st}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+
+	s.handleLanding(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want text/html", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "mago") {
+		t.Errorf("body missing title, got: %q", body)
+	}
+	if !strings.Contains(body, "http://localhost:9100") {
+		t.Errorf("body missing appURL, got: %q", body)
+	}
+}
+
 func TestHandleOperators(t *testing.T) {
 	s := &server{appURL: "http://localhost:9100"}
 	rec := httptest.NewRecorder()
