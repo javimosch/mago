@@ -477,6 +477,46 @@ func TestCmdLinkListsInstallations(t *testing.T) {
 	}
 }
 
+func TestCmdLinkNoInstallations(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/installations" || r.Method != "GET" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"installations": []map[string]any{},
+			"repos":         []string{},
+		})
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+	os.MkdirAll(filepath.Join(home, ".mago"), 0o755)
+	os.WriteFile(filepath.Join(home, ".mago", "config.json"), []byte(`{"token":"token"}`), 0o600)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = cmdLink(nil)
+	})
+	if err != nil {
+		t.Fatalf("cmdLink: %v", err)
+	}
+	if !strings.Contains(out, "no GitHub App installation linked yet") {
+		t.Errorf("expected empty-link guidance, got: %q", out)
+	}
+	if !strings.Contains(out, "operators") {
+		t.Errorf("expected operator install URL, got: %q", out)
+	}
+}
+
 func TestCmdRegister(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
