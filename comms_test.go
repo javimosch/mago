@@ -88,6 +88,47 @@ func TestShipReleaseNote_Posts(t *testing.T) {
 	}
 }
 
+// TestShipReleaseNote_EmptyNote verifies the CMO failing to produce a non-empty note
+// (empty/whitespace content) is reported as a failure before any gh call.
+func TestShipReleaseNote_EmptyNote(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\":\"   \",\"is_error\":false,\"subtype\":\"\"}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	dir := t.TempDir()
+	writeAgent(t, dir, "cmo", "---\nname: cmo\ntitle: Chief Marketing Officer\nprovider: claude\n---\n")
+	c := &Company{Dir: dir}
+	if c.shipReleaseNote("owner/repo", 42, "a title") {
+		t.Fatal("shipReleaseNote(...) = true, want false for empty note")
+	}
+}
+
+// TestShipReleaseNote_GhFails verifies the CMO is reported as failing when the release
+// note is drafted but the `gh pr comment` call fails.
+func TestShipReleaseNote_GhFails(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\":\"Shipped a thing\",\"is_error\":false,\"subtype\":\"\"}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	dir := t.TempDir()
+	writeAgent(t, dir, "cmo", "---\nname: cmo\ntitle: Chief Marketing Officer\nprovider: claude\n---\n")
+	c := &Company{Dir: dir}
+	if c.shipReleaseNote("owner/repo", 42, "a title") {
+		t.Fatal("shipReleaseNote(...) = true, want false when gh fails")
+	}
+}
+
 func TestMarketingAgentSkipsReviewerAndPlanner(t *testing.T) {
 	dir := t.TempDir()
 	writeAgent(t, dir, "critic", "---\nname: critic\nreviews: true\nplans: true\n---\n")

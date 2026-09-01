@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -164,6 +165,37 @@ func TestLocalBackendHITL(t *testing.T) {
 	}
 	if task.Status != "in_progress" || !strings.Contains(task.Body, "HUMAN ANSWER") {
 		t.Errorf("after answer: status=%q body missing HUMAN ANSWER", task.Status)
+	}
+}
+
+func TestLocalBackendListTasks_SkipsNonMarkdown(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	if err := ensureDir(c.tasksDir()); err != nil {
+		t.Fatalf("ensure tasks dir: %v", err)
+	}
+	b := &localBackend{c: c}
+
+	if _, err := b.AddTask("markdown task", ""); err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	// A non-markdown file and a subdirectory should be ignored by ListTasks.
+	if err := os.WriteFile(filepath.Join(c.tasksDir(), "README.txt"), []byte("not a task"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(c.tasksDir(), "subdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, err := b.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("ListTasks = %v, want 1 task", taskIDs(tasks))
+	}
+	if tasks[0].Title != "markdown task" {
+		t.Errorf("task title = %q, want %q", tasks[0].Title, "markdown task")
 	}
 }
 
