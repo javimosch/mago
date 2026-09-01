@@ -109,6 +109,36 @@ func TestCmdActivity_Limit(t *testing.T) {
 	}
 }
 
+func TestCmdActivity_PositionalLimit(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "activity.db")
+	st, err := openStore(db)
+	if err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	st.LogEvent("signup", u.ID, "first-action")
+	st.LogEvent("subscribed", u.ID, "second-action")
+	st.Close()
+
+	t.Setenv("DB_PATH", db)
+	out := captureStdout(t, func() {
+		if err := cmdActivity([]string{"1"}); err != nil {
+			t.Fatalf("cmdActivity: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "second-action") {
+		t.Errorf("output should include newest event, got:\n%s", out)
+	}
+	if strings.Contains(out, "first-action") {
+		t.Errorf("output should not include older event when positional limit is 1, got:\n%s", out)
+	}
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
