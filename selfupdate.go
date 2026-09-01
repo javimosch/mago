@@ -109,6 +109,7 @@ func selfUpdate(latest string) (string, error) {
 	// each other's download; the rename is atomic and both write identical bytes, so last-wins is safe.
 	tmp := fmt.Sprintf("%s.new.%d", exe, os.Getpid()) // same dir => same fs => atomic rename
 	if err := downloadFile(url, tmp); err != nil {
+		os.Remove(tmp)
 		return "", err
 	}
 	if got := fileSHA12(tmp); got != latest {
@@ -169,5 +170,9 @@ func downloadFile(url, path string) error {
 		os.Remove(path)
 		return err
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		os.Remove(path)
+		return err
+	}
+	return nil
 }

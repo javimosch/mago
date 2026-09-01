@@ -134,6 +134,15 @@ func TestValidateProjectsConfig_Malformed(t *testing.T) {
 	}
 }
 
+// TestValidateProjectsConfig_Missing verifies a missing projects config file is treated as
+// valid (no-op) rather than an error.
+func TestValidateProjectsConfig_Missing(t *testing.T) {
+	c := newTestCompany(t)
+	if err := c.validateProjectsConfig(); err != nil {
+		t.Errorf("validateProjectsConfig() with missing file = %v, want nil", err)
+	}
+}
+
 // TestValidateGHRepo verifies the MAGO_GH_REPO sanity checks: valid bare owner/repo,
 // empty (unset), common URL/remote mistakes, missing owner or repo, and trailing .git.
 func TestValidateGHRepo(t *testing.T) {
