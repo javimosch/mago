@@ -267,3 +267,58 @@ func TestVerifyStripeSig(t *testing.T) {
 		t.Error("verifyStripeSig should tolerate whitespace around key names")
 	}
 }
+
+func TestHandlePortalErrors(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "portal.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("portal@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := &server{store: st, jwtSecret: "test-secret"}
+
+	t.Run("unauthorized", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/portal", nil)
+		s.handlePortal(rec, req)
+		if rec.Code != 401 {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/portal", nil)
+		req.Header.Set("Authorization", "Bearer "+jwtSign("test-secret", 999, "missing@example.com"))
+		s.handlePortal(rec, req)
+		if rec.Code != 404 {
+			t.Errorf("status = %d, want 404", rec.Code)
+		}
+	})
+
+	t.Run("billing not configured", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/portal", nil)
+		req.Header.Set("Authorization", "Bearer "+jwtSign("test-secret", u.ID, u.Email))
+		s.handlePortal(rec, req)
+		if rec.Code != 503 {
+			t.Errorf("status = %d, want 503", rec.Code)
+		}
+	})
+
+	t.Run("no customer yet", func(t *testing.T) {
+		s := &server{store: st, jwtSecret: "test-secret", stripeKey: "sk_test"}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/portal", nil)
+		req.Header.Set("Authorization", "Bearer "+jwtSign("test-secret", u.ID, u.Email))
+		s.handlePortal(rec, req)
+		if rec.Code != 409 {
+			t.Errorf("status = %d, want 409", rec.Code)
+		}
+	})
+}
