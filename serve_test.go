@@ -248,6 +248,53 @@ func TestHandleWebhook_NoSecret(t *testing.T) {
 	}
 }
 
+func TestHandleWebhook_BadSignature(t *testing.T) {
+	w := &eventWorker{wake: make(chan wakeEvent, 4)}
+	h := w.handleWebhook("shhh")
+
+	body := `{"action":"opened","issue":{"number":42}}`
+	req := httptest.NewRequest("POST", "/webhook/github", strings.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "issues")
+	req.Header.Set("X-Hub-Signature-256", "sha256=deadbeef")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+	if len(w.wake) != 0 {
+		t.Errorf("want 0 queued wakes, got %d", len(w.wake))
+	}
+}
+
+func TestHandleWebhook_ValidSignature(t *testing.T) {
+	secret := "shhh"
+	body := `{"action":"opened","issue":{"number":42}}`
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(body))
+	sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	w := &eventWorker{wake: make(chan wakeEvent, 4)}
+	h := w.handleWebhook(secret)
+
+	req := httptest.NewRequest("POST", "/webhook/github", strings.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "issues")
+	req.Header.Set("X-Hub-Signature-256", sig)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if !strings.Contains(rr.Body.String(), "wake=true") {
+		t.Errorf("response = %q, want wake=true", rr.Body.String())
+	}
+	if len(w.wake) != 1 {
+		t.Fatalf("want 1 queued wake, got %d", len(w.wake))
+	}
+}
+
 // TestCmdServe_StatusStopped verifies cmdServe "status" prints "stopped" when
 // no worker is running for the company.
 func TestCmdServe_StatusStopped(t *testing.T) {
