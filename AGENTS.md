@@ -124,6 +124,9 @@ authenticated; fail with a clear `100–109` integration error, not a crash, whe
 - Environment values that gate enabled/disabled checks must be read with `strings.TrimSpace`
   so whitespace-only values are treated as unset. Match existing handling in `mode.go`,
   `review.go`, `verify.go`, and `worker.go`.
+- Self-update must remove the per-PID temp file (`.new.<pid>`) on hash mismatch, probe
+  failure, and download failure so a failed update cannot leave stale binaries beside the
+  live executable.
 
 ## Open issue / PR triage
 

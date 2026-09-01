@@ -122,6 +122,27 @@ func TestDownloadFile_ConnectionError(t *testing.T) {
 	}
 }
 
+// TestDownloadFile_TruncatedBody verifies that a server advertising a larger
+// Content-Length than it actually sends is treated as a copy error and the
+// partial temp file is removed so a broken download cannot be swapped in.
+func TestDownloadFile_TruncatedBody(t *testing.T) {
+	dir := t.TempDir()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("short"))
+	}))
+	defer ts.Close()
+
+	dst := filepath.Join(dir, "truncated")
+	if err := downloadFile(ts.URL, dst); err == nil {
+		t.Fatal("downloadFile should error on truncated body")
+	}
+	if _, err := os.Stat(dst); err == nil {
+		t.Errorf("downloadFile left partial temp file %q after copy error", dst)
+	}
+}
+
 // TestMaybeSelfUpdate verifies the nudge logic in manual mode: same or empty
 // versions are ignored, a new version records the nudge, and repeated calls
 // for the same version do not nudge again.
