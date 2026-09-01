@@ -209,3 +209,47 @@ func TestSelfUpdate_HashMismatch(t *testing.T) {
 		t.Errorf("selfUpdate left stale temp file %q after hash mismatch", tmp)
 	}
 }
+
+// TestSelfUpdate_ProbeRejected verifies that a downloaded binary passing the hash check
+// but failing the runtime `mago version` probe is rejected and the temp file is cleaned up.
+// This is the rbm21 brick regression: a self-consistent partial publish can hash-match
+// but not actually execute, so the probe must catch it before the live binary is replaced.
+func TestSelfUpdate_ProbeRejected(t *testing.T) {
+	dir := t.TempDir()
+
+	// A file that runs and exits cleanly but prints nothing: the probe rejects empty output.
+	script := []byte("#!/bin/sh\nexit 0\n")
+	if err := os.WriteFile(filepath.Join(dir, "payload"), script, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wantHash := fileSHA12(filepath.Join(dir, "payload"))
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/dl/mago" {
+			w.WriteHeader(http.StatusOK)
+			w.Write(script)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", ts.URL)
+
+	_, err := selfUpdate(wantHash)
+	if err == nil {
+		t.Fatal("selfUpdate with a failing probe should fail")
+	}
+	if !strings.Contains(err.Error(), "downloaded binary rejected") {
+		t.Errorf("error should mention probe rejection, got: %v", err)
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	tmp := fmt.Sprintf("%s.new.%d", exe, os.Getpid())
+	if _, err := os.Stat(tmp); err == nil {
+		t.Errorf("selfUpdate left stale temp file %q after probe rejection", tmp)
+	}
+}
