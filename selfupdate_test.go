@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -170,5 +172,40 @@ func TestMaybeSelfUpdate_AutoModeSurfacesError(t *testing.T) {
 
 	if lastNudgeVer != "" {
 		t.Errorf("auto mode should not nudge; lastNudgeVer = %q", lastNudgeVer)
+	}
+}
+
+// TestSelfUpdate_HashMismatch verifies that selfUpdate rejects a downloaded binary whose
+// sha256[:12] does not match the advertised version, and that the temporary download is
+// cleaned up so a mid-deploy race cannot leave a stray .new.<pid> file behind.
+func TestSelfUpdate_HashMismatch(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/dl/mago" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("not-the-advertised-binary"))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", ts.URL)
+
+	_, err := selfUpdate("wrong-hash")
+	if err == nil {
+		t.Fatal("selfUpdate with hash mismatch should fail")
+	}
+	if !strings.Contains(err.Error(), "advertised") {
+		t.Errorf("error should mention advertised version, got: %v", err)
+	}
+
+	// The per-PID temp file must be removed on mismatch.
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	tmp := fmt.Sprintf("%s.new.%d", exe, os.Getpid())
+	if _, err := os.Stat(tmp); err == nil {
+		t.Errorf("selfUpdate left stale temp file %q after hash mismatch", tmp)
 	}
 }
