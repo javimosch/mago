@@ -62,6 +62,53 @@ func TestParseMode(t *testing.T) {
 	if _, err := parseMode(base, []string{"update=sometimes"}); err == nil {
 		t.Error("bad update value should error")
 	}
+	if _, err := parseMode(base, []string{"foo=bar"}); err == nil {
+		t.Error("unknown mode key should error")
+	}
+
+	// Preset aliases that set or preserve mode fields.
+	m, _ = parseMode(base, []string{"review"})
+	if m.Merge != "review" {
+		t.Errorf("review preset: %+v", m)
+	}
+	m, _ = parseMode(base, []string{"review-only"})
+	if m.Merge != "review" {
+		t.Errorf("review-only preset: %+v", m)
+	}
+	m, _ = parseMode(base, []string{"verified"})
+	if m.Merge != "verified" {
+		t.Errorf("verified preset: %+v", m)
+	}
+	m, _ = parseMode(base, []string{"auto"})
+	if m.Merge != "verified" {
+		t.Errorf("auto preset should set merge=verified, got %+v", m)
+	}
+
+	// Key-value aliases and additional value forms.
+	m, _ = parseMode(base, []string{"comms=1"})
+	if !m.Comms {
+		t.Errorf("comms=1: %+v", m)
+	}
+	m, _ = parseMode(base, []string{"merge=on"})
+	if m.Merge != "on" {
+		t.Errorf("merge=on: %+v", m)
+	}
+	m, _ = parseMode(base, []string{"prs=5", "issues=3"})
+	if m.PRCap != 5 || m.IssueCap != 3 {
+		t.Errorf("prs/issues aliases: %+v", m)
+	}
+
+	// Empty and whitespace tokens are skipped without changing the mode.
+	m, _ = parseMode(workerMode{Proactive: 600}, []string{"", "  ", "proactive=300"})
+	if m.Proactive != 300 {
+		t.Errorf("empty tokens should be skipped: %+v", m)
+	}
+
+	// No merge token and an empty base falls back to the default review policy.
+	m, _ = parseMode(workerMode{}, []string{"comms=on"})
+	if m.Merge != "review" {
+		t.Errorf("empty merge should default to review: %+v", m)
+	}
 }
 
 func TestLoadModeTrimsEnv(t *testing.T) {
