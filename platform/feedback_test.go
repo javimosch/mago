@@ -97,6 +97,40 @@ func TestHandleFeedback_Valid(t *testing.T) {
 	}
 }
 
+// TestHandleFeedback_DefaultType verifies that an omitted type falls back to "feedback"
+// and is reflected in the recorded event.
+func TestHandleFeedback_DefaultType(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "feedback.db")
+	st, err := openStore(db)
+	if err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	secret := "test-secret"
+	s := &server{store: st, jwtSecret: secret}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/feedback", strings.NewReader(`{"message":"hello"}`))
+	req.Header.Set("Authorization", "Bearer "+jwtSign(secret, u.ID, u.Email))
+	s.handleFeedback(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+
+	var n int
+	err = st.db.QueryRow("SELECT COUNT(*) FROM events WHERE kind='feedback' AND user_id=? AND detail LIKE '[feedback] %'", u.ID).Scan(&n)
+	if err != nil || n != 1 {
+		t.Fatalf("event not recorded with default type: err=%v count=%d", err, n)
+	}
+}
+
 // TestHandleFeedback_EmptyMessage verifies that a request with only whitespace
 // in the message body is rejected with a 400 error.
 func TestHandleFeedback_EmptyMessage(t *testing.T) {
