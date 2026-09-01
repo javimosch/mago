@@ -27,6 +27,22 @@ func TestVerifyCommand(t *testing.T) {
 	}
 }
 
+func TestVerifyCommand_WhitespaceOnly(t *testing.T) {
+	dir := t.TempDir()
+
+	// A whitespace-only custom command should be treated as unset.
+	t.Setenv("MAGO_VERIFY_CMD", "   \t  ")
+	if cmd, _ := verifyCommand(dir); cmd != "" {
+		t.Errorf("whitespace-only MAGO_VERIFY_CMD should be ignored, got %q", cmd)
+	}
+
+	// After it is ignored, go.mod auto-detection should still kick in.
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module x\n"), 0o644)
+	if cmd, label := verifyCommand(dir); cmd == "" || label != "go build + test" {
+		t.Errorf("go.mod should still be detected, got %q/%q", cmd, label)
+	}
+}
+
 func TestLastLines(t *testing.T) {
 	if got := lastLines("a\nb\nc\nd\n", 2); got != "c\nd" {
 		t.Errorf("lastLines = %q, want %q", got, "c\nd")

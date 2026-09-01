@@ -53,6 +53,8 @@ func mockStripeServer(t *testing.T) {
 		case r.URL.Path == "/v1/subscriptions/sub_missing" && r.Method == "DELETE":
 			w.WriteHeader(404)
 			w.Write([]byte(`{"error":{"message":"not found"}}`))
+		case r.URL.Path == "/v1/billing_portal/sessions" && r.Method == "POST":
+			json.NewEncoder(w).Encode(map[string]any{"url": "https://billing.stripe.com/test"})
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(404)
@@ -124,6 +126,15 @@ func TestStripeCancelSubscription(t *testing.T) {
 	// Empty subscription is a no-op.
 	if err := stripeCancelSubscription("sk_test", ""); err != nil {
 		t.Fatalf("cancel empty sub: %v", err)
+	}
+}
+
+func TestStripeBillingPortal(t *testing.T) {
+	mockStripeServer(t)
+
+	got, err := stripeBillingPortal("sk_test", "cus_existing", "https://app.example/return")
+	if err != nil || got != "https://billing.stripe.com/test" {
+		t.Fatalf("billing portal: err=%v got=%q", err, got)
 	}
 }
 
@@ -319,6 +330,87 @@ func TestHandlePortalErrors(t *testing.T) {
 		s.handlePortal(rec, req)
 		if rec.Code != 409 {
 			t.Errorf("status = %d, want 409", rec.Code)
+		}
+	})
+}
+
+func TestHandleWebhook(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "webhook.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	secret := "whsec_test"
+	s := &server{store: st, webhookSecret: secret}
+
+	u, err := st.Create("webhook@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("checkout session completed activates user", func(t *testing.T) {
+		ev := map[string]any{
+			"id":   "evt_checkout_1",
+			"type": "checkout.session.completed",
+			"data": map[string]any{
+				"object": map[string]any{
+					"customer":     "cus_test",
+					"subscription": "sub_test",
+					"metadata":     map[string]any{"user_id": strconv.FormatInt(u.ID, 10)},
+				},
+			},
+		}
+		body, _ := json.Marshal(ev)
+		ts := time.Now().Unix()
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(fmt.Sprintf("%d.%s", ts, body)))
+		sig := fmt.Sprintf("t=%d,v1=%s", ts, hex.EncodeToString(mac.Sum(nil)))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/webhook", bytes.NewReader(body))
+		req.Header.Set("Stripe-Signature", sig)
+		s.handleWebhook(rec, req)
+
+		if rec.Code != 200 {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+		fresh := st.GetByID(u.ID)
+		if fresh.Plan != "mago" || fresh.StripeCustomer != "cus_test" || fresh.StripeSub != "sub_test" || fresh.LicenseKey == "" {
+			t.Fatalf("user not activated: %+v", fresh)
+		}
+	})
+
+	t.Run("subscription deleted downgrades user", func(t *testing.T) {
+		if err := st.Update(u.ID, func(u *User) { u.Plan = "mago"; u.StripeSub = "sub_old"; u.StripeCustomer = "cus_old" }); err != nil {
+			t.Fatalf("update user: %v", err)
+		}
+		ev := map[string]any{
+			"id":   "evt_cancel_1",
+			"type": "customer.subscription.deleted",
+			"data": map[string]any{
+				"object": map[string]any{
+					"metadata": map[string]any{"user_id": strconv.FormatInt(u.ID, 10)},
+				},
+			},
+		}
+		body, _ := json.Marshal(ev)
+		ts := time.Now().Unix()
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(fmt.Sprintf("%d.%s", ts, body)))
+		sig := fmt.Sprintf("t=%d,v1=%s", ts, hex.EncodeToString(mac.Sum(nil)))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/webhook", bytes.NewReader(body))
+		req.Header.Set("Stripe-Signature", sig)
+		s.handleWebhook(rec, req)
+
+		if rec.Code != 200 {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+		fresh := st.GetByID(u.ID)
+		if fresh.Plan != "free" {
+			t.Fatalf("plan = %q, want free", fresh.Plan)
 		}
 	})
 }
