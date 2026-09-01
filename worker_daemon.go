@@ -77,6 +77,7 @@ func superviseWorker(workerArgs []string) error {
 	}
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(sigs)
 	backoff := time.Second
 	for {
 		cmd := exec.Command(exe, append([]string{"serve"}, workerArgs...)...)

@@ -226,6 +226,16 @@ func TestSuperviseWorker_CleanExit(t *testing.T) {
 	}
 }
 
+func TestSuperviseWorker_StartError(t *testing.T) {
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return filepath.Join(t.TempDir(), "no-such-binary"), nil }
+
+	if err := superviseWorker([]string{}); err == nil {
+		t.Fatal("superviseWorker should surface a start error")
+	}
+}
+
 func TestWorkerStatus_InvalidCompany(t *testing.T) {
 	dir := t.TempDir()
 	err := workerStatus(dir)
