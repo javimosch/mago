@@ -347,6 +347,33 @@ func TestCmdSubscribe(t *testing.T) {
 	}
 }
 
+func TestCmdSubscribe_Error(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/checkout" || r.Method != "POST" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error":"checkout denied"}`, http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+	os.MkdirAll(filepath.Join(home, ".mago"), 0o755)
+	os.WriteFile(filepath.Join(home, ".mago", "config.json"), []byte(`{"token":"token"}`), 0o600)
+
+	err := cmdSubscribe(nil)
+	if err == nil {
+		t.Fatal("cmdSubscribe: expected error for failed checkout")
+	}
+	if !strings.Contains(err.Error(), "checkout denied") {
+		t.Errorf("error = %q, want 'checkout denied'", err.Error())
+	}
+}
+
 func TestCmdBilling(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
