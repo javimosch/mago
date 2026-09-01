@@ -135,6 +135,16 @@ func TestImplementerName_SingleImplementer(t *testing.T) {
 	}
 }
 
+func TestImplementerName_FirstImplementerWins(t *testing.T) {
+	agents := []*Agent{
+		makeAgent("staff", "Staff Eng", false, false, true),
+		makeAgent("cto", "CTO", false, false, true),
+	}
+	if got := implementerName(agents); got != "staff" {
+		t.Errorf("first implementer in roster should win: got %q, want %q", got, "staff")
+	}
+}
+
 // --- routeTask (LLM-free paths) ---
 //
 // tauComplete fails in the test environment (no API key), so routeTask always
