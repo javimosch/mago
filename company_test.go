@@ -107,6 +107,17 @@ func TestCompanyLoadMirrors(t *testing.T) {
 	}
 }
 
+func TestCompanyLoadMirrors_Malformed(t *testing.T) {
+	c := newTestCompany(t)
+	if err := os.WriteFile(c.mirrorsFile(), []byte("{not valid json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := c.loadMirrors()
+	if len(got) != 0 {
+		t.Errorf("loadMirrors() with malformed JSON = %v, want empty", got)
+	}
+}
+
 // TestValidateProjectsConfig_Malformed verifies a corrupted projects.json is
 // rejected with an actionable error that names the file and suggests recovery.
 func TestValidateProjectsConfig_Malformed(t *testing.T) {
