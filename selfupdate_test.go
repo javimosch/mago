@@ -61,6 +61,11 @@ func TestFileSHA12(t *testing.T) {
 	if got := fileSHA12(filepath.Join(dir, "missing")); got != "" {
 		t.Errorf("missing file SHA should be empty, got %q", got)
 	}
+
+	// A directory is not a readable file, so hashing it must return empty.
+	if got := fileSHA12(dir); got != "" {
+		t.Errorf("directory SHA should be empty, got %q", got)
+	}
 }
 
 // TestSelfVersion verifies the running executable hash is returned as a
