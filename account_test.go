@@ -612,3 +612,84 @@ func TestCmdAccount_UsageError(t *testing.T) {
 		t.Errorf("error = %q, want usage message", err.Error())
 	}
 }
+
+// TestCmdRegister_PlanBranches covers the trial and default onboarding branches
+// of cmdRegister that TestCmdRegister (founding plan) does not exercise.
+func TestCmdRegister_PlanBranches(t *testing.T) {
+	cases := []struct {
+		name      string
+		plan      string
+		trial     bool
+		trialEnds int64
+		wantOut   string
+	}{
+		{
+			name:      "trial",
+			plan:      "monthly",
+			trial:     true,
+			trialEnds: time.Now().Add(48 * time.Hour).Unix(),
+			wantOut:   "48-hour free trial active",
+		},
+		{
+			name:    "default",
+			plan:    "monthly",
+			trial:   false,
+			wantOut: "mago subscribe",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/auth/signup":
+					if r.Method != "POST" {
+						http.Error(w, "not found", http.StatusNotFound)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]string{"token": "register-token"})
+				case "/api/account":
+					if r.Method != "GET" {
+						http.Error(w, "not found", http.StatusNotFound)
+						return
+					}
+					if r.Header.Get("Authorization") != "Bearer register-token" {
+						http.Error(w, "unauthorized", http.StatusUnauthorized)
+						return
+					}
+					json.NewEncoder(w).Encode(accountInfo{
+						Email:      "dev@example.com",
+						Plan:       tc.plan,
+						Active:     true,
+						Trial:      tc.trial,
+						TrialEnds:  tc.trialEnds,
+						LicenseKey: "",
+					})
+				default:
+					http.Error(w, "not found", http.StatusNotFound)
+				}
+			}))
+			defer srv.Close()
+
+			t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+			var err error
+			out := captureStdout(t, func() {
+				err = cmdRegister([]string{"--email", "dev@example.com", "--password", "secret"})
+			})
+			if err != nil {
+				t.Fatalf("cmdRegister: %v", err)
+			}
+			if !strings.Contains(out, tc.wantOut) {
+				t.Errorf("output missing %q:\n%s", tc.wantOut, out)
+			}
+			if !strings.Contains(out, "registered dev@example.com") {
+				t.Errorf("missing registration message:\n%s", out)
+			}
+		})
+	}
+}

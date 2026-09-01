@@ -159,6 +159,19 @@ func TestCheckClaudeOnPath_Present(t *testing.T) {
 	}
 }
 
+// TestCheckClaudeOnPath_Missing verifies the failure path when claude is absent.
+func TestCheckClaudeOnPath_Missing(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	c := checkClaudeOnPath()
+	if c.ok {
+		t.Errorf("missing claude should fail")
+	}
+	if c.hint == "" {
+		t.Errorf("missing claude should produce a hint")
+	}
+}
+
 // TestCheckTau_Label verifies the tau label is always set regardless of PATH.
 func TestCheckTau_Label(t *testing.T) {
 	c := checkTau()
