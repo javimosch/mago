@@ -36,6 +36,20 @@ func TestWorkerID_TrimSpace(t *testing.T) {
 	}
 }
 
+// TestWorkerID_WhitespaceOnlyEnvFallsBack verifies that a whitespace-only
+// MAGO_WORKER_ID is treated as unset and the function falls back to the
+// hostname (or the hard-coded "worker" fallback).
+func TestWorkerID_WhitespaceOnlyEnvFallsBack(t *testing.T) {
+	t.Setenv("MAGO_WORKER_ID", "   ")
+	got := workerID()
+	if got == "   " {
+		t.Errorf("workerID() = %q, should not return untrimmed whitespace", got)
+	}
+	if got == "" {
+		t.Errorf("workerID() should not be empty")
+	}
+}
+
 func TestRunRelay_NoLicense(t *testing.T) {
 	// With no license key, runRelay should log once and return without dialing out.
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
