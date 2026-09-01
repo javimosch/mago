@@ -408,6 +408,33 @@ func TestCmdBilling(t *testing.T) {
 	}
 }
 
+func TestCmdBilling_Error(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/portal" || r.Method != "POST" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error":"no active subscription"}`, http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+	os.MkdirAll(filepath.Join(home, ".mago"), 0o755)
+	os.WriteFile(filepath.Join(home, ".mago", "config.json"), []byte(`{"token":"token"}`), 0o600)
+
+	err := cmdBilling(nil)
+	if err == nil {
+		t.Fatal("cmdBilling: expected error for failed portal request")
+	}
+	if !strings.Contains(err.Error(), "no active subscription") {
+		t.Errorf("error = %q, want 'no active subscription'", err.Error())
+	}
+}
+
 func TestCmdLinkListsInstallations(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
