@@ -406,6 +406,17 @@ func TestCheckClaudeAuth(t *testing.T) {
 			t.Errorf("hint should mention transient error, got %q", c.hint)
 		}
 	})
+
+	// claude may exit non-zero while still emitting a result JSON; the auth check
+	// should not fail when the captured output is a valid, authenticated response.
+	t.Run("nonzero exit with valid output", func(t *testing.T) {
+		dir := makeClaude(`{"result":"pong","is_error":false}`, 1)
+		t.Setenv("PATH", dir)
+		c := checkClaudeAuth()
+		if !c.ok {
+			t.Errorf("valid result on nonzero exit should pass, got: %s", c.hint)
+		}
+	})
 }
 
 // TestCmdWorkerMode_Validation covers the input-validation paths before any platform call.
