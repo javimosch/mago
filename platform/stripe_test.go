@@ -53,6 +53,8 @@ func mockStripeServer(t *testing.T) {
 		case r.URL.Path == "/v1/subscriptions/sub_missing" && r.Method == "DELETE":
 			w.WriteHeader(404)
 			w.Write([]byte(`{"error":{"message":"not found"}}`))
+		case r.URL.Path == "/v1/billing_portal/sessions" && r.Method == "POST":
+			json.NewEncoder(w).Encode(map[string]any{"url": "https://billing.stripe.com/test"})
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(404)
@@ -124,6 +126,15 @@ func TestStripeCancelSubscription(t *testing.T) {
 	// Empty subscription is a no-op.
 	if err := stripeCancelSubscription("sk_test", ""); err != nil {
 		t.Fatalf("cancel empty sub: %v", err)
+	}
+}
+
+func TestStripeBillingPortal(t *testing.T) {
+	mockStripeServer(t)
+
+	got, err := stripeBillingPortal("sk_test", "cus_existing", "https://app.example/return")
+	if err != nil || got != "https://billing.stripe.com/test" {
+		t.Fatalf("billing portal: err=%v got=%q", err, got)
 	}
 }
 
