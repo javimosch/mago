@@ -147,3 +147,17 @@ func TestReadPid(t *testing.T) {
 		t.Errorf("non-existent pid: got pid=%d alive=%v, want 999999/false", pid, alive)
 	}
 }
+
+// TestPidFileAndLogFile verify the daemon file helpers expand ~/ to the user's
+// home directory and point at the expected mago-platform run directory.
+func TestPidFileAndLogFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	if got := pidFile(); got != filepath.Join(home, ".mago-platform", "mago-platform.pid") {
+		t.Errorf("pidFile() = %q, want %q", got, filepath.Join(home, ".mago-platform", "mago-platform.pid"))
+	}
+	if got := logFile(); got != filepath.Join(home, ".mago-platform", "mago-platform.log") {
+		t.Errorf("logFile() = %q, want %q", got, filepath.Join(home, ".mago-platform", "mago-platform.log"))
+	}
+}
