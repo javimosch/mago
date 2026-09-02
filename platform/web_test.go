@@ -89,6 +89,28 @@ func TestHandleDownloadTrimsWhitespace(t *testing.T) {
 	}
 }
 
+func TestHandleDownloadDefaultsToLinuxAmd64(t *testing.T) {
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "mago-linux-amd64")
+	if err := os.WriteFile(binPath, []byte("default binary bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MAGO_CLI_DIR", dir)
+
+	s := &server{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/dl/mago", nil)
+
+	s.handleDownload(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != "default binary bytes" {
+		t.Errorf("body = %q, want default binary bytes", rec.Body.String())
+	}
+}
+
 func TestHandleDownloadMissingFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("MAGO_CLI_DIR", dir)
