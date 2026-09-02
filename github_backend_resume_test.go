@@ -31,3 +31,46 @@ func TestGithubBackendResumeAnsweredHITL(t *testing.T) {
 		t.Errorf("edits missing expected label changes: %q", s)
 	}
 }
+
+// TestGithubBackendResumeAnsweredHITL_ListError verifies resumeAnsweredHITL aborts
+// quietly when the initial issue list command fails, without editing any issue.
+func TestGithubBackendResumeAnsweredHITL_ListError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo "network timeout" >&2
+		exit 1
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	b.resumeAnsweredHITL()
+
+	if _, err := os.Stat(fake + "/gh.edits"); !os.IsNotExist(err) {
+		t.Errorf("resumeAnsweredHITL should not edit issues when listIssues fails")
+	}
+}
+
+// TestGithubBackendResumeAnsweredHITL_ViewError verifies resumeAnsweredHITL skips
+// an issue whose view command fails and does not attempt an edit.
+func TestGithubBackendResumeAnsweredHITL_ViewError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo '[{"number":7,"title":"hitl me","state":"open","labels":[{"name":"mago:hitl"}]}]'
+	elif [ "$3" = "issue" ] && [ "$4" = "view" ]; then
+		echo "view failed" >&2
+		exit 1
+	elif [ "$3" = "issue" ] && [ "$4" = "edit" ]; then
+		printf '%s\n' "$*" >> "$0.edits"
+		exit 0
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	b.resumeAnsweredHITL()
+
+	if _, err := os.Stat(fake + "/gh.edits"); !os.IsNotExist(err) {
+		t.Errorf("resumeAnsweredHITL should not edit issues when viewIssue fails")
+	}
+}

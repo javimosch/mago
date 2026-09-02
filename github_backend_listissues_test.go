@@ -58,3 +58,22 @@ func TestGithubBackendListIssues_GhError(t *testing.T) {
 		t.Errorf("error %q should mention the failing subcommand and stderr", err.Error())
 	}
 }
+
+// TestGithubBackendListIssues_Malformed verifies non-JSON output is reported as a parse error.
+func TestGithubBackendListIssues_Malformed(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo "not json"
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	_, err := b.listIssues()
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "parse issue list") {
+		t.Errorf("error %q does not mention parse issue list", err.Error())
+	}
+}
