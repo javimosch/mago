@@ -149,6 +149,63 @@ func TestAgoStr(t *testing.T) {
 	}
 }
 
+func TestCmdUsageWithData(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "usage.db")
+
+	st, err := openStore(db)
+	if err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+
+	alice, err := st.Create("alice@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Record enough events that UsageByAccount returns a row and the repos branch is reached.
+	st.RecordGHEvent(alice.ID, "a/b", "issues", "opened")
+	st.RecordGHEvent(alice.ID, "a/b", "pull_request", "opened")
+	st.RecordGHEvent(alice.ID, "a/c", "issue_comment", "created")
+
+	// Also record events for an account that has no users row, so the "account %d" fallback is hit.
+	st.RecordGHEvent(999, "x/y", "issues", "opened")
+
+	st.Close()
+
+	t.Setenv("DB_PATH", db)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+
+	err = cmdUsage([]string{"7"})
+	w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("cmdUsage = %v, want nil", err)
+	}
+
+	out, _ := io.ReadAll(r)
+	s := string(out)
+
+	if !strings.Contains(s, "alice@example.com") {
+		t.Errorf("output missing email: %s", s)
+	}
+	if !strings.Contains(s, "account 999") {
+		t.Errorf("output missing fallback account id: %s", s)
+	}
+	if !strings.Contains(s, "a/b, a/c") {
+		t.Errorf("output missing repos list: %s", s)
+	}
+	if !strings.Contains(s, "2 repo(s)") {
+		t.Errorf("output missing repo count: %s", s)
+	}
+}
+
 func TestCmdUsageEmpty(t *testing.T) {
 	db := filepath.Join(t.TempDir(), "empty.db")
 	t.Setenv("DB_PATH", db)
