@@ -132,6 +132,46 @@ func TestNotifyOnEvent_FiresHighSignal(t *testing.T) {
 	}
 }
 
+// TestNotifyOnEvent_WorkerConnectDedupe verifies that repeated worker_connect
+// events within the grace period only fire one Telegram notification.
+func TestNotifyOnEvent_WorkerConnectDedupe(t *testing.T) {
+	firstConnectMu.Lock()
+	firstConnectSince = map[int64]time.Time{}
+	firstConnectMu.Unlock()
+
+	t.Setenv("TELEGRAM_BOT_TOKEN", "bot-token")
+	t.Setenv("TELEGRAM_CHAT_ID", "chat123")
+
+	orig := http.DefaultClient
+	defer func() { http.DefaultClient = orig }()
+
+	reqCh := make(chan *http.Request, 2)
+	http.DefaultClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		reqCh <- req
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+	})}
+
+	uid := int64(42)
+	notifyOnEvent("worker_connect", uid, "w@example.com", "worker-1")
+	notifyOnEvent("worker_connect", uid, "w@example.com", "worker-1 again")
+
+	var count int
+	done := time.After(500 * time.Millisecond)
+loop:
+	for {
+		select {
+		case <-reqCh:
+			count++
+		case <-done:
+			break loop
+		}
+	}
+
+	if count != 1 {
+		t.Errorf("got %d worker_connect notifications, want 1", count)
+	}
+}
+
 // TestNotifyOnEvent_Unconfigured verifies that when Telegram is not configured
 // the function returns before doing any work and does not touch the worker-connect cache.
 func TestNotifyOnEvent_Unconfigured(t *testing.T) {
