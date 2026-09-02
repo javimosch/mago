@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -159,5 +160,26 @@ func TestPidFileAndLogFile(t *testing.T) {
 	}
 	if got := logFile(); got != filepath.Join(home, ".mago-platform", "mago-platform.log") {
 		t.Errorf("logFile() = %q, want %q", got, filepath.Join(home, ".mago-platform", "mago-platform.log"))
+	}
+}
+
+// TestListenInodeAndPidOnPort verifies the /proc-net helpers can locate a live
+// listening socket and map it back to the current process.
+func TestListenInodeAndPidOnPort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	inode := listenInode(port)
+	if inode == "" {
+		t.Fatalf("listenInode(%d) returned empty", port)
+	}
+
+	got := pidOnPort(strconv.Itoa(port))
+	if got != os.Getpid() {
+		t.Errorf("pidOnPort(%d) = %d, want %d", port, got, os.Getpid())
 	}
 }
