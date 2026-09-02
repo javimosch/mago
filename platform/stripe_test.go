@@ -334,6 +334,50 @@ func TestHandlePortalErrors(t *testing.T) {
 	})
 }
 
+func TestHandlePortalSuccess(t *testing.T) {
+	mockStripeServer(t)
+
+	st, err := openStore(filepath.Join(t.TempDir(), "portal-success.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("portal-success@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.StripeCustomer = "cus_existing"
+	if err := st.Update(u.ID, func(u *User) { u.StripeCustomer = "cus_existing" }); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &server{
+		store:     st,
+		stripeKey: "sk_test",
+		appURL:    "https://app.example",
+		jwtSecret: "test-secret",
+	}
+
+	tok := jwtSign("test-secret", u.ID, u.Email)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/portal", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	s.handlePortal(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	var out struct{ URL string }
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out.URL != "https://billing.stripe.com/test" {
+		t.Fatalf("portal url = %q", out.URL)
+	}
+}
+
 func TestHandleWebhook(t *testing.T) {
 	st, err := openStore(filepath.Join(t.TempDir(), "webhook.db"))
 	if err != nil {
