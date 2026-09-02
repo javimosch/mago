@@ -31,3 +31,22 @@ func TestGithubBackendResumeAnsweredHITL(t *testing.T) {
 		t.Errorf("edits missing expected label changes: %q", s)
 	}
 }
+
+// TestGithubBackendResumeAnsweredHITL_ListError verifies resumeAnsweredHITL aborts
+// quietly when the initial issue list command fails, without editing any issue.
+func TestGithubBackendResumeAnsweredHITL_ListError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo "network timeout" >&2
+		exit 1
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	b.resumeAnsweredHITL()
+
+	if _, err := os.Stat(fake + "/gh.edits"); !os.IsNotExist(err) {
+		t.Errorf("resumeAnsweredHITL should not edit issues when listIssues fails")
+	}
+}
