@@ -66,6 +66,34 @@ func TestPlanningFocusFallback(t *testing.T) {
 	}
 }
 
+// TestAdvanceRoadmapNoLater verifies the rotation when the roadmap has no ## Later
+// section: Now <- Next, Next becomes the placeholder, and the old Now is archived.
+func TestAdvanceRoadmapNoLater(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	os.WriteFile(c.roadmapFile(), []byte(
+		"# co — ROADMAP\n\n## Now\nShip A.\n\n## Next\nShip B.\n\n## Out of scope\nrewrites\n"), 0o644)
+
+	if !c.advanceRoadmap() {
+		t.Fatal("advanceRoadmap should succeed")
+	}
+	if got := c.roadmapNow(); got != "Ship B." {
+		t.Errorf("Now = %q, want %q", got, "Ship B.")
+	}
+	if got := c.roadmapNext(); got != "(none yet)" {
+		t.Errorf("Next = %q, want %q", got, "(none yet)")
+	}
+	raw := c.roadmapRaw()
+	if !strings.Contains(raw, "## Done") || !strings.Contains(raw, "Ship A.") {
+		t.Errorf("old Now should be archived:\n%s", raw)
+	}
+	if !strings.Contains(raw, "rewrites") {
+		t.Errorf("Out of scope should be preserved:\n%s", raw)
+	}
+}
+
 func TestAdvanceRoadmap(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)

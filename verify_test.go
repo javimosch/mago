@@ -68,6 +68,12 @@ func TestRunShell(t *testing.T) {
 	}
 }
 
+func TestRunShell_Failure(t *testing.T) {
+	if _, err := runShell(t.TempDir(), "false", 10_000_000_000); err == nil {
+		t.Error("runShell should return an error when the command fails")
+	}
+}
+
 func TestVerificationPath(t *testing.T) {
 	cases := []struct {
 		home, path, want string

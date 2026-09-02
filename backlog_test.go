@@ -135,6 +135,34 @@ func TestShippedText(t *testing.T) {
 	}
 }
 
+func TestMissionText(t *testing.T) {
+	c := newTestCompany(t)
+
+	// Missing STATE.md -> empty
+	if got := c.missionText(); got != "" {
+		t.Errorf("missing STATE.md: got %q, want empty", got)
+	}
+
+	placeholder := "# co\n\n## Mission\n(Set by the CEO. Edit me.)\n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n- entry\n"
+	os.WriteFile(c.stateFile(), []byte(placeholder), 0o644)
+	if got := c.missionText(); got != "" {
+		t.Errorf("placeholder Mission: got %q, want empty", got)
+	}
+
+	real := "# co\n\n## Mission\nShip a delightful CLI.\n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n- entry\n"
+	os.WriteFile(c.stateFile(), []byte(real), 0o644)
+	if got := c.missionText(); got != "Ship a delightful CLI." {
+		t.Errorf("real Mission: got %q, want %q", got, "Ship a delightful CLI.")
+	}
+
+	// Leading/trailing whitespace is trimmed.
+	trimmed := "# co\n\n## Mission\n  Ship it.  \n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n- entry\n"
+	os.WriteFile(c.stateFile(), []byte(trimmed), 0o644)
+	if got := c.missionText(); got != "Ship it." {
+		t.Errorf("trimmed Mission: got %q, want %q", got, "Ship it.")
+	}
+}
+
 func TestPlannerAgent(t *testing.T) {
 	// No agents -> nil
 	c := newTestCompany(t)
