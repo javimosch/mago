@@ -97,6 +97,24 @@ func TestWithClaudeRetry(t *testing.T) {
 	}
 }
 
+func TestClaudeComplete(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\": \"completed\", \"is_error\": false, \"subtype\": \"\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	got, err := claudeComplete(&Agent{Model: "sonnet"}, "prompt")
+	if err != nil {
+		t.Fatalf("claudeComplete: %v", err)
+	}
+	if got != "completed" {
+		t.Errorf("claudeComplete = %q, want completed", got)
+	}
+}
+
 func TestRunClaude(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "claude")
