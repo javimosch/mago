@@ -332,6 +332,29 @@ func TestGithubBackendPendingHITL(t *testing.T) {
 	}
 }
 
+// TestGithubBackendPendingHITL_Error verifies that a gh CLI failure when listing
+// HITL issues is propagated to the caller instead of returning an empty slice.
+func TestGithubBackendPendingHITL_Error(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo "network timeout" >&2
+		exit 1
+	fi
+	exit 1`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	got, err := b.PendingHITL()
+	if err == nil {
+		t.Fatal("expected error when gh issue list fails")
+	}
+	if got != nil {
+		t.Errorf("PendingHITL = %v, want nil on error", got)
+	}
+	if !strings.Contains(err.Error(), "issue list") || !strings.Contains(err.Error(), "network timeout") {
+		t.Errorf("error %q should mention the failing gh subcommand and stderr", err.Error())
+	}
+}
+
 func TestGithubBackendAddTask(t *testing.T) {
 	fake := fakeGh(t, `if [ "$3" = "label" ]; then
 		exit 0
@@ -629,6 +652,27 @@ fi`)
 		t.Fatal("expected error when gh issue list fails")
 	}
 	if !strings.Contains(err.Error(), "issue list") || !strings.Contains(err.Error(), "network timeout") {
+		t.Errorf("error %q should mention the failing gh subcommand and stderr", err.Error())
+	}
+}
+
+// TestGithubBackendLoadIssue_Error verifies that loadIssue propagates a gh CLI
+// failure from viewIssue instead of returning a partial or nil result silently.
+func TestGithubBackendLoadIssue_Error(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "view" ]; then
+	echo "not found" >&2
+	exit 1
+else
+	exit 1
+fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	_, err := b.loadIssue("404")
+	if err == nil {
+		t.Fatal("expected error when gh issue view fails")
+	}
+	if !strings.Contains(err.Error(), "issue view") || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error %q should mention the failing gh subcommand and stderr", err.Error())
 	}
 }
