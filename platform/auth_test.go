@@ -260,6 +260,21 @@ func TestHandleAccount(t *testing.T) {
 			t.Errorf("status = %d, want 401", rec.Code)
 		}
 	})
+
+	// A valid token for a user that no longer exists in the store must 404.
+	t.Run("not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/account", nil)
+		req.Header.Set("Authorization", "Bearer "+jwtSign(secret, 999, "missing@example.com"))
+		srv.handleAccount(rec, req)
+
+		if rec.Code != 404 {
+			t.Errorf("status = %d, want 404", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "not found") {
+			t.Errorf("body = %q, want not found", rec.Body.String())
+		}
+	})
 }
 
 // TestHandleSignup verifies validation, duplicate detection, and both the trial
