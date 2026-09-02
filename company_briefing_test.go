@@ -108,6 +108,70 @@ func TestOpenPRsText(t *testing.T) {
 	})
 }
 
+func TestBuildBriefing_Implementer(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir, Name: "testco", ghRepo: "acme/web"}
+
+	// Direction files give the briefing its product-context section.
+	if err := os.WriteFile(filepath.Join(dir, "VISION.md"), []byte("## North star\nBuild.\n\n## Constraints\nNone.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ROADMAP.md"), []byte("## Now\nShip.\n\n## Out of scope\nOther.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := fakeGh(t, "echo '[]'")
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	got := c.buildBriefing(&Agent{Name: "coder", Title: "Implementer"}, &Task{ID: "42", Title: "Fix it", Body: "do it", Status: "in_progress"})
+	for _, want := range []string{
+		"# BRIEFING",
+		"## Your role",
+		"Implementer",
+		"## Active task #42: Fix it",
+		"status: in_progress",
+		"## Open PRs in acme/web",
+		"(none open)",
+		"## Project repo",
+		"You are IMPLEMENTING",
+		"mago/task-42",
+		"Closes #42",
+		"## Skills",
+		"## Your recent runs",
+		"## Instruction",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildBriefing missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuildBriefing_ClarifyMode(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir, Name: "testco", ghRepo: "acme/web"}
+
+	// Clarify mode skips the repo/project section and emits the clarification
+	// instructions and an explicit "do NOT write code" directive.
+	got := c.buildBriefing(&Agent{Name: "coder", Title: "Implementer"}, &Task{ID: "7", Title: "Clarify it", Body: "what does this mean", Status: "clarify", Clarify: true})
+	for _, want := range []string{
+		"# BRIEFING",
+		"## Your role",
+		"Implementer",
+		"## Active task #7: Clarify it",
+		"status: clarify",
+		"## CLARIFICATION PHASE (do NOT implement)",
+		"## Instruction",
+		"Do NOT write code or open a PR this tick",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildBriefing missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "## Project repo") {
+		t.Errorf("clarify mode should not include the project repo section:\n%s", got)
+	}
+}
+
 func TestBuildBriefingReviewer(t *testing.T) {
 	dir := t.TempDir()
 	c := &Company{Dir: dir, Name: "testco", ghRepo: "acme/web"}
