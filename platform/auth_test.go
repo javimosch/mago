@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -61,6 +62,14 @@ func TestJWTSignVerify(t *testing.T) {
 	}
 	if _, ok := jwtVerify("wrong-secret", token); ok {
 		t.Error("jwtVerify accepted a token with the wrong secret")
+	}
+
+	// Expired token should fail.
+	expiredPayload, _ := json.Marshal(map[string]any{"uid": uid, "email": email, "exp": int64(1)})
+	expiredBody := b64(`{"alg":"HS256","typ":"JWT"}`) + "." + b64(string(expiredPayload))
+	expiredToken := expiredBody + "." + sign(expiredBody, secret)
+	if _, ok := jwtVerify(secret, expiredToken); ok {
+		t.Error("jwtVerify accepted an expired token")
 	}
 }
 

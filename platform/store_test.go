@@ -224,3 +224,38 @@ func TestInstallations(t *testing.T) {
 		t.Errorf("ClaimInstallation on missing id = nil, want error")
 	}
 }
+
+func TestRecentEvents(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "recent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	st.LogEvent("signup", u.ID, "first")
+	st.LogEvent("worker_connect", u.ID, "second")
+
+	events := st.RecentEvents(10)
+	if len(events) != 2 {
+		t.Fatalf("RecentEvents(10) = %d events, want 2", len(events))
+	}
+	if events[0].Kind != "worker_connect" || events[0].Detail != "second" || events[0].Email != u.Email {
+		t.Errorf("most recent event = %+v, want worker_connect/second/%s", events[0], u.Email)
+	}
+	if events[1].Kind != "signup" || events[1].Detail != "first" || events[1].Email != u.Email {
+		t.Errorf("second event = %+v, want signup/first/%s", events[1], u.Email)
+	}
+
+	if got := len(st.RecentEvents(1)); got != 1 {
+		t.Errorf("RecentEvents(1) = %d, want 1", got)
+	}
+
+	if got := len(st.RecentEvents(0)); got != 2 {
+		t.Errorf("RecentEvents(0) default limit = %d, want 2", got)
+	}
+}
