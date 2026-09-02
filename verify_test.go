@@ -148,3 +148,45 @@ func TestVerifyEnabled(t *testing.T) {
 		t.Fatal("verifyEnabled should be on when MAGO_VERIFY_CMD is set")
 	}
 }
+
+// TestVerifyPR_NoChecksDetected covers the successful fetch/checkout path in verifyPR when
+// the checkout has no recognizable project file and no MAGO_VERIFY_CMD is configured.
+func TestVerifyPR_NoChecksDetected(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+
+	// Build a bare "remote" with a pull/1/head ref pointing at a tree with no go.mod.
+	bareDir := t.TempDir()
+	gitRunT(t, "", "init", "-q", "--bare", bareDir)
+
+	seedDir := t.TempDir()
+	gitRunT(t, seedDir, "init", "-q")
+	gitRunT(t, seedDir, "config", "user.email", "seed@local")
+	gitRunT(t, seedDir, "config", "user.name", "seed")
+	gitRunT(t, seedDir, "checkout", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(seedDir, "README"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRunT(t, seedDir, "add", "README")
+	gitRunT(t, seedDir, "commit", "-q", "-m", "seed")
+	gitRunT(t, seedDir, "remote", "add", "origin", bareDir)
+	gitRunT(t, seedDir, "push", "-q", "origin", "main")
+
+	sha := strings.TrimSpace(gitRunT(t, seedDir, "rev-parse", "HEAD"))
+	gitRunT(t, "", "--git-dir", bareDir, "update-ref", "refs/pull/1/head", sha)
+
+	// Pre-populate the verify clone so ensureClone is a no-op.
+	verifyDir := filepath.Join(dir, ".mago", "verify", "owner-repo")
+	gitRunT(t, "", "clone", "-q", bareDir, verifyDir)
+
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	c := &Company{Dir: dir, Name: "t"}
+	c.saveMode(workerMode{Merge: "verified"})
+
+	res := c.verifyPR("owner/repo", 1)
+	if res.ran || res.ok || !strings.Contains(res.detail, "no automated checks detected") {
+		t.Errorf("verifyPR no checks = %+v, want no-run with 'no automated checks detected'", res)
+	}
+}
