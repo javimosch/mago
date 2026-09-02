@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -86,5 +87,28 @@ func TestGithubBackendPickActiveTaskEmptyQueue(t *testing.T) {
 	}
 	if task != nil {
 		t.Errorf("PickActiveTask = %v, want nil", task)
+	}
+}
+
+// TestGithubBackendPickActiveTask_ListError verifies that a gh CLI failure when
+// listing issues is propagated to the caller instead of returning a nil task.
+func TestGithubBackendPickActiveTask_ListError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		echo "network timeout" >&2
+		exit 1
+	fi
+	exit 1`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task, err := b.PickActiveTask("dev")
+	if err == nil {
+		t.Fatal("expected error when gh issue list fails")
+	}
+	if task != nil {
+		t.Errorf("PickActiveTask = %v, want nil on error", task)
+	}
+	if !strings.Contains(err.Error(), "issue list") || !strings.Contains(err.Error(), "network timeout") {
+		t.Errorf("error %q should mention the failing gh subcommand and stderr", err.Error())
 	}
 }
