@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -176,5 +177,23 @@ func TestValidateGHRepo(t *testing.T) {
 		if !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("validateGHRepo(%q) = %q, want containing %q", tc.repo, err.Error(), tc.want)
 		}
+	}
+}
+
+// TestLoadCompany_InvalidGHRepo verifies that a company directory with an
+// invalid MAGO_GH_REPO value is rejected before any repo selection logic runs.
+func TestLoadCompany_InvalidGHRepo(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+	t.Setenv("MAGO_GH_REPO", "https://github.com/acme/backlog")
+
+	_, err := loadCompany(dir)
+	if err == nil {
+		t.Fatal("loadCompany should fail for invalid MAGO_GH_REPO")
+	}
+	if !strings.Contains(err.Error(), "looks like a URL or git remote") {
+		t.Errorf("error = %q, want URL/git remote error", err.Error())
 	}
 }
