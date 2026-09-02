@@ -192,6 +192,42 @@ func TestNotifyOnEvent_Unconfigured(t *testing.T) {
 	}
 }
 
+// TestNotifyOnEvent_UnknownKind verifies that an unknown event kind with Telegram
+// configured returns before sending any HTTP request and does not touch the
+// worker-connect cache.
+func TestNotifyOnEvent_UnknownKind(t *testing.T) {
+	firstConnectMu.Lock()
+	firstConnectSince = map[int64]time.Time{}
+	firstConnectMu.Unlock()
+
+	t.Setenv("TELEGRAM_BOT_TOKEN", "bot-token")
+	t.Setenv("TELEGRAM_CHAT_ID", "chat123")
+
+	orig := http.DefaultClient
+	defer func() { http.DefaultClient = orig }()
+
+	reqCh := make(chan *http.Request, 1)
+	http.DefaultClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		reqCh <- req
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+	})}
+
+	notifyOnEvent("unknown_kind", 7, "u@example.com", "should not fire")
+
+	select {
+	case <-reqCh:
+		t.Fatal("unknown event kind should not send a Telegram request")
+	case <-time.After(200 * time.Millisecond):
+		// expected
+	}
+
+	firstConnectMu.Lock()
+	defer firstConnectMu.Unlock()
+	if len(firstConnectSince) != 0 {
+		t.Errorf("firstConnectSince should remain empty for unknown kind, got %d entries", len(firstConnectSince))
+	}
+}
+
 // roundTripperFunc is a simple http.RoundTripper adapter for tests.
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
