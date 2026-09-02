@@ -73,6 +73,63 @@ func TestWriteBack(t *testing.T) {
 	}
 }
 
+// TestWriteBack_MinimalReflection covers the branches where the reflection has no
+// state delta and lessons with empty skill/note are skipped.
+func TestWriteBack_MinimalReflection(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+	c := &Company{Dir: dir}
+	c.tasks = &localBackend{c: c}
+
+	a := &Agent{Name: "dev"}
+	task, err := c.tasks.AddTask("minimal task", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	r := &Reflection{
+		Summary:    "small update",
+		StateDelta: "",
+		TaskStatus: "in_progress",
+		Next:       "continue",
+		Lessons:    []Lesson{{Skill: "", Note: "empty-skill"}, {Skill: "ok", Note: ""}},
+	}
+
+	if err := c.writeBack(a, task, r, "raw output"); err != nil {
+		t.Fatalf("writeBack: %v", err)
+	}
+
+	// Empty state delta should not create a STATE.md entry.
+	if _, err := os.Stat(c.stateFile()); err == nil {
+		b, _ := os.ReadFile(c.stateFile())
+		if strings.Contains(string(b), "small update") {
+			t.Errorf("state should not contain empty state delta")
+		}
+	}
+
+	// Lessons with empty skill or note should not create skill files.
+	if _, err := os.Stat(filepath.Join(c.skillsDir(), "ok")); err == nil {
+		t.Errorf("skill with empty note should not be recorded")
+	}
+
+	runDir := filepath.Join(c.runsDir(), "dev")
+	entries, err := os.ReadDir(runDir)
+	if err != nil {
+		t.Fatalf("ReadDir runs: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("writeBack did not write a run journal")
+	}
+
+	updated, err := c.tasks.FindTask(task.ID)
+	if err != nil {
+		t.Fatalf("FindTask: %v", err)
+	}
+	if updated.Status != "in_progress" {
+		t.Errorf("task status = %q, want in_progress", updated.Status)
+	}
+}
+
 func TestProgressNote(t *testing.T) {
 	cases := []struct {
 		status, summary, next, want string
