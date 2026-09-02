@@ -57,6 +57,24 @@ func TestHandleFeedback_Unauthorized(t *testing.T) {
 
 // TestHandleFeedback_Valid records a feedback event and returns ok when the
 // message is non-empty and the request is authenticated.
+// TestHandleFeedback_InvalidJSON verifies that a malformed JSON body is rejected
+// with a 400 before any store logic is reached.
+func TestHandleFeedback_InvalidJSON(t *testing.T) {
+	secret := "test-secret"
+	s := &server{jwtSecret: secret}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/feedback", strings.NewReader(`{not json`))
+	req.Header.Set("Authorization", "Bearer "+jwtSign(secret, 1, "dev@example.com"))
+	s.handleFeedback(rec, req)
+
+	if rec.Code != 400 {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid json") {
+		t.Errorf("body = %q, want invalid json", rec.Body.String())
+	}
+}
+
 func TestHandleFeedback_Valid(t *testing.T) {
 	dir := t.TempDir()
 	db := filepath.Join(dir, "feedback.db")
