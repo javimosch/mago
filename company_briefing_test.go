@@ -146,6 +146,32 @@ func TestBuildBriefing_Implementer(t *testing.T) {
 	}
 }
 
+func TestBuildBriefing_ClarifyMode(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir, Name: "testco", ghRepo: "acme/web"}
+
+	// Clarify mode skips the repo/project section and emits the clarification
+	// instructions and an explicit "do NOT write code" directive.
+	got := c.buildBriefing(&Agent{Name: "coder", Title: "Implementer"}, &Task{ID: "7", Title: "Clarify it", Body: "what does this mean", Status: "clarify", Clarify: true})
+	for _, want := range []string{
+		"# BRIEFING",
+		"## Your role",
+		"Implementer",
+		"## Active task #7: Clarify it",
+		"status: clarify",
+		"## CLARIFICATION PHASE (do NOT implement)",
+		"## Instruction",
+		"Do NOT write code or open a PR this tick",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildBriefing missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "## Project repo") {
+		t.Errorf("clarify mode should not include the project repo section:\n%s", got)
+	}
+}
+
 func TestBuildBriefingReviewer(t *testing.T) {
 	dir := t.TempDir()
 	c := &Company{Dir: dir, Name: "testco", ghRepo: "acme/web"}
