@@ -149,6 +149,39 @@ func TestHandleFeedback_DefaultType(t *testing.T) {
 	}
 }
 
+// TestHandleFeedback_UnknownUser verifies that feedback from a valid token
+// whose user ID is no longer in the store still records an event with a
+// fallback "account <id>" identifier.
+func TestHandleFeedback_UnknownUser(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "feedback.db")
+	st, err := openStore(db)
+	if err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	defer st.Close()
+
+	secret := "test-secret"
+	s := &server{store: st, jwtSecret: secret}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/feedback", strings.NewReader(`{"message":"hello"}`))
+	req.Header.Set("Authorization", "Bearer "+jwtSign(secret, 999, "missing@example.com"))
+	s.handleFeedback(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"ok":true`) {
+		t.Errorf("body missing ok=true: %q", rec.Body.String())
+	}
+
+	var n int
+	err = st.db.QueryRow("SELECT COUNT(*) FROM events WHERE kind='feedback' AND user_id=999").Scan(&n)
+	if err != nil || n != 1 {
+		t.Fatalf("event not recorded for unknown user: err=%v count=%d", err, n)
+	}
+}
+
 // TestHandleFeedback_EmptyMessage verifies that a request with only whitespace
 // in the message body is rejected with a 400 error.
 func TestHandleFeedback_EmptyMessage(t *testing.T) {
