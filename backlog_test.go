@@ -105,6 +105,7 @@ func TestProactiveMaxPerCycle(t *testing.T) {
 		{"0", 2},            // zero falls back to default
 		{"not-a-number", 2}, // invalid falls back to default
 		{"  3  ", 3},        // trimmed whitespace
+		{" ", 2},            // whitespace-only treated as unset
 	}
 	for _, c := range cases {
 		t.Setenv("MAGO_PROACTIVE_MAX", c.env)
