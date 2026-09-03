@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,6 +212,38 @@ func TestApplyControl(t *testing.T) {
 	m = c.loadMode()
 	if m.Proactive != 1200 || !m.Comms || m.Merge != "verified" || m.Update != "auto" {
 		t.Errorf("rejected tokens should not overwrite mode: %+v", m)
+	}
+}
+
+// TestApplyControl_SaveError verifies that applyControl surfaces (but does not raise)
+// a persist failure on stderr and leaves the previous mode intact, rather than panicking
+// or silently dropping the control frame.
+func TestApplyControl_SaveError(t *testing.T) {
+	dir := t.TempDir()
+	// Make .mago a regular file so os.WriteFile for mode.json fails.
+	magoPath := filepath.Join(dir, ".mago")
+	if err := os.WriteFile(magoPath, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("setup .mago file: %v", err)
+	}
+	c := &Company{Dir: dir, Name: "co"}
+
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w
+
+	c.applyControl([]byte(`{"tokens":["proactive=1200"]}`))
+
+	w.Close()
+	os.Stderr = old
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read captured stderr: %v", err)
+	}
+	if !strings.Contains(string(out), "control save failed") {
+		t.Errorf("expected 'control save failed' on stderr, got: %q", string(out))
 	}
 }
 
