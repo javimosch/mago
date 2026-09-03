@@ -73,6 +73,24 @@ func TestJWTSignVerify(t *testing.T) {
 	}
 }
 
+func TestJWTVerify_MalformedPayload(t *testing.T) {
+	secret := "test-secret"
+
+	header := b64(`{"alg":"HS256","typ":"JWT"}`)
+
+	// Payload segment is not valid base64 — decoding must fail.
+	badB64 := header + ".not-valid-base64!!!." + sign(header+".not-valid-base64!!!", secret)
+	if _, ok := jwtVerify(secret, badB64); ok {
+		t.Error("jwtVerify accepted a token with an un-decodable payload")
+	}
+
+	// Payload segment is valid base64 but not JSON — unmarshaling must fail.
+	badJSON := header + "." + b64("not json") + "." + sign(header+"."+b64("not json"), secret)
+	if _, ok := jwtVerify(secret, badJSON); ok {
+		t.Error("jwtVerify accepted a token with a non-JSON payload")
+	}
+}
+
 func TestGenLicense(t *testing.T) {
 	k := genLicense()
 	if !strings.HasPrefix(k, "mago_") {
