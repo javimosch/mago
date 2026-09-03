@@ -153,6 +153,12 @@ func TestVerifyEnabled(t *testing.T) {
 	if !c.verifyEnabled() {
 		t.Fatal("verifyEnabled should be on when MAGO_VERIFY_CMD is set")
 	}
+
+	// Whitespace-only MAGO_VERIFY_CMD should be treated as unset.
+	t.Setenv("MAGO_VERIFY_CMD", "   \t  ")
+	if c.verifyEnabled() {
+		t.Fatal("verifyEnabled should be off when MAGO_VERIFY_CMD is whitespace-only")
+	}
 }
 
 // TestVerifyPR_NoChecksDetected covers the successful fetch/checkout path in verifyPR when
