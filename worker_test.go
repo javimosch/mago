@@ -652,3 +652,27 @@ func TestWorkerDoctor_FailuresExit101(t *testing.T) {
 		t.Fatalf("workerDoctor exit code = %d, want 101", exit.ExitCode())
 	}
 }
+
+// TestCmdWorker_Doctor_Exit101 verifies that `mago worker doctor` routes through to
+// workerDoctor and exits with code 101 when the diagnostic checks fail.
+func TestCmdWorker_Doctor_Exit101(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("MAGO_TEST_CMDWORKER_DOCTOR_CHILD")) == "1" {
+		t.Setenv("MAGO_PROVIDER", "")
+		t.Setenv("MAGO_GH_REPO", "")
+		t.Setenv("OPENCODE_API_KEY", "")
+		t.Setenv("PATH", t.TempDir())
+		cmdWorker([]string{"doctor"})
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestCmdWorker_Doctor_Exit101")
+	cmd.Env = append(os.Environ(), "MAGO_TEST_CMDWORKER_DOCTOR_CHILD= 1")
+	err := cmd.Run()
+	exit, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("cmdWorker doctor did not exit the process: %v", err)
+	}
+	if exit.ExitCode() != 101 {
+		t.Fatalf("cmdWorker doctor exit code = %d, want 101", exit.ExitCode())
+	}
+}
