@@ -137,3 +137,28 @@ func TestAdvanceRoadmap(t *testing.T) {
 		t.Errorf("Next should remain unchanged, got %q", got)
 	}
 }
+
+// TestAdvanceRoadmapNoSections verifies that a roadmap without both a real ## Now
+// and ## Next is not advanced, and that an empty roadmap is a no-op.
+func TestAdvanceRoadmapNoSections(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	// Empty file -> nothing to advance.
+	if c.advanceRoadmap() {
+		t.Error("advanceRoadmap should return false for an empty roadmap")
+	}
+
+	// Missing Next section -> nothing to promote.
+	os.WriteFile(c.roadmapFile(), []byte("## Now\nA.\n"), 0o644)
+	if c.advanceRoadmap() {
+		t.Error("advanceRoadmap should return false when Next is missing")
+	}
+
+	// Missing Now section -> current focus is unknown.
+	os.WriteFile(c.roadmapFile(), []byte("## Next\nB.\n"), 0o644)
+	if c.advanceRoadmap() {
+		t.Error("advanceRoadmap should return false when Now is missing")
+	}
+}
