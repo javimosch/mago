@@ -12,6 +12,22 @@ import (
 	"testing"
 )
 
+func TestCliVersion_MissingDirAndBinary(t *testing.T) {
+	// Empty (and whitespace-only) MAGO_CLI_DIR must short-circuit to empty.
+	t.Setenv("MAGO_CLI_DIR", "   ")
+	if got := cliVersion("linux-amd64"); got != "" {
+		t.Errorf("cliVersion with whitespace-only MAGO_CLI_DIR = %q, want empty", got)
+	}
+
+	dir := t.TempDir()
+	t.Setenv("MAGO_CLI_DIR", dir)
+
+	// Missing binary for this platform returns empty.
+	if got := cliVersion("linux-arm64"); got != "" {
+		t.Errorf("cliVersion for missing binary = %q, want empty", got)
+	}
+}
+
 func TestPlatOf(t *testing.T) {
 	cases := []struct {
 		os, arch, want string
