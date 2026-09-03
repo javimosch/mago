@@ -284,3 +284,40 @@ func TestReconcileOnce_ReviewerBouncesTask(t *testing.T) {
 		t.Errorf("bounced task should be open, got status %q", ts[0].Status)
 	}
 }
+
+// TestReconcileOnce_DoneTaskSkipped verifies that a completed task is ignored by
+// the router and leaves the agent idle, so no model call is attempted.
+func TestReconcileOnce_DoneTaskSkipped(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "cto", "---\nname: cto\ntitle: CTO\nimplements: true\n---\n")
+
+	task, err := c.tasks.AddTask("Polish the README", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := c.tasks.SetStatus(task, "done"); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+
+	worked, err := reconcileOnce(c)
+	if err != nil {
+		t.Fatalf("reconcileOnce: %v", err)
+	}
+	if worked {
+		t.Error("reconcileOnce with only a done task should report worked=false")
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(ts) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(ts))
+	}
+	if ts[0].Status != "done" {
+		t.Errorf("done task should stay done, got status %q", ts[0].Status)
+	}
+}
