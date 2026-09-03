@@ -122,6 +122,48 @@ func TestRunTick_NoTask(t *testing.T) {
 	}
 }
 
+// TestRunTick_ReviewerBouncesTask verifies that a review-only agent never claims an
+// issue-task: it bounces the task and reports work so it can be re-routed to an implementer.
+func TestRunTick_ReviewerBouncesTask(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "rev", "---\nname: rev\ntitle: Head of Org Engineering\nreviews: true\n---\n")
+
+	task, err := c.tasks.AddTask("Triage the review backlog", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := c.tasks.Assign(task, "rev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	res, err := runTick(c, "rev")
+	if err != nil {
+		t.Fatalf("runTick error: %v", err)
+	}
+	if !res.worked {
+		t.Error("reviewer bounce should report worked=true")
+	}
+	if res.signal != "working" {
+		t.Errorf("signal = %q, want working", res.signal)
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(ts) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(ts))
+	}
+	if ts[0].Assignee != "" {
+		t.Errorf("bounced task should be unassigned, got %q", ts[0].Assignee)
+	}
+	if ts[0].Status != "open" {
+		t.Errorf("bounced task should be open, got %q", ts[0].Status)
+	}
+}
+
 func TestWarnIfNoProviderKey(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
