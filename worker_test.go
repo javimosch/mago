@@ -568,6 +568,65 @@ func TestCmdWorkerMode_NoMatch(t *testing.T) {
 	}
 }
 
+// TestCmdWorkerMode_All verifies that the --all flag broadcasts a mode change to every
+// connected worker without naming a specific worker id.
+func TestCmdWorkerMode_All(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/api/worker/control" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"updated": 3,
+			"workers": []string{"w1", "w2", "w3"},
+		})
+	}))
+	defer srv.Close()
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+	if err := os.MkdirAll(filepath.Join(home, ".mago"), 0o755); err != nil {
+		t.Fatalf("mkdir .mago: %v", err)
+	}
+	b, _ := json.Marshal(&cliConfig{Token: "token"})
+	if err := os.WriteFile(filepath.Join(home, ".mago", "config.json"), b, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdWorkerMode([]string{"reactive", "--all"}); err != nil {
+			t.Errorf("cmdWorkerMode: %v", err)
+		}
+	})
+
+	if gotBody != nil {
+		if w, _ := gotBody["worker"].(string); w != "" {
+			t.Errorf("request worker = %q, want empty when --all is used", w)
+		}
+		if all, _ := gotBody["all"].(bool); !all {
+			t.Error("request all = false, want true when --all is used")
+		}
+	}
+	if !strings.Contains(out, "mode pushed live to 3 worker(s)") {
+		t.Errorf("output missing success message:\n%s", out)
+	}
+	if !strings.Contains(out, "w1") || !strings.Contains(out, "w2") || !strings.Contains(out, "w3") {
+		t.Errorf("output missing worker ids:\n%s", out)
+	}
+}
+
 // TestWorkerDoctor_FailuresExit101 verifies that workerDoctor exits with code 101
 // (integration error per AGENTS.md) when any diagnostic check fails. Because
 // workerDoctor calls os.Exit, the test runs it in a subprocess so the main test
@@ -591,5 +650,29 @@ func TestWorkerDoctor_FailuresExit101(t *testing.T) {
 	}
 	if exit.ExitCode() != 101 {
 		t.Fatalf("workerDoctor exit code = %d, want 101", exit.ExitCode())
+	}
+}
+
+// TestCmdWorker_Doctor_Exit101 verifies that `mago worker doctor` routes through to
+// workerDoctor and exits with code 101 when the diagnostic checks fail.
+func TestCmdWorker_Doctor_Exit101(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("MAGO_TEST_CMDWORKER_DOCTOR_CHILD")) == "1" {
+		t.Setenv("MAGO_PROVIDER", "")
+		t.Setenv("MAGO_GH_REPO", "")
+		t.Setenv("OPENCODE_API_KEY", "")
+		t.Setenv("PATH", t.TempDir())
+		cmdWorker([]string{"doctor"})
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestCmdWorker_Doctor_Exit101")
+	cmd.Env = append(os.Environ(), "MAGO_TEST_CMDWORKER_DOCTOR_CHILD= 1")
+	err := cmd.Run()
+	exit, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("cmdWorker doctor did not exit the process: %v", err)
+	}
+	if exit.ExitCode() != 101 {
+		t.Fatalf("cmdWorker doctor exit code = %d, want 101", exit.ExitCode())
 	}
 }
