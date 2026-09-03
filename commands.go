@@ -21,7 +21,7 @@ func parseCompanyDir(args []string) (string, []string, error) {
 			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
 				return "", nil, fmt.Errorf("flag -C needs a directory value, e.g. `-C <dir>` (or set $MAGO_COMPANY)")
 			}
-			dir = args[i+1]
+			dir = strings.TrimSpace(args[i+1])
 			i++
 			continue
 		}
