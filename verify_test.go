@@ -202,3 +202,60 @@ func TestVerifyPR_NoChecksDetected(t *testing.T) {
 		t.Errorf("verifyPR no checks = %+v, want no-run with 'no automated checks detected'", res)
 	}
 }
+
+// TestVerifyPR_RunShell covers the success and failure branches of the shell
+// command that verifyPR runs after fetching and checking out a PR.
+func TestVerifyPR_RunShell(t *testing.T) {
+	c := newTestCompany(t)
+
+	// Build a bare "remote" with a go.mod so auto-detection would also work,
+	// and set two PR refs so each case can use a distinct branch.
+	bareDir := t.TempDir()
+	gitRunT(t, "", "init", "-q", "--bare", bareDir)
+
+	seedDir := t.TempDir()
+	gitRunT(t, seedDir, "init", "-q")
+	gitRunT(t, seedDir, "config", "user.email", "seed@local")
+	gitRunT(t, seedDir, "config", "user.name", "seed")
+	gitRunT(t, seedDir, "checkout", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(seedDir, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRunT(t, seedDir, "add", "go.mod")
+	gitRunT(t, seedDir, "commit", "-q", "-m", "seed")
+	gitRunT(t, seedDir, "remote", "add", "origin", bareDir)
+	gitRunT(t, seedDir, "push", "-q", "origin", "main")
+
+	sha := strings.TrimSpace(gitRunT(t, seedDir, "rev-parse", "HEAD"))
+	gitRunT(t, "", "--git-dir", bareDir, "update-ref", "refs/pull/1/head", sha)
+	gitRunT(t, "", "--git-dir", bareDir, "update-ref", "refs/pull/2/head", sha)
+
+	verifyDir := filepath.Join(c.magoDir(), "verify", "owner-repo")
+	gitRunT(t, "", "clone", "-q", bareDir, verifyDir)
+
+	cases := []struct {
+		name      string
+		prNum     int
+		cmd       string
+		wantOK    bool
+		wantLabel string
+	}{
+		{"pass", 1, "true", true, "MAGO_VERIFY_CMD passed"},
+		{"fail", 2, "false", false, "MAGO_VERIFY_CMD **FAILED**"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MAGO_VERIFY_CMD", tc.cmd)
+			res := c.verifyPR("owner/repo", tc.prNum)
+			if !res.ran {
+				t.Errorf("verifyPR %s: expected verification to run, got %+v", tc.name, res)
+			}
+			if res.ok != tc.wantOK {
+				t.Errorf("verifyPR %s ok = %v, want %v", tc.name, res.ok, tc.wantOK)
+			}
+			if !strings.Contains(res.detail, tc.wantLabel) {
+				t.Errorf("verifyPR %s detail = %q, want %q", tc.name, res.detail, tc.wantLabel)
+			}
+		})
+	}
+}
