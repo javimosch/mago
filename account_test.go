@@ -207,6 +207,24 @@ func TestLoadConfigTrimsWhitespace(t *testing.T) {
 	}
 }
 
+// TestCliConfigSaveError verifies that save surfaces an error when the .mago
+// directory cannot be created (e.g., a regular file already occupies the path).
+func TestCliConfigSaveError(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Make .mago a regular file so ensureDir/MkdirAll fails.
+	magoPath := filepath.Join(home, ".mago")
+	if err := os.WriteFile(magoPath, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("setup .mago file: %v", err)
+	}
+
+	c := &cliConfig{PlatformURL: defaultPlatformURL}
+	if err := c.save(); err == nil {
+		t.Fatal("save should fail when .mago is not a directory")
+	}
+}
+
 func TestCliConfigPlatformDo(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
