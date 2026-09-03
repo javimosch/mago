@@ -334,6 +334,47 @@ func TestReconcileOnce_UnknownAssigneeReroutes(t *testing.T) {
 	}
 }
 
+// TestReconcileOnce_InProgressTaskResumes verifies that an in-progress task that
+// is already assigned to a known agent is not re-routed; the agent resumes work.
+func TestReconcileOnce_InProgressTaskResumes(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_TEST_BAD_REFLECTION", "2")
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "cto", "---\nname: cto\ntitle: CTO\nimplements: true\n---\n")
+
+	task, err := c.tasks.AddTask("Finish the dashboard", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := c.tasks.Claim(task, "cto"); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	worked, err := reconcileOnce(c)
+	if err != nil {
+		t.Fatalf("reconcileOnce: %v", err)
+	}
+	if !worked {
+		t.Error("reconcileOnce should report worked=true when an in-progress task resumes")
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(ts) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(ts))
+	}
+	if ts[0].Assignee != "cto" {
+		t.Errorf("task should stay assigned to cto, got %q", ts[0].Assignee)
+	}
+	if ts[0].Status != "in_progress" {
+		t.Errorf("task should stay in_progress, got status %q", ts[0].Status)
+	}
+}
+
 // TestReconcileOnce_DoneTaskSkipped verifies that a completed task is ignored by
 // the router and leaves the agent idle, so no model call is attempted.
 func TestReconcileOnce_DoneTaskSkipped(t *testing.T) {
