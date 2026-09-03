@@ -2,10 +2,12 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWorkerPidFile(t *testing.T) {
@@ -255,5 +257,56 @@ func TestWorkerStop_InvalidCompany(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not a mago company") {
 		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
+
+// TestWorkerStop_KillsRunningWorker exercises the branch of workerStop that finds
+// and terminates a live worker and supervisor for the same company. It confirms
+// killCompanyWorkers correctly classifies /proc entries and counts the killed
+// processes without requiring a real mago binary.
+func TestWorkerStop_KillsRunningWorker(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_GH_REPO", "")
+
+	stub := writeStubExe(t, "sleep 60")
+
+	// Launch a supervisor and a worker for the same company directory.
+	supervisor := exec.Command(stub, "serve", "--supervise", "-C", c.Dir)
+	if err := supervisor.Start(); err != nil {
+		t.Fatalf("start supervisor: %v", err)
+	}
+	defer supervisor.Process.Kill()
+
+	worker := exec.Command(stub, "serve", "-C", c.Dir)
+	if err := worker.Start(); err != nil {
+		t.Fatalf("start worker: %v", err)
+	}
+	defer worker.Process.Kill()
+
+	// Give the processes time to show up in /proc so killCompanyWorkers can see them.
+	time.Sleep(200 * time.Millisecond)
+
+	out := captureStdout(t, func() {
+		if err := workerStop(c.Dir); err != nil {
+			t.Fatalf("workerStop: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "mago worker stopped") {
+		t.Errorf("output = %q, want 'mago worker stopped'", out)
+	}
+	if !strings.Contains(out, "2 process") {
+		t.Errorf("output = %q, want '2 process(es)'", out)
+	}
+
+	// Confirm both processes were reaped.
+	for _, cmd := range []*exec.Cmd{supervisor, worker} {
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Errorf("process %d was not reaped", cmd.Process.Pid)
+		}
 	}
 }
