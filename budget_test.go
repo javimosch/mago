@@ -80,6 +80,7 @@ func TestBudget_InvalidCap(t *testing.T) {
 		value string
 	}{
 		{"empty", ""},
+		{"whitespace-only", " "},
 		{"invalid", "abc"},
 		{"negative", "-5"},
 	}
