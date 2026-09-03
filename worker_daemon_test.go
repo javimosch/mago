@@ -295,8 +295,10 @@ func TestWorkerStop_KillsRunningWorker(t *testing.T) {
 	if !strings.Contains(out, "mago worker stopped") {
 		t.Errorf("output = %q, want 'mago worker stopped'", out)
 	}
-	if !strings.Contains(out, "2 process") {
-		t.Errorf("output = %q, want '2 process(es)'", out)
+	// Each stub shell spawned a child sleep, so killCompanyWorkers must kill the
+	// matched processes and their descendants: 4 processes total.
+	if !strings.Contains(out, "4 process") {
+		t.Errorf("output = %q, want '4 process(es)'", out)
 	}
 
 	// Confirm both processes were reaped.

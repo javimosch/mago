@@ -158,13 +158,44 @@ func killCompanyWorkers(absDir string) int {
 			workers = append(workers, pid)
 		}
 	}
-	for _, p := range supers { // kill supervisors first so they can't restart their child
-		syscall.Kill(p, syscall.SIGKILL)
+
+	killed := map[int]bool{}
+	// Kill supervisors first so they can't restart their child, then workers.
+	for _, p := range append(supers, workers...) {
+		killProcessTree(p, killed)
 	}
-	for _, p := range workers {
-		syscall.Kill(p, syscall.SIGKILL)
+	return len(killed)
+}
+
+// killProcessTree sends SIGKILL to pid and its descendants (recursively), recording
+// each killed pid in killed. Children are killed before the parent so they can't be
+// re-parented and orphaned when the parent disappears.
+func killProcessTree(pid int, killed map[int]bool) {
+	if pid <= 0 || killed[pid] {
+		return
 	}
-	return len(supers) + len(workers)
+	children := childPids(pid)
+	for _, c := range children {
+		killProcessTree(c, killed)
+	}
+	if err := syscall.Kill(pid, syscall.SIGKILL); err == nil {
+		killed[pid] = true
+	}
+}
+
+// childPids returns the immediate child pids of pid from /proc, or nil.
+func childPids(pid int) []int {
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%d/children", pid, pid))
+	if err != nil {
+		return nil
+	}
+	var out []int
+	for _, s := range strings.Fields(string(b)) {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // classifyServeProc reports whether a process's argv is a `mago serve … -C <absDir>` worker/supervisor
