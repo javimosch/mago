@@ -252,3 +252,18 @@ func TestRunDebri_Success(t *testing.T) {
 		t.Errorf("got %q, want %q", got, "reflection result")
 	}
 }
+
+// TestRunDebri_NotOnPath verifies that runDebri returns a clear integration error
+// when the debri binary is not on PATH, rather than a raw exec error.
+func TestRunDebri_NotOnPath(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	a := &Agent{Model: "SWE-1.6"}
+	_, err := runDebri(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runDebri: expected an error when debri is not on PATH")
+	}
+	if !strings.Contains(err.Error(), "starting debri") || !strings.Contains(err.Error(), "PATH") {
+		t.Errorf("runDebri should surface a PATH hint, got: %v", err)
+	}
+}
