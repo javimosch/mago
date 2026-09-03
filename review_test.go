@@ -185,6 +185,13 @@ func TestMergeUnverifiedEnabled(t *testing.T) {
 		}
 	})
 
+	t.Run("whitespace-only is false", func(t *testing.T) {
+		t.Setenv("MAGO_MERGE_UNVERIFIED", "   ")
+		if mergeUnverifiedEnabled() {
+			t.Error("mergeUnverifiedEnabled() = true, want false for whitespace-only value")
+		}
+	})
+
 	t.Run("other value is false", func(t *testing.T) {
 		t.Setenv("MAGO_MERGE_UNVERIFIED", "yes")
 		if mergeUnverifiedEnabled() {
