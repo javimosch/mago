@@ -110,6 +110,23 @@ func TestParseCompanyDir_WhitespaceEnvIsTrimmed(t *testing.T) {
 	}
 }
 
+// TestParseCompanyDir_WhitespaceFlagIsTrimmed verifies the -C <dir> value is trimmed so
+// surrounding spaces are ignored and the flag still sets the company directory correctly.
+func TestParseCompanyDir_WhitespaceFlagIsTrimmed(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+
+	dir, rest, err := parseCompanyDir([]string{"-C", "  /srv/acme  ", "status"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dir != "/srv/acme" {
+		t.Errorf("padded -C value should be trimmed, got dir=%q", dir)
+	}
+	if len(rest) != 1 || rest[0] != "status" {
+		t.Errorf("rest = %v, want [status]", rest)
+	}
+}
+
 // TestLoadCompany_MissingCompanyNamesRemedies verifies the not-a-mago-company error points the
 // user at both remedies: the -C <dir> flag and the $MAGO_COMPANY env var.
 func TestLoadCompany_MissingCompanyNamesRemedies(t *testing.T) {
