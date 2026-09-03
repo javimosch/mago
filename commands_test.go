@@ -405,6 +405,32 @@ func TestCmdStatus_WithTask(t *testing.T) {
 	}
 }
 
+func TestCmdStatus_WithProject(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	if err := cmdProject([]string{"-C", dir, "add", "web", "--repo", "acme/web"}); err != nil {
+		t.Fatalf("cmdProject web: %v", err)
+	}
+	if err := cmdProject([]string{"-C", dir, "add", "api", "--repo", "acme/api"}); err != nil {
+		t.Fatalf("cmdProject api: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdStatus([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdStatus: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "## Projects") {
+		t.Errorf("expected projects section, got: %q", out)
+	}
+	if !strings.Contains(out, "web -> acme/web") || !strings.Contains(out, "api -> acme/api") {
+		t.Errorf("expected projects in status output, got: %q", out)
+	}
+}
+
 // TestCmdAnswer_RecordsResponse verifies the `mago answer` command appends the
 // human response to an existing task and flips its status to in_progress.
 func TestCmdAnswer_RecordsResponse(t *testing.T) {

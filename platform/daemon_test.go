@@ -1,11 +1,13 @@
 package main
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseStartFlags(t *testing.T) {
@@ -159,5 +161,38 @@ func TestPidFileAndLogFile(t *testing.T) {
 	}
 	if got := logFile(); got != filepath.Join(home, ".mago-platform", "mago-platform.log") {
 		t.Errorf("logFile() = %q, want %q", got, filepath.Join(home, ".mago-platform", "mago-platform.log"))
+	}
+}
+
+// TestListenInodeAndPidOnPort verifies the /proc helpers can detect the inode of a
+// listening socket and map that inode back to the current process. It uses a real
+// loopback listener so the test is accurate without mocking /proc.
+func TestListenInodeAndPidOnPort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	// Give /proc a moment to reflect the new socket.
+	time.Sleep(50 * time.Millisecond)
+
+	inode := listenInode(port)
+	if inode == "" {
+		t.Fatalf("listenInode(%d) returned empty; expected a socket inode", port)
+	}
+
+	gotPid := pidOnPort(strconv.Itoa(port))
+	if gotPid != os.Getpid() {
+		t.Errorf("pidOnPort(%d) = %d, want %d", port, gotPid, os.Getpid())
+	}
+
+	if err := ln.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// After closing the listener the port should no longer be held.
+	if got := pidOnPort(strconv.Itoa(port)); got != 0 {
+		t.Errorf("pidOnPort(%d) after close = %d, want 0", port, got)
 	}
 }
