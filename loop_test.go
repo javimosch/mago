@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -106,6 +107,21 @@ func TestDriveLoop_ZeroTicks(t *testing.T) {
 	)
 	if ran != 0 || runs != 0 {
 		t.Fatalf("maxTicks=0 should run nothing: ran=%d runs=%d", ran, runs)
+	}
+}
+
+// cmdLoop surfaces a loadCompany error (e.g. a directory with no .mago/) instead
+// of proceeding into the tick loop.
+func TestCmdLoop_LoadCompanyError(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	dir := t.TempDir() // no .mago/
+
+	err := cmdLoop([]string{"-C", dir, "dev", "--base", "0", "--max-ticks", "1"})
+	if err == nil {
+		t.Fatal("expected error for missing .mago/")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
 	}
 }
 
