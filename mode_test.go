@@ -346,3 +346,25 @@ func TestLoadSaveMode(t *testing.T) {
 		t.Error("review mode should not verify")
 	}
 }
+
+// TestCmdMode_SaveError verifies that cmdMode returns a non-nil error when the
+// mode file cannot be persisted, rather than silently dropping the user's mode
+// change.
+func TestCmdMode_SaveError(t *testing.T) {
+	dir := t.TempDir()
+	// Make .mago a regular file so .mago/mode.json cannot be created.
+	if err := os.WriteFile(filepath.Join(dir, ".mago"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("write .mago file: %v", err)
+	}
+
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_TASK_LABEL", "")
+
+	err := cmdMode([]string{"-C", dir, "proactive=600"})
+	if err == nil {
+		t.Fatal("cmdMode should fail when mode file cannot be written")
+	}
+	if !strings.Contains(err.Error(), ".mago/mode.json") {
+		t.Errorf("error should mention .mago/mode.json, got: %v", err)
+	}
+}
