@@ -168,6 +168,23 @@ func TestLocalBackendHITL(t *testing.T) {
 	}
 }
 
+// TestLocalBackendListTasks_MissingDir verifies that ListTasks returns an empty
+// result (not an error) when the tasks directory does not yet exist, so a fresh
+// company can be queried before any tasks are added.
+func TestLocalBackendListTasks_MissingDir(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	b := &localBackend{c: c}
+
+	tasks, err := b.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks on missing dir: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("ListTasks on missing dir = %v, want empty", tasks)
+	}
+}
+
 func TestLocalBackendListTasks_SkipsNonMarkdown(t *testing.T) {
 	dir := t.TempDir()
 	c := &Company{Dir: dir}
