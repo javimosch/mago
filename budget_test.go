@@ -70,6 +70,18 @@ func TestBudget_TrimmedCap(t *testing.T) {
 	}
 }
 
+func TestGuardBudget_NotOverBudget(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "t"}
+
+	t.Setenv("MAGO_DAILY_BUDGET", "5")
+	c.saveUsage(budgetUsage{Day: utcDay(), Actions: 2})
+	if c.guardBudget("test") {
+		t.Fatal("guardBudget should return false when under the cap")
+	}
+}
+
 func TestBudget_InvalidCap(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
