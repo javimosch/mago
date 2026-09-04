@@ -764,6 +764,36 @@ func TestCmdLogin_BadCreds(t *testing.T) {
 	}
 }
 
+// TestCmdLogin_SaveError verifies that cmdLogin surfaces an error when the
+// local config cannot be persisted, rather than silently discarding the token.
+func TestCmdLogin_SaveError(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Make .mago a regular file so MkdirAll fails when saving the config.
+	magoPath := filepath.Join(home, ".mago")
+	if err := os.WriteFile(magoPath, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("setup .mago file: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/login" || r.Method != "POST" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"token": "login-token"})
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+	err := cmdLogin([]string{"--email", "dev@example.com", "--password", "secret"})
+	if err == nil {
+		t.Fatal("expected error when config cannot be saved")
+	}
+}
+
 // TestCmdRegister_PlanBranches covers the trial and default onboarding branches
 // of cmdRegister that TestCmdRegister (founding plan) does not exercise.
 func TestCmdRegister_PlanBranches(t *testing.T) {

@@ -135,3 +135,23 @@ func TestStreamRelay_HappyPath(t *testing.T) {
 		t.Error("expected a wake event for the issues webhook")
 	}
 }
+
+func TestRunRelay_RefusedReconnects(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	w := &eventWorker{}
+	cfg := &cliConfig{PlatformURL: srv.URL, LicenseKey: "test-key"}
+	runRelay(ctx, w, cfg, []string{"owner/repo"})
+
+	if calls < 1 {
+		t.Errorf("runRelay should have attempted at least one connection, got %d", calls)
+	}
+}
