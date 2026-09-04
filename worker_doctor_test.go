@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -12,7 +13,7 @@ import (
 // missing. The test runs in a subprocess so the os.Exit(101) does not terminate
 // the main test runner.
 func TestWorkerDoctor_GHRepoTokenFailure(t *testing.T) {
-	if os.Getenv("MAGO_TEST_WORKER_DOCTOR_GH_REPO_CHILD") == "1" {
+	if strings.TrimSpace(os.Getenv("MAGO_TEST_WORKER_DOCTOR_GH_REPO_CHILD")) == "1" {
 		dir := t.TempDir()
 		for _, name := range []string{"tau", "gh"} {
 			p := filepath.Join(dir, name)
