@@ -270,6 +270,46 @@ exit 1
 	}
 }
 
+// TestCmdDigest_MissionSet covers the branch where STATE.md has a non-placeholder
+// ## Mission section, so cmdDigest prints it instead of the unset hint.
+func TestCmdDigest_MissionSet(t *testing.T) {
+	c := newTestCompany(t)
+	state := `# testco — company state
+
+## Mission
+Ship the thing.
+
+## Shipped
+Nothing yet.
+
+## In flight
+Nothing yet.
+
+## Decisions
+None yet.
+
+## Activity log
+`
+	if err := os.WriteFile(filepath.Join(c.Dir, "STATE.md"), []byte(state), 0o644); err != nil {
+		t.Fatalf("write STATE.md: %v", err)
+	}
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_DAILY_BUDGET", "")
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", c.Dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Mission: Ship the thing.") {
+		t.Errorf("digest should print the set mission, got:\n%s", out)
+	}
+	if strings.Contains(out, "Mission: (unset") {
+		t.Errorf("digest should not report an unset mission when one is set, got:\n%s", out)
+	}
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
