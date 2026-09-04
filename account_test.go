@@ -729,6 +729,41 @@ func TestCmdAccount_UsageError(t *testing.T) {
 	}
 }
 
+// TestCmdLogin_BadCreds verifies that cmdLogin returns a clear error when the
+// platform rejects the credentials, instead of silently failing.
+func TestCmdLogin_BadCreds(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/login" || r.Method != "POST" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var in map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if in["email"] == "dev@example.com" && in["password"] == "secret" {
+			json.NewEncoder(w).Encode(map[string]string{"token": "ok"})
+			return
+		}
+		http.Error(w, `{"error":"bad credentials"}`, http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+	err := cmdLogin([]string{"--email", "dev@example.com", "--password", "wrong"})
+	if err == nil {
+		t.Fatal("cmdLogin: expected error for bad credentials")
+	}
+	if !strings.Contains(err.Error(), "bad credentials") {
+		t.Errorf("error = %q, want 'bad credentials'", err.Error())
+	}
+}
+
 // TestCmdRegister_PlanBranches covers the trial and default onboarding branches
 // of cmdRegister that TestCmdRegister (founding plan) does not exercise.
 func TestCmdRegister_PlanBranches(t *testing.T) {
