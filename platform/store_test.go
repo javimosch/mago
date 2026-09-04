@@ -225,6 +225,42 @@ func TestInstallations(t *testing.T) {
 	}
 }
 
+// TestEntitledRepos_Union verifies that EntitledRepos combines repos from both
+// claimed GitHub App installations (repos_json) and direct repo_grants.
+func TestEntitledRepos_Union(t *testing.T) {
+	st, err := openStore(filepath.Join(t.TempDir(), "entitled.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := st.UpsertInstallation(1, "org-a", []string{"org-a/one", "org-a/two"}); err != nil {
+		t.Fatalf("UpsertInstallation: %v", err)
+	}
+	if err := st.ClaimInstallation(1, u.ID); err != nil {
+		t.Fatalf("ClaimInstallation: %v", err)
+	}
+
+	got := st.EntitledRepos(u.ID)
+	if !got["org-a/one"] || !got["org-a/two"] || len(got) != 2 {
+		t.Errorf("EntitledRepos after claim = %v, want org-a/one and org-a/two", got)
+	}
+
+	if err := st.GrantRepo(u.ID, "direct/three"); err != nil {
+		t.Fatalf("GrantRepo: %v", err)
+	}
+
+	got = st.EntitledRepos(u.ID)
+	if !got["org-a/one"] || !got["org-a/two"] || !got["direct/three"] || len(got) != 3 {
+		t.Errorf("EntitledRepos union = %v, want three repos", got)
+	}
+}
+
 func TestRecentEvents(t *testing.T) {
 	st, err := openStore(filepath.Join(t.TempDir(), "recent.db"))
 	if err != nil {
