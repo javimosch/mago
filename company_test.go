@@ -144,6 +144,18 @@ func TestValidateProjectsConfig_Missing(t *testing.T) {
 	}
 }
 
+// TestValidateProjectsConfig_Valid verifies a well-formed projects config file passes
+// validation without error.
+func TestValidateProjectsConfig_Valid(t *testing.T) {
+	c := newTestCompany(t)
+	if err := c.saveProject("web", "acme/web", false); err != nil {
+		t.Fatalf("save project: %v", err)
+	}
+	if err := c.validateProjectsConfig(); err != nil {
+		t.Errorf("validateProjectsConfig() with valid JSON = %v, want nil", err)
+	}
+}
+
 // TestValidateGHRepo verifies the MAGO_GH_REPO sanity checks: valid bare owner/repo,
 // empty (unset), common URL/remote mistakes, missing owner or repo, and trailing .git.
 func TestValidateGHRepo(t *testing.T) {
