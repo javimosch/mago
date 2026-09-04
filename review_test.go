@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -283,5 +284,29 @@ func TestReviewPR_ProjectRepoAccepted(t *testing.T) {
 	// branch, proving the repo-scoping check itself passed.
 	if ok := c.reviewPR("acme/widget", 7); ok {
 		t.Error("reviewPR() = true, want false (no reviewer configured) but the repo should be in scope")
+	}
+}
+
+// TestReviewPR_DiffError verifies that reviewPR returns false and stops before any model
+// or verification work when the gh pr diff call fails (network/auth/missing PR).
+func TestReviewPR_DiffError(t *testing.T) {
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	ghDir := t.TempDir()
+	script := `#!/bin/sh
+if [ "$3" = "pr" ] && [ "$4" = "diff" ]; then
+	echo "diff fetch failed" >&2
+fi
+exit 1
+`
+	if err := os.WriteFile(filepath.Join(ghDir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake gh: %v", err)
+	}
+	t.Setenv("PATH", ghDir+":"+os.Getenv("PATH"))
+
+	if got := c.reviewPR("acme/backlog", 1); got {
+		t.Error("reviewPR() = true, want false when gh pr diff fails")
 	}
 }
