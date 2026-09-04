@@ -105,7 +105,7 @@ func cmdTask(args []string) error {
 	var words []string
 	for i := 1; i < len(rest); i++ {
 		if rest[i] == "--project" && i+1 < len(rest) {
-			project = rest[i+1]
+			project = strings.TrimSpace(rest[i+1])
 			i++
 			continue
 		}
@@ -138,7 +138,7 @@ func cmdProject(args []string) error {
 	var pos []string
 	for i := 0; i < len(rest); i++ {
 		if rest[i] == "--repo" && i+1 < len(rest) {
-			repo = rest[i+1]
+			repo = strings.TrimSpace(rest[i+1])
 			i++
 			continue
 		}
