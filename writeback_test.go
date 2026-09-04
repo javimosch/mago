@@ -187,6 +187,17 @@ func TestWritebackAppendState(t *testing.T) {
 	}
 }
 
+// TestWritebackAppendToSection_MissingFile verifies appendToSection is a no-op
+// when the STATE.md file has not been created yet, rather than creating one.
+func TestWritebackAppendToSection_MissingFile(t *testing.T) {
+	c := &Company{Dir: t.TempDir()}
+	c.appendToSection("Shipped", "- 2026-08-14 #1 shipped a thing")
+
+	if _, err := os.Stat(c.stateFile()); err == nil {
+		t.Errorf("appendToSection should not create a missing STATE.md")
+	}
+}
+
 func TestWritebackAppendToSection(t *testing.T) {
 	c := &Company{Dir: t.TempDir()}
 	state := "# Company state\n\n## Shipped\n(nothing yet)\n\n## Activity log\n\n"
