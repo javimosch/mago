@@ -123,6 +123,38 @@ func TestCmdFeedback_EmptyMessage(t *testing.T) {
 	}
 }
 
+// TestCmdFeedback_RelaySuccess verifies a successful relay write is reported in
+// the command's JSON output even when the platform endpoint is not authenticated.
+func TestCmdFeedback_RelaySuccess(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USER", "tester")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/feedback" {
+			t.Errorf("unexpected relay path: %q", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("method = %q, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	t.Setenv("FEEDBACK_RELAY", srv.URL)
+
+	out := captureStdout(t, func() {
+		if err := cmdFeedback([]string{"relay", "is", "working"}); err != nil {
+			t.Fatalf("cmdFeedback: %v", err)
+		}
+	})
+	if !strings.Contains(out, `"relayed":1`) {
+		t.Errorf("expected relayed=1, got: %q", out)
+	}
+	if !strings.Contains(out, `"stored":0`) {
+		t.Errorf("expected stored=0 when not logged in, got: %q", out)
+	}
+}
+
 func TestPostFeedback(t *testing.T) {
 	body := map[string]any{"message": "hello"}
 
