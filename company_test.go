@@ -156,6 +156,23 @@ func TestValidateProjectsConfig_Valid(t *testing.T) {
 	}
 }
 
+// TestValidateProjectsConfig_ReadError verifies an unreadable projects config path
+// (e.g. a directory where the file should be) returns an error that names the file.
+func TestValidateProjectsConfig_ReadError(t *testing.T) {
+	c := newTestCompany(t)
+	if err := os.MkdirAll(c.projectsConfigFile(), 0o755); err != nil {
+		t.Fatalf("setup projects.json as directory: %v", err)
+	}
+
+	err := c.validateProjectsConfig()
+	if err == nil {
+		t.Fatal("expected error for unreadable projects config")
+	}
+	if !strings.Contains(err.Error(), "projects config") {
+		t.Errorf("error = %q, want 'projects config'", err.Error())
+	}
+}
+
 // TestValidateGHRepo verifies the MAGO_GH_REPO sanity checks: valid bare owner/repo,
 // empty (unset), common URL/remote mistakes, missing owner or repo, and trailing .git.
 func TestValidateGHRepo(t *testing.T) {
