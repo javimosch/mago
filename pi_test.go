@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -116,5 +117,103 @@ func TestRunPi(t *testing.T) {
 	}
 	if got != "hello from pi" {
 		t.Errorf("runPi returned %q, want %q", got, "hello from pi")
+	}
+}
+
+// TestRunPi_NotOnPath verifies that runPi returns a clear integration error
+// when the pi binary is not on PATH.
+func TestRunPi_NotOnPath(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	a := &Agent{Model: "openrouter/test"}
+	_, err := runPi(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runPi: expected an error when pi is not on PATH")
+	}
+	if !strings.Contains(err.Error(), "starting pi") || !strings.Contains(err.Error(), "PATH") {
+		t.Errorf("runPi should surface a PATH hint, got: %v", err)
+	}
+}
+
+// TestRunPi_NoOutput verifies that runPi returns an error when the pi binary
+// exits successfully but emits no parseable assistant content.
+func TestRunPi_NoOutput(t *testing.T) {
+	dir := t.TempDir()
+	piBin := filepath.Join(dir, "pi")
+	body := "#!/bin/sh\nexit 0\n"
+	if err := os.WriteFile(piBin, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	a := &Agent{Model: "openrouter/test"}
+	_, err := runPi(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runPi: expected an error for empty output")
+	}
+	if !strings.Contains(err.Error(), "no output from pi") {
+		t.Errorf("runPi should surface 'no output from pi', got: %v", err)
+	}
+}
+
+// TestPiComplete_RetryThenSuccess covers the retry/backoff path in piComplete:
+// the first fake pi call fails, the second succeeds.
+func TestPiComplete_RetryThenSuccess(t *testing.T) {
+	dir := t.TempDir()
+	counter := filepath.Join(dir, "counter")
+	if err := os.WriteFile(counter, []byte("0"), 0o644); err != nil {
+		t.Fatalf("write counter: %v", err)
+	}
+
+	piBin := filepath.Join(dir, "pi")
+	body := `#!/bin/sh
+n=0
+if [ -f "$COUNTER_FILE" ]; then
+	read -r n < "$COUNTER_FILE"
+fi
+n=$((n + 1))
+echo "$n" > "$COUNTER_FILE"
+if [ "$n" -lt 2 ]; then
+	exit 1
+fi
+printf '%s\n' '{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"ok"}]}]}'
+`
+	if err := os.WriteFile(piBin, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake pi: %v", err)
+	}
+
+	t.Setenv("PATH", dir)
+	t.Setenv("COUNTER_FILE", counter)
+	got, err := piComplete(&Agent{Model: "openrouter/test"}, "prompt")
+	if err != nil {
+		t.Fatalf("piComplete: %v", err)
+	}
+	if got != "ok" {
+		t.Errorf("piComplete = %q, want ok", got)
+	}
+
+	b, err := os.ReadFile(counter)
+	if err != nil {
+		t.Fatalf("read counter: %v", err)
+	}
+	if strings.TrimSpace(string(b)) != "2" {
+		t.Errorf("counter = %q, want 2", string(b))
+	}
+}
+
+// TestPiComplete_FinalFailure verifies that piComplete returns the last error
+// when all retry attempts fail.
+func TestPiComplete_FinalFailure(t *testing.T) {
+	dir := t.TempDir()
+	piBin := filepath.Join(dir, "pi")
+	body := "#!/bin/sh\nexit 1\n"
+	if err := os.WriteFile(piBin, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := piComplete(&Agent{Model: "openrouter/test"}, "prompt")
+	if err == nil {
+		t.Fatal("piComplete: expected an error when all attempts fail")
 	}
 }
