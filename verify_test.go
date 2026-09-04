@@ -259,3 +259,29 @@ func TestVerifyPR_RunShell(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyPR_CloneFailure verifies that verifyPR reports a clear detail when
+// ensureClone cannot clone the repo (e.g. gh auth/network failure), before any
+// fetch or shell command is attempted.
+func TestVerifyPR_CloneFailure(t *testing.T) {
+	c := newTestCompany(t)
+
+	bin := t.TempDir()
+	script := `#!/bin/sh
+if [ "$1" = "repo" ] && [ "$2" = "clone" ]; then
+	echo "gh repo clone failed" >&2
+	exit 1
+fi
+exit 0
+`
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake gh: %v", err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("MAGO_VERIFY_CMD", "true")
+
+	res := c.verifyPR("owner/repo", 1)
+	if res.ran || res.ok || !strings.Contains(res.detail, "could not clone for verification") {
+		t.Errorf("verifyPR clone failure = %+v, want a clone-failure detail", res)
+	}
+}
