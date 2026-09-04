@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -274,6 +275,57 @@ func TestProposeBacklog(t *testing.T) {
 			t.Errorf("filed %d tasks, want 2", len(ts))
 		}
 	})
+}
+
+// TestProposeBacklog_FocusCompleteHoldsWithActive verifies that when the planner
+// reports FOCUS_COMPLETE but there are still active tasks, proposeBacklog returns
+// 0 without filing new tasks and prints a holding message.
+func TestProposeBacklog_FocusCompleteHoldsWithActive(t *testing.T) {
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	body := "#!/bin/sh\nprintf '%s\\n' '{\"content\":\"FOCUS_COMPLETE\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+
+	mission := "# co\n\n## Mission\nShip a delightful CLI.\n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n"
+	if err := os.WriteFile(c.stateFile(), []byte(mission), 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	writeAgentFile(t, c, "hop", "---\nname: hop\ntitle: Head of Product\nplans: true\nprovider: deepseek\n---\nYou plan.")
+
+	if _, err := c.tasks.AddTask("active task", ""); err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	old := os.Stderr
+	os.Stderr = w
+	got := c.proposeBacklog()
+	w.Close()
+	os.Stderr = old
+	out, _ := io.ReadAll(r)
+
+	if got != 0 {
+		t.Errorf("proposeBacklog() = %d, want 0", got)
+	}
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(ts) != 1 {
+		t.Errorf("proposeBacklog filed %d tasks, want 0", len(ts)-1)
+	}
+	if !strings.Contains(string(out), "focus complete but") || !strings.Contains(string(out), "still active") {
+		t.Errorf("stderr should report focus held due to active tasks, got:\n%s", string(out))
+	}
 }
 
 func TestOrNone(t *testing.T) {

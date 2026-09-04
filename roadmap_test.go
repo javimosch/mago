@@ -162,3 +162,44 @@ func TestAdvanceRoadmapNoSections(t *testing.T) {
 		t.Error("advanceRoadmap should return false when Now is missing")
 	}
 }
+
+// TestAdvanceRoadmap_PlaceholderLater verifies that a placeholder ## Later is
+// treated as "nothing to promote", so Next becomes (none yet) instead of pulling
+// from a real Later body.
+func TestAdvanceRoadmap_PlaceholderLater(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	os.WriteFile(c.roadmapFile(), []byte(
+		"# co — ROADMAP\n\n## Now\nShip A.\n\n## Next\nShip B.\n\n## Later\n(none yet)\n\n## Out of scope\nrewrites\n"), 0o644)
+
+	if !c.advanceRoadmap() {
+		t.Fatal("advanceRoadmap should succeed when Next is real, even with placeholder Later")
+	}
+	if got := c.roadmapNow(); got != "Ship B." {
+		t.Errorf("Now = %q, want %q", got, "Ship B.")
+	}
+	if got := c.roadmapNext(); got != "(none yet)" {
+		t.Errorf("Next = %q, want %q", got, "(none yet)")
+	}
+}
+
+// TestAdvanceRoadmap_ExistingDone verifies that advancing appends the completed
+// focus to an existing ## Done section instead of creating a duplicate one.
+func TestAdvanceRoadmap_ExistingDone(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	os.WriteFile(c.roadmapFile(), []byte(
+		"# co — ROADMAP\n\n## Done\n- 2023-10-01T00-00-00Z — Ship previous.\n\n## Now\nShip A.\n\n## Next\nShip B.\n"), 0o644)
+
+	if !c.advanceRoadmap() {
+		t.Fatal("advanceRoadmap should succeed")
+	}
+	raw := c.roadmapRaw()
+	if !strings.Contains(raw, "## Done") || !strings.Contains(raw, "Ship A.") || !strings.Contains(raw, "Ship previous.") {
+		t.Errorf("Done section should contain both new and old entries:\n%s", raw)
+	}
+}
