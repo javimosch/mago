@@ -134,3 +134,24 @@ func TestRunPi_NotOnPath(t *testing.T) {
 		t.Errorf("runPi should surface a PATH hint, got: %v", err)
 	}
 }
+
+// TestRunPi_NoOutput verifies that runPi returns an error when the pi binary
+// exits successfully but emits no parseable assistant content.
+func TestRunPi_NoOutput(t *testing.T) {
+	dir := t.TempDir()
+	piBin := filepath.Join(dir, "pi")
+	body := "#!/bin/sh\nexit 0\n"
+	if err := os.WriteFile(piBin, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	a := &Agent{Model: "openrouter/test"}
+	_, err := runPi(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runPi: expected an error for empty output")
+	}
+	if !strings.Contains(err.Error(), "no output from pi") {
+		t.Errorf("runPi should surface 'no output from pi', got: %v", err)
+	}
+}
