@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -116,5 +117,20 @@ func TestRunPi(t *testing.T) {
 	}
 	if got != "hello from pi" {
 		t.Errorf("runPi returned %q, want %q", got, "hello from pi")
+	}
+}
+
+// TestRunPi_NotOnPath verifies that runPi returns a clear integration error
+// when the pi binary is not on PATH.
+func TestRunPi_NotOnPath(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	a := &Agent{Model: "openrouter/test"}
+	_, err := runPi(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runPi: expected an error when pi is not on PATH")
+	}
+	if !strings.Contains(err.Error(), "starting pi") || !strings.Contains(err.Error(), "PATH") {
+		t.Errorf("runPi should surface a PATH hint, got: %v", err)
 	}
 }
