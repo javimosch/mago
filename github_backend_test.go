@@ -635,6 +635,29 @@ func TestGithubBackendClearClarify(t *testing.T) {
 	}
 }
 
+// TestGhWrapperAuthError verifies that a gh CLI stderr containing an
+// authentication trigger is surfaced as the dedicated auth-failure message.
+func TestGhWrapperAuthError(t *testing.T) {
+	fake := fakeGh(t, `if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+		echo "401 Bad credentials" >&2
+		exit 1
+	else
+		exit 1
+	fi`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	_, err := gh("issue", "view", "1")
+	if err == nil {
+		t.Fatal("expected error from gh")
+	}
+	if !strings.Contains(err.Error(), "GitHub authentication failed") {
+		t.Errorf("error = %q, want auth failure message", err.Error())
+	}
+	if !strings.Contains(err.Error(), "MAGO_GH_TOKEN") {
+		t.Errorf("error = %q, should mention MAGO_GH_TOKEN", err.Error())
+	}
+}
+
 // TestGithubBackendListTasks_GhError verifies that a gh CLI failure during issue
 // listing is surfaced as a clear error rather than being swallowed or misreported.
 func TestGithubBackendListTasks_GhError(t *testing.T) {
