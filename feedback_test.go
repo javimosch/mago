@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -152,6 +154,56 @@ func TestCmdFeedback_RelaySuccess(t *testing.T) {
 	}
 	if !strings.Contains(out, `"stored":0`) {
 		t.Errorf("expected stored=0 when not logged in, got: %q", out)
+	}
+}
+
+// TestCmdFeedback_PlatformAndRelaySuccess verifies that the platform endpoint
+// and the central relay can both succeed in the same call, setting stored=1
+// and relayed=1 in the JSON response.
+func TestCmdFeedback_PlatformAndRelaySuccess(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USER", "tester")
+	os.MkdirAll(home+"/.mago", 0o755)
+
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/feedback" && r.Method == "POST" {
+			if r.Header.Get("Authorization") != "Bearer platform-token" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"ok":true,"issue_url":"https://github.com/acme/mago/issues/1"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer platform.Close()
+
+	relay := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/feedback" && r.Method == "POST" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer relay.Close()
+
+	os.WriteFile(home+"/.mago/config.json", []byte(`{"token":"platform-token","platform_url":"`+platform.URL+`"}`), 0o600)
+	t.Setenv("FEEDBACK_RELAY", relay.URL)
+
+	out := captureStdout(t, func() {
+		if err := cmdFeedback([]string{"stored", "and", "relayed"}); err != nil {
+			t.Fatalf("cmdFeedback: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, `"stored":1`) {
+		t.Errorf("expected stored=1, got: %q", out)
+	}
+	if !strings.Contains(out, `"relayed":1`) {
+		t.Errorf("expected relayed=1, got: %q", out)
 	}
 }
 
