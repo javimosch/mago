@@ -212,3 +212,42 @@ func TestHandleFeedback_EmptyMessage(t *testing.T) {
 		t.Errorf("body = %q, want message required", rec.Body.String())
 	}
 }
+
+// TestHandleFeedback_RepoFilingFails verifies that when MAGO_FEEDBACK_REPO is set
+// but the App cannot file a triage issue (no app key here), feedback is still
+// recorded and the response reports an empty issue_url rather than failing.
+func TestHandleFeedback_RepoFilingFails(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "feedback.db")
+	st, err := openStore(db)
+	if err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	defer st.Close()
+
+	u, err := st.Create("dev@example.com", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	t.Setenv("MAGO_FEEDBACK_REPO", "acme/feedback")
+	t.Setenv("GITHUB_APP_PRIVATE_KEY", "")
+	t.Setenv("GITHUB_APP_ID", "")
+
+	secret := "test-secret"
+	s := &server{store: st, jwtSecret: secret}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/feedback", strings.NewReader(`{"message":"hello"}`))
+	req.Header.Set("Authorization", "Bearer "+jwtSign(secret, u.ID, u.Email))
+	s.handleFeedback(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"ok":true`) {
+		t.Errorf("body missing ok=true: %q", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"issue_url":""`) {
+		t.Errorf("body should report empty issue_url when filing fails: %q", rec.Body.String())
+	}
+}
