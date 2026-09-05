@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -194,5 +195,66 @@ func TestListenInodeAndPidOnPort(t *testing.T) {
 	// After closing the listener the port should no longer be held.
 	if got := pidOnPort(strconv.Itoa(port)); got != 0 {
 		t.Errorf("pidOnPort(%d) after close = %d, want 0", port, got)
+	}
+}
+
+// TestCmdStop_NotRunning verifies cmdStop reports "not running" and is safe when
+// no pidfile exists.
+func TestCmdStop_NotRunning(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	err := cmdStop()
+	if err == nil {
+		t.Fatal("cmdStop with no running daemon should return an error")
+	}
+	if !strings.Contains(err.Error(), "not running") {
+		t.Errorf("error = %q, want 'not running'", err.Error())
+	}
+}
+
+// TestCmdStop_StopsRunning verifies cmdStop sends SIGTERM to the pid in the
+// pidfile, removes the pidfile, and prints the stopped message.
+func TestCmdStop_StopsRunning(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cmd := exec.Command("sleep", "60")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start sleep: %v", err)
+	}
+	defer cmd.Process.Kill()
+
+	pidPath := pidFile()
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdStop(); err != nil {
+			t.Fatalf("cmdStop: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "mago-platform stopped") {
+		t.Errorf("output = %q, want 'mago-platform stopped'", out)
+	}
+	if !strings.Contains(out, strconv.Itoa(cmd.Process.Pid)) {
+		t.Errorf("output = %q, want pid %d", out, cmd.Process.Pid)
+	}
+
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Errorf("pidfile should have been removed, got: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Errorf("process %d was not reaped", cmd.Process.Pid)
 	}
 }
