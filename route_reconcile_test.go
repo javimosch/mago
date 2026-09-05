@@ -52,6 +52,45 @@ func TestReconcileOnce_ResumesInProgressTask(t *testing.T) {
 	}
 }
 
+// stubListTasks injects tasks carrying GitHub-label-derived state (mago:go /
+// mago:clarify) that the local file backend can't express, and records ClearClarify
+// calls. Other TaskBackend methods fall through to the embedded localBackend.
+type stubListTasks struct {
+	*localBackend
+	list    []*Task
+	cleared int
+}
+
+func (s *stubListTasks) ListTasks() ([]*Task, error) { return s.list, nil }
+
+func (s *stubListTasks) ClearClarify(t *Task) error {
+	s.cleared++
+	t.Clarify = false
+	t.Go = false
+	return nil
+}
+
+// TestReconcileOnce_GoPromotesClarifyTask verifies that a task still in clarification
+// (needs_human + mago:clarify) that receives mago:go is promoted — its planning state
+// dropped — rather than routed back to the planner.
+func TestReconcileOnce_GoPromotesClarifyTask(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+
+	c := newTestCompany(t)
+	st := &stubListTasks{localBackend: &localBackend{c: c}}
+	c.tasks = st
+	writeAgentFile(t, c, "cto", "---\nname: cto\ntitle: CTO\nimplements: true\n---\n")
+
+	st.list = []*Task{{ID: "9", Title: "Spec the API", Status: "needs_human", Clarify: true, Go: true}}
+
+	if _, err := reconcileOnce(c); err != nil {
+		t.Fatalf("reconcileOnce: %v", err)
+	}
+	if st.cleared != 1 {
+		t.Errorf("ClearClarify calls = %d, want 1 for a mago:go task still in clarification", st.cleared)
+	}
+}
+
 // TestReconcileOnce_AllAgentsUnloadable verifies that an agents dir whose .md files all
 // fail to load (e.g. invalid frontmatter) produces a clean error rather than a panic on
 // agents[0] during routing.
