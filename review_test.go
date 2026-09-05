@@ -382,3 +382,69 @@ func TestReviewPR_ApproveMerges(t *testing.T) {
 		t.Errorf("expected a `gh pr merge` call for PR #7 in merge=on mode, log:\n%s", got)
 	}
 }
+
+// TestReviewPR_RequestChangesNoMerge verifies that a request_changes verdict posts
+// the review comment but never calls `gh pr merge`, even in merge=on mode.
+func TestReviewPR_RequestChangesNoMerge(t *testing.T) {
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	ghLog := writeFakeReviewBins(t, "diff --git a/f b/f\n+one line\n",
+		`{"content":"{\"verdict\":\"request_changes\",\"comment\":\"leaks a secret\"}"}`)
+
+	if !c.reviewPR("acme/backlog", 8) {
+		t.Fatal("reviewPR() = false, want true for a completed request_changes review")
+	}
+
+	log, err := os.ReadFile(ghLog)
+	if err != nil {
+		t.Fatalf("read gh log: %v", err)
+	}
+	got := string(log)
+	if !strings.Contains(got, "pr comment 8") {
+		t.Errorf("expected a `gh pr comment` call for PR #8, log:\n%s", got)
+	}
+	if strings.Contains(got, "pr merge") {
+		t.Errorf("request_changes must never merge, log:\n%s", got)
+	}
+}
+
+// TestReviewPR_UnparseableVerdict verifies that a model reply with no parseable
+// verdict is not merged and produces no comment — an unparsable review is a no-op,
+// not a silent approval.
+func TestReviewPR_UnparseableVerdict(t *testing.T) {
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	ghLog := writeFakeReviewBins(t, "diff --git a/f b/f\n+one line\n",
+		`{"content":"I could not decide on this diff."}`)
+
+	if c.reviewPR("acme/backlog", 9) {
+		t.Error("reviewPR() = true, want false when no verdict can be parsed")
+	}
+
+	log, err := os.ReadFile(ghLog)
+	if err != nil {
+		t.Fatalf("read gh log: %v", err)
+	}
+	got := string(log)
+	if strings.Contains(got, "pr comment") || strings.Contains(got, "pr merge") {
+		t.Errorf("unparseable verdict must not comment or merge, log:\n%s", got)
+	}
+}
