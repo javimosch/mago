@@ -151,6 +151,16 @@ func TestTrialRemaining(t *testing.T) {
 	}
 }
 
+func TestConfigPath_UserHomeDirError(t *testing.T) {
+	// If the OS cannot resolve a home directory, configPath falls back to a
+	// relative filename in the current working directory.
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	if got := configPath(); got != ".mago-config.json" {
+		t.Errorf("configPath() = %q, want .mago-config.json", got)
+	}
+}
+
 func TestLoadConfigAndSave(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
