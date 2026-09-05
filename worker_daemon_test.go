@@ -392,3 +392,30 @@ exit 0`
 		t.Fatalf("worker ran %d time(s), want at least 2", n)
 	}
 }
+
+// TestChildPids_NoSuchPID verifies that a pid with no /proc entry yields nil rather
+// than an error — childPids is a best-effort helper used during worker teardown.
+func TestChildPids_NoSuchPID(t *testing.T) {
+	if got := childPids(1 << 30); got != nil {
+		t.Errorf("childPids(nonexistent) = %v, want nil", got)
+	}
+}
+
+// TestKillProcessTree_Guards covers the early-return branches: non-positive pids and
+// pids already recorded in killed must be skipped without signalling anything.
+func TestKillProcessTree_Guards(t *testing.T) {
+	killed := map[int]bool{}
+
+	killProcessTree(0, killed)
+	killProcessTree(-42, killed)
+	if len(killed) != 0 {
+		t.Fatalf("non-positive pids must not be killed, got %v", killed)
+	}
+
+	// A pid already in the map is a no-op (prevents cycles in /proc children).
+	killed[os.Getpid()] = true
+	killProcessTree(os.Getpid(), killed)
+	if len(killed) != 1 {
+		t.Fatalf("already-killed pid must not be re-processed, got %v", killed)
+	}
+}
