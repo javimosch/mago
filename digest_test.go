@@ -310,6 +310,155 @@ None yet.
 	}
 }
 
+// TestCmdDigest_BadArgs verifies a bare -C flag is rejected with a clear usage error
+// rather than being swallowed as a positional argument.
+func TestCmdDigest_BadArgs(t *testing.T) {
+	if err := cmdDigest([]string{"-C"}); err == nil {
+		t.Fatal("cmdDigest with a bare -C should error")
+	} else if !strings.Contains(err.Error(), "-C") {
+		t.Errorf("error should mention the -C flag, got: %v", err)
+	}
+}
+
+// TestCmdDigest_NotACompany verifies pointing -C at a directory without .mago/ fails
+// with the "run mago init" hint instead of rendering an empty digest.
+func TestCmdDigest_NotACompany(t *testing.T) {
+	err := cmdDigest([]string{"-C", t.TempDir()})
+	if err == nil {
+		t.Fatal("cmdDigest on a non-company dir should error")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error should explain the dir is not a company, got: %v", err)
+	}
+}
+
+// TestCmdDigest_BacklogListError verifies that when the task backend cannot list tasks
+// (here, a failing gh), the digest degrades to a "could not list" note instead of
+// aborting the whole report.
+func TestCmdDigest_BacklogListError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("setup: mkdir .mago: %v", err)
+	}
+
+	ghDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ghDir, "gh"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake gh: %v", err)
+	}
+	t.Setenv("PATH", ghDir+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_GH_REPO", "acme/repo")
+	t.Setenv("MAGO_TASK_LABEL", "")
+	t.Setenv("MAGO_DAILY_BUDGET", "")
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "could not list tasks") {
+		t.Errorf("digest should degrade on a listing failure, got:\n%s", out)
+	}
+	// ghCount failures render as "?" — the report still completes.
+	if !strings.Contains(out, "merged ? · open ?") {
+		t.Errorf("digest should render failed PR counts as ?, got:\n%s", out)
+	}
+}
+
+// TestCmdDigest_HITLAndBudgetPause covers two human-facing sections at once: a pending
+// HITL item in .mago/inbox must be listed under "Needs you", and an exhausted
+// MAGO_DAILY_BUDGET must print the "paused" suffix so the CEO sees why work stopped.
+func TestCmdDigest_HITLAndBudgetPause(t *testing.T) {
+	dir := t.TempDir()
+	inbox := filepath.Join(dir, ".mago", "inbox")
+	for _, sub := range []string{".mago/agents", "tasks", ".mago/inbox"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatalf("setup: mkdir %s: %v", sub, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(inbox, "task-7.md"),
+		[]byte("from: dev\ntask: #7 ship it\n\nQUESTION:\nWhich env?"), 0o644); err != nil {
+		t.Fatalf("write inbox item: %v", err)
+	}
+	// Today's usage already exceeds the cap -> overBudget() is true.
+	usage := `{"day":"` + utcDay() + `","actions":2}`
+	if err := os.WriteFile(filepath.Join(dir, ".mago", "usage.json"), []byte(usage), 0o644); err != nil {
+		t.Fatalf("write usage.json: %v", err)
+	}
+
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_DAILY_BUDGET", "1")
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Needs you (HITL):") || strings.Contains(out, "Needs you (HITL): none") {
+		t.Errorf("digest should list the pending HITL item, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Which env?") {
+		t.Errorf("digest should include the HITL question, got:\n%s", out)
+	}
+	if !strings.Contains(out, "2 / 1 work cycles") {
+		t.Errorf("digest should show budget usage 2 / 1, got:\n%s", out)
+	}
+	if !strings.Contains(out, "paused") {
+		t.Errorf("digest should mark the company as budget-paused, got:\n%s", out)
+	}
+}
+
+// TestCmdDigest_MultiProjectShippedByMago covers the multi-project branch when a company
+// repo is ALSO configured: besides per-project counts, the digest must still print the
+// company-repo "shipped by mago" autonomy metric.
+func TestCmdDigest_MultiProjectShippedByMago(t *testing.T) {
+	dir := t.TempDir()
+	for _, sub := range []string{".mago/agents", "tasks"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatalf("setup: mkdir %s: %v", sub, err)
+		}
+	}
+	b, err := json.Marshal(map[string]string{"web": "acme/web"})
+	if err != nil {
+		t.Fatalf("marshal projects.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".mago", "projects.json"), b, 0o644); err != nil {
+		t.Fatalf("write projects.json: %v", err)
+	}
+
+	// Fake gh: issues -> empty list, pr counts -> fixed numbers.
+	ghDir := t.TempDir()
+	script := `#!/bin/sh
+if echo "$*" | grep -q issue; then
+	echo "[]"
+	exit 0
+fi
+echo "4"
+exit 0
+`
+	if err := os.WriteFile(filepath.Join(ghDir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake gh: %v", err)
+	}
+	t.Setenv("PATH", ghDir+":"+os.Getenv("PATH"))
+	t.Setenv("MAGO_GH_REPO", "acme/backlog")
+	t.Setenv("MAGO_TASK_LABEL", "")
+	t.Setenv("MAGO_DAILY_BUDGET", "")
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "web: merged 4 · open 4") {
+		t.Errorf("digest should list the project PR counts, got:\n%s", out)
+	}
+	if !strings.Contains(out, "shipped by mago: 4 (on acme/backlog)") {
+		t.Errorf("digest should include the company-repo mago-shipped metric, got:\n%s", out)
+	}
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
