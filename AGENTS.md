@@ -62,6 +62,10 @@ No output from `gofmt -l .` or `go vet` means green.
 Delete coverage artifacts (`cover.out`, `cover.html`, etc.) before staging; although `*.out`
 is gitignored, the generated files should never be committed.
 
+When multiple agents share a worktree, run tests with a private `TMPDIR` (e.g.
+`TMPDIR=/tmp/$AM_RUN_ID go test ./...`) to avoid a sibling process deleting the
+re-executed `mago.test` binary mid-suite.
+
 ## Daemon / process surface
 
 `mago-platform` (operator) has the daemon lifecycle: `start [--daemon] [--port]`, `stop`,
