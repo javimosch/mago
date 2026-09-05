@@ -52,4 +52,18 @@ func TestMain_Dispatch(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".mago")); err != nil {
 		t.Errorf("init did not create .mago/: %v", err)
 	}
+
+	// feedback returns without failing the caller even when offline, and emits
+	// the JSON response expected by agents driving the CLI.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USER", "tester")
+	t.Setenv("FEEDBACK_RELAY", "off")
+	os.Args = []string{"mago", "feedback", "dispatch", "test"}
+	out = captureStdout(t, main)
+	if !strings.Contains(out, `"ok":true`) {
+		t.Errorf("feedback output missing ok=true: %q", out)
+	}
+	if !strings.Contains(out, `"relayed":0`) {
+		t.Errorf("feedback output should show relayed=0 with FEEDBACK_RELAY=off: %q", out)
+	}
 }
