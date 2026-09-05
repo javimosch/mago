@@ -448,6 +448,46 @@ func TestCmdStatus_WithProject(t *testing.T) {
 	}
 }
 
+// TestCmdStatus_PendingHITL verifies that a task with an open human question shows up
+// in the "## Pending human input (HITL)" section of `mago status`.
+func TestCmdStatus_PendingHITL(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	if err := cmdTask([]string{"-C", dir, "add", "blocked on ceo"}); err != nil {
+		t.Fatalf("cmdTask: %v", err)
+	}
+
+	c := &Company{Dir: dir, Name: "test"}
+	c.tasks = &localBackend{c: c}
+	task, err := c.tasks.FindTask("1")
+	if err != nil {
+		t.Fatalf("FindTask: %v", err)
+	}
+	if err := c.tasks.RaiseHITL(task, "cto", "Ship the CLI as a single binary or a tarball?"); err != nil {
+		t.Fatalf("RaiseHITL: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdStatus([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdStatus: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "## Pending human input (HITL)") {
+		t.Errorf("expected HITL section, got: %q", out)
+	}
+	if !strings.Contains(out, "single binary or a tarball") {
+		t.Errorf("expected the pending question text, got: %q", out)
+	}
+	if !strings.Contains(out, "[needs_human]") {
+		t.Errorf("expected the task's needs_human status in the list, got: %q", out)
+	}
+}
+
 // TestCmdAnswer_RecordsResponse verifies the `mago answer` command appends the
 // human response to an existing task and flips its status to in_progress.
 func TestCmdAnswer_RecordsResponse(t *testing.T) {

@@ -254,6 +254,95 @@ func TestPushState_WithSync(t *testing.T) {
 	}
 }
 
+// TestPushDefs_NoRemoteMain exercises the fresh-repo path in pushDefs: when the remote has
+// no main branch at all (and no local main exists), pushDefs must bootstrap main from an
+// empty root commit (commit-tree) before it can attach the .maindefs worktree and push the
+// agent definitions.
+func TestPushDefs_NoRemoteMain(t *testing.T) {
+	bareDir := t.TempDir()
+	gitRunT(t, "", "init", "-q", "--bare", bareDir)
+
+	ghRepo := "example/no-main-repo"
+	redirectGithubRepo(t, ghRepo, bareDir)
+
+	companyDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(companyDir, ".mago", "agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "agents", "cto.md"), []byte("cto agent\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "config.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "projects.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Company{Dir: companyDir, Name: "test", ghRepo: ghRepo}
+	if err := c.ensureStateRepo(); err != nil {
+		t.Fatalf("ensureStateRepo: %v", err)
+	}
+	c.pushDefs()
+
+	out := gitRunT(t, "", "ls-remote", "--heads", bareDir)
+	if !strings.Contains(out, "refs/heads/main") {
+		t.Fatalf("expected main branch bootstrapped on remote, got:\n%s", out)
+	}
+	tree := gitRunT(t, bareDir, "ls-tree", "-r", "--name-only", "main")
+	if !strings.Contains(tree, ".mago/agents/cto.md") {
+		t.Fatalf("expected agent definitions on main, got tree:\n%s", tree)
+	}
+}
+
+// TestPushDefs_ReusesWorktreeOnSecondPush verifies that a second pushDefs reuses the
+// existing .maindefs worktree (rather than recreating it) and still publishes changed
+// agent definitions to main as a new commit.
+func TestPushDefs_ReusesWorktreeOnSecondPush(t *testing.T) {
+	bareDir := t.TempDir()
+	gitRunT(t, "", "init", "-q", "--bare", bareDir)
+
+	ghRepo := "example/reuse-worktree-repo"
+	redirectGithubRepo(t, ghRepo, bareDir)
+
+	companyDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(companyDir, ".mago", "agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "agents", "cto.md"), []byte("cto v1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, "STATE.md"), []byte("# state\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "config.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "projects.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Company{Dir: companyDir, Name: "test", ghRepo: ghRepo}
+	t.Setenv("MAGO_STATE_SYNC", "1")
+	c.pushState("first")
+
+	wtGit := filepath.Join(companyDir, ".maindefs", ".git")
+	if _, err := os.Stat(wtGit); err != nil {
+		t.Fatalf("expected .maindefs worktree to exist after first push: %v", err)
+	}
+
+	// Change a definition, then push again: the worktree-reuse path must pick it up.
+	if err := os.WriteFile(filepath.Join(companyDir, ".mago", "agents", "cto.md"), []byte("cto v2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.pushState("second")
+
+	got := gitRunT(t, bareDir, "show", "main:.mago/agents/cto.md")
+	if strings.TrimSpace(got) != "cto v2" {
+		t.Fatalf("expected updated definition on remote main, got %q", got)
+	}
+}
+
 // TestPushState_Idempotent verifies that a second pushState with unchanged content is a
 // no-op: the runtime branch has no staged changes and the definitions worktree has nothing new
 // to commit, so both calls complete without error and without creating extra commits.
