@@ -297,6 +297,90 @@ Keep mission.
 	}
 }
 
+// TestCompactStateSynthesisFailure verifies that a failed synthesis — whether the tau
+// call itself errors or returns unparseable JSON — is logged and skipped, leaving
+// STATE.md untouched. Compaction is best-effort and must never destroy state.
+func TestCompactStateSynthesisFailure(t *testing.T) {
+	writeState := func(t *testing.T, c *Company) string {
+		t.Helper()
+		var logLines []string
+		for i := 1; i <= stateCompactThreshold+1; i++ {
+			logLines = append(logLines, fmt.Sprintf("- 2024-01-%02d [cto] did work %d", i%30+1, i))
+		}
+		// Blank lines between entries exercise the entry scanner's empty-line skip.
+		content := fmt.Sprintf(`# test — company state
+
+## Mission
+Keep mission.
+
+## Shipped
+(none)
+
+## In flight
+(none)
+
+## Decisions
+(none)
+
+## Activity log
+%s
+`, strings.Join(logLines, "\n\n"))
+		if err := os.WriteFile(c.stateFile(), []byte(content), 0o644); err != nil {
+			t.Fatalf("write STATE.md: %v", err)
+		}
+		return content
+	}
+	fakeTau := func(t *testing.T, body string) {
+		t.Helper()
+		bindir := t.TempDir()
+		script := filepath.Join(bindir, "tau")
+		if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+			t.Fatalf("write fake tau: %v", err)
+		}
+		t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+	}
+
+	t.Run("unparseable synthesis", func(t *testing.T) {
+		// tauComplete returns the content string; synthesizeState then fails to unmarshal it.
+		fakeTau(t, "#!/bin/sh\nprintf '%s\\n' '{\"content\":\"not json at all\"}'\n")
+		c := newTestCompany(t)
+		content := writeState(t, c)
+
+		var err error
+		out := captureStderr(t, func() { err = c.compactState() })
+		if err != nil {
+			t.Fatalf("compactState: %v", err)
+		}
+		if !strings.Contains(out, "compaction synthesis failed") {
+			t.Errorf("expected synthesis-failure log, got:\n%s", out)
+		}
+		got, _ := os.ReadFile(c.stateFile())
+		if string(got) != content {
+			t.Errorf("STATE.md modified on synthesis failure")
+		}
+	})
+
+	t.Run("tau call fails", func(t *testing.T) {
+		// tau exits non-zero on every attempt; tauComplete exhausts its retries.
+		fakeTau(t, "#!/bin/sh\nexit 1\n")
+		c := newTestCompany(t)
+		content := writeState(t, c)
+
+		var err error
+		out := captureStderr(t, func() { err = c.compactState() })
+		if err != nil {
+			t.Fatalf("compactState: %v", err)
+		}
+		if !strings.Contains(out, "compaction synthesis failed") {
+			t.Errorf("expected synthesis-failure log, got:\n%s", out)
+		}
+		got, _ := os.ReadFile(c.stateFile())
+		if string(got) != content {
+			t.Errorf("STATE.md modified on tau failure")
+		}
+	})
+}
+
 // ---------- helpers ----------
 
 func diff(a, b string) string {
