@@ -310,3 +310,180 @@ exit 1
 		t.Error("reviewPR() = true, want false when gh pr diff fails")
 	}
 }
+
+// writeFakeReviewBins installs fake `gh` and `tau` binaries on PATH. The fake gh
+// logs every invocation to $GH_LOG and prints diffBody for `pr diff`; the fake tau
+// answers tauComplete with content. Returns the path of the gh log file.
+func writeFakeReviewBins(t *testing.T, diffBody, tauContent string) string {
+	t.Helper()
+	dir := t.TempDir()
+	ghLog := filepath.Join(dir, "gh.log")
+	t.Setenv("GH_LOG", ghLog)
+
+	ghScript := `#!/bin/sh
+echo "$@" >> "$GH_LOG"
+if [ "$3" = "pr" ] && [ "$4" = "diff" ]; then
+	cat "$GH_DIFF"
+fi
+exit 0
+`
+	diffFile := filepath.Join(dir, "diff.txt")
+	if err := os.WriteFile(diffFile, []byte(diffBody), 0o644); err != nil {
+		t.Fatalf("write diff fixture: %v", err)
+	}
+	t.Setenv("GH_DIFF", diffFile)
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(ghScript), 0o755); err != nil {
+		t.Fatalf("write fake gh: %v", err)
+	}
+
+	tauScript := `#!/bin/sh
+echo "$@" >> "${TAU_LOG:-/dev/null}"
+printf '%s\n' "$TAU_OUT"
+`
+	t.Setenv("TAU_OUT", tauContent)
+	if err := os.WriteFile(filepath.Join(dir, "tau"), []byte(tauScript), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	return ghLog
+}
+
+// TestReviewPR_ApproveMerges exercises the full review path end-to-end with fake
+// binaries: a reviewer agent + approve verdict in the default merge mode ("on")
+// must post the review comment AND squash-merge the PR.
+func TestReviewPR_ApproveMerges(t *testing.T) {
+	// Deterministic merge mode: no env may flip it to review/verified or disable verify.
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	ghLog := writeFakeReviewBins(t, "diff --git a/f b/f\n+one line\n",
+		`{"content":"{\"verdict\":\"approve\",\"comment\":\"meets all criteria\"}"}`)
+
+	if !c.reviewPR("acme/backlog", 7) {
+		t.Fatal("reviewPR() = false, want true for a completed approve review")
+	}
+
+	log, err := os.ReadFile(ghLog)
+	if err != nil {
+		t.Fatalf("read gh log: %v", err)
+	}
+	got := string(log)
+	if !strings.Contains(got, "pr comment 7") {
+		t.Errorf("expected a `gh pr comment` call for PR #7, log:\n%s", got)
+	}
+	if !strings.Contains(got, "pr merge 7 --squash --delete-branch") {
+		t.Errorf("expected a `gh pr merge` call for PR #7 in merge=on mode, log:\n%s", got)
+	}
+}
+
+// TestReviewPR_RequestChangesNoMerge verifies that a request_changes verdict posts
+// the review comment but never calls `gh pr merge`, even in merge=on mode.
+func TestReviewPR_RequestChangesNoMerge(t *testing.T) {
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	ghLog := writeFakeReviewBins(t, "diff --git a/f b/f\n+one line\n",
+		`{"content":"{\"verdict\":\"request_changes\",\"comment\":\"leaks a secret\"}"}`)
+
+	if !c.reviewPR("acme/backlog", 8) {
+		t.Fatal("reviewPR() = false, want true for a completed request_changes review")
+	}
+
+	log, err := os.ReadFile(ghLog)
+	if err != nil {
+		t.Fatalf("read gh log: %v", err)
+	}
+	got := string(log)
+	if !strings.Contains(got, "pr comment 8") {
+		t.Errorf("expected a `gh pr comment` call for PR #8, log:\n%s", got)
+	}
+	if strings.Contains(got, "pr merge") {
+		t.Errorf("request_changes must never merge, log:\n%s", got)
+	}
+}
+
+// TestReviewPR_UnparseableVerdict verifies that a model reply with no parseable
+// verdict is not merged and produces no comment — an unparsable review is a no-op,
+// not a silent approval.
+func TestReviewPR_UnparseableVerdict(t *testing.T) {
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	ghLog := writeFakeReviewBins(t, "diff --git a/f b/f\n+one line\n",
+		`{"content":"I could not decide on this diff."}`)
+
+	if c.reviewPR("acme/backlog", 9) {
+		t.Error("reviewPR() = true, want false when no verdict can be parsed")
+	}
+
+	log, err := os.ReadFile(ghLog)
+	if err != nil {
+		t.Fatalf("read gh log: %v", err)
+	}
+	got := string(log)
+	if strings.Contains(got, "pr comment") || strings.Contains(got, "pr merge") {
+		t.Errorf("unparseable verdict must not comment or merge, log:\n%s", got)
+	}
+}
+
+// TestReviewPR_DiffTruncated verifies that an oversized diff is capped before it
+// reaches the model: the review prompt must carry the truncation marker instead of
+// the raw tail of a >12000-byte diff (prompt-size guard for the reviewer call).
+func TestReviewPR_DiffTruncated(t *testing.T) {
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	dir := t.TempDir()
+	tauLog := filepath.Join(dir, "tau.log")
+	t.Setenv("TAU_LOG", tauLog)
+	writeFakeReviewBins(t, "diff --git a/big b/big\n+"+strings.Repeat("x", 13000)+"\n",
+		`{"content":"{\"verdict\":\"approve\",\"comment\":\"ok\"}"}`)
+
+	if !c.reviewPR("acme/backlog", 10) {
+		t.Fatal("reviewPR() = false, want true for a completed review")
+	}
+
+	log, err := os.ReadFile(tauLog)
+	if err != nil {
+		t.Fatalf("read tau log: %v", err)
+	}
+	got := string(log)
+	if !strings.Contains(got, "...(diff truncated)") {
+		t.Error("oversized diff should reach the model with the truncation marker")
+	}
+	if strings.Contains(got, strings.Repeat("x", 13000)) {
+		t.Error("the full oversized diff must not reach the model prompt")
+	}
+}
