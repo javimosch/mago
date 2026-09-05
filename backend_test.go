@@ -304,6 +304,89 @@ func TestLocalBackendPickActiveTask(t *testing.T) {
 	}
 }
 
+// TestLocalBackendListTasks_NotADir verifies ListTasks propagates a real read error
+// (as opposed to the missing-dir case, which yields an empty list), and that FindTask
+// and PickActiveTask propagate it too.
+func TestLocalBackendListTasks_NotADir(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	// A regular file occupying the tasks path makes ReadDir fail with ENOTDIR,
+	// which is not IsNotExist and must surface as an error.
+	if err := os.WriteFile(c.tasksDir(), []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b := &localBackend{c: c}
+
+	if _, err := b.ListTasks(); err == nil {
+		t.Error("ListTasks on a non-directory tasks path: expected error")
+	}
+	if _, err := b.FindTask("1"); err == nil {
+		t.Error("FindTask should propagate the ListTasks error")
+	}
+	if _, err := b.PickActiveTask("dev"); err == nil {
+		t.Error("PickActiveTask should propagate the ListTasks error")
+	}
+}
+
+// TestLocalBackendListTasks_SkipsUnreadable verifies a .md entry that cannot be read
+// (e.g. a dangling symlink) is skipped rather than aborting the whole listing.
+func TestLocalBackendListTasks_SkipsUnreadable(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	if err := ensureDir(c.tasksDir()); err != nil {
+		t.Fatalf("ensure tasks dir: %v", err)
+	}
+	b := &localBackend{c: c}
+
+	if _, err := b.AddTask("real task", ""); err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(c.tasksDir(), "gone.md"), filepath.Join(c.tasksDir(), "ghost.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, err := b.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].Title != "real task" {
+		t.Errorf("ListTasks = %v, want just the readable task", taskIDs(tasks))
+	}
+}
+
+// TestLocalBackendPickActiveTask_UnroutedFallback verifies the third pass: an open task
+// with no assignee is picked when nothing is in progress and nothing is routed to the
+// agent. (An in-progress unassigned task wins in pass one, so this needs only open tasks.)
+func TestLocalBackendPickActiveTask_UnroutedFallback(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	if err := ensureDir(c.tasksDir()); err != nil {
+		t.Fatalf("ensure tasks dir: %v", err)
+	}
+	b := &localBackend{c: c}
+
+	// A task routed to someone else must not be picked, even as a fallback.
+	routed, err := b.AddTask("routed elsewhere", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := b.Assign(routed, "other"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	free, err := b.AddTask("unrouted task", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	picked, err := b.PickActiveTask("dev")
+	if err != nil {
+		t.Fatalf("PickActiveTask: %v", err)
+	}
+	if picked == nil || picked.ID != free.ID {
+		t.Fatalf("PickActiveTask(dev) = %v, want unrouted task %s", picked, free.ID)
+	}
+}
+
 func taskIDs(tasks []*Task) []string {
 	out := make([]string, len(tasks))
 	for i, t := range tasks {
