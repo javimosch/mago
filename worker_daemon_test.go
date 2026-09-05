@@ -312,3 +312,47 @@ func TestWorkerStop_KillsRunningWorker(t *testing.T) {
 		}
 	}
 }
+
+// TestSuperviseWorker_CrashRestart covers the non-zero-exit branch in superviseWorker:
+// the worker crashes once, the supervisor logs and waits for the backoff, then it
+// restarts and exits cleanly.
+func TestSuperviseWorker_CrashRestart(t *testing.T) {
+	counter := filepath.Join(t.TempDir(), "counter")
+	if err := os.WriteFile(counter, []byte("0"), 0o644); err != nil {
+		t.Fatalf("write counter: %v", err)
+	}
+
+	script := `countf="${STUB_COUNTER}"
+if [ ! -f "$countf" ]; then
+	echo 0 > "$countf"
+fi
+n=$(cat "$countf")
+n=$((n + 1))
+echo "$n" > "$countf"
+if [ "$n" -lt 2 ]; then
+	exit 1
+fi
+exit 0`
+	stub := writeStubExe(t, script)
+	t.Setenv("STUB_COUNTER", counter)
+
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return stub, nil }
+
+	if err := superviseWorker([]string{}); err != nil {
+		t.Fatalf("superviseWorker: %v", err)
+	}
+
+	b, err := os.ReadFile(counter)
+	if err != nil {
+		t.Fatalf("read counter: %v", err)
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		t.Fatalf("counter %q: %v", b, err)
+	}
+	if n < 2 {
+		t.Fatalf("worker ran %d time(s), want at least 2", n)
+	}
+}
