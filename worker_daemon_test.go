@@ -249,6 +249,28 @@ func TestWorkerStatus_InvalidCompany(t *testing.T) {
 	}
 }
 
+func TestWorkerStop_StalePidfile(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_GH_REPO", "")
+
+	pidFile := workerPidFile(c)
+	if err := os.WriteFile(pidFile, []byte("999999\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := workerStop(c.Dir); err != nil {
+			t.Fatalf("workerStop: %v", err)
+		}
+	})
+	if !strings.Contains(out, "0 process") {
+		t.Errorf("output = %q, want '0 process'", out)
+	}
+	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+		t.Errorf("stale pidfile should be removed, got err = %v", err)
+	}
+}
+
 func TestWorkerStop_InvalidCompany(t *testing.T) {
 	dir := t.TempDir()
 	err := workerStop(dir)
