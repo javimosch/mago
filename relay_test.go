@@ -136,6 +136,38 @@ func TestStreamRelay_HappyPath(t *testing.T) {
 	}
 }
 
+// TestStreamRelay_SkipsBlankAndGarbageLines verifies that empty lines and lines that
+// aren't valid JSON are skipped rather than ending or corrupting the stream.
+func TestStreamRelay_SkipsBlankAndGarbageLines(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_WORKER_ID", "relay-test")
+
+	self := selfVersion()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		f := w.(http.Flusher)
+		fmt.Fprint(w, "\n")         // blank line: skipped
+		fmt.Fprint(w, "   \n")      // whitespace-only line: skipped
+		fmt.Fprint(w, "not json\n") // unparseable: skipped
+		fmt.Fprint(w, "{broken\n")  // truncated JSON: skipped
+		f.Flush()
+		fmt.Fprintf(w, "{\"event\":\"ping\",\"version\":\"%s\"}\n", self)
+		f.Flush()
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	w := &eventWorker{comp: c, wake: make(chan wakeEvent, 2)}
+	cfg := &cliConfig{PlatformURL: srv.URL, LicenseKey: "test-key"}
+	err := streamRelay(ctx, w, cfg, []string{"owner/repo"})
+	if err == nil || !strings.Contains(err.Error(), "stream closed") {
+		t.Errorf("streamRelay should end with stream closed, got: %v", err)
+	}
+}
+
 func TestRunRelay_RefusedReconnects(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
