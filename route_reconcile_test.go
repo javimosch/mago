@@ -51,3 +51,25 @@ func TestReconcileOnce_ResumesInProgressTask(t *testing.T) {
 		t.Errorf("task body should still contain the progress log, got:\n%s", ts[0].Body)
 	}
 }
+
+// TestReconcileOnce_AllAgentsUnloadable verifies that an agents dir whose .md files all
+// fail to load (e.g. invalid frontmatter) produces a clean error rather than a panic on
+// agents[0] during routing.
+func TestReconcileOnce_AllAgentsUnloadable(t *testing.T) {
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	// "provder" is an unknown frontmatter key, so loadAgent rejects the file even though
+	// loadAgentNames listed it.
+	writeAgentFile(t, c, "broken", "---\nname: broken\nprovder: openai\n---\n")
+
+	worked, err := reconcileOnce(c)
+	if err == nil {
+		t.Fatal("reconcileOnce should error when no agent files load, got nil")
+	}
+	if worked {
+		t.Error("reconcileOnce should report worked=false when no agents load")
+	}
+	if !strings.Contains(err.Error(), c.agentsDir()) {
+		t.Errorf("error should name the agents dir, got: %v", err)
+	}
+}

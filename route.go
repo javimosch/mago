@@ -50,6 +50,12 @@ func reconcileOnce(comp *Company) (bool, error) {
 		applyModelOverrides(a)
 		agents = append(agents, a)
 	}
+	// names came from the directory listing, so a non-empty roster can still yield zero
+	// loadable agents (e.g. every file has invalid frontmatter) — routing would index
+	// agents[0] below and panic. Fail clearly instead.
+	if len(agents) == 0 {
+		return false, fmt.Errorf("no loadable agents in %s", comp.agentsDir())
+	}
 
 	tasks, err := comp.tasks.ListTasks()
 	if err != nil {
