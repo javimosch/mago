@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -331,6 +332,149 @@ func TestRunTick_TauStartFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "tau") {
 		t.Errorf("error should mention tau, got: %v", err)
+	}
+}
+
+// fakeClaude writes a fake `claude` binary on PATH that emits a single
+// `{"result": "<result>", "is_error": false}` JSON object for every invocation —
+// enough for claudeComplete (reflection recovery) and runClaude-free test paths.
+func fakeClaude(t *testing.T, result string) {
+	t.Helper()
+	dir := t.TempDir()
+	escaped := strings.ReplaceAll(result, `"`, `\"`)
+	body := fmt.Sprintf(`#!/bin/sh
+cat >/dev/null 2>/dev/null
+echo '{"result": "%s", "is_error": false, "subtype": ""}'
+`, escaped)
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+}
+
+// TestRunTick_RecoveredReflection verifies the recovery path end-to-end: when the
+// tick's main output is unparseable (MAGO_TEST_BAD_REFLECTION=1) the follow-up
+// no-tools call salvages a reflection and writeBack applies it normally.
+func TestRunTick_RecoveredReflection(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+	t.Setenv("MAGO_TEST_BAD_REFLECTION", "1") // bad main output, recovery succeeds
+	fakeClaude(t, `{"summary":"polished the copy","task_status":"done","next":"","cadence_signal":"idle"}`)
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\nprovider: claude\nimplements: true\n---\n")
+
+	task, err := c.tasks.AddTask("Polish the README", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := c.tasks.Assign(task, "dev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	res, err := runTick(c, "dev")
+	if err != nil {
+		t.Fatalf("runTick error: %v", err)
+	}
+	if !res.worked {
+		t.Error("recovered tick should report worked=true")
+	}
+	if res.status != "done" {
+		t.Errorf("status = %q, want done", res.status)
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if ts[0].Status != "done" {
+		t.Errorf("task status = %q, want done", ts[0].Status)
+	}
+	journals, err := filepath.Glob(filepath.Join(c.runsDir(), "dev", "*.json"))
+	if err != nil || len(journals) == 0 {
+		t.Fatalf("expected a run journal under .mago/runs/dev, got %v (err %v)", journals, err)
+	}
+}
+
+// TestRunTick_DoneWithoutPRStaysInProgress verifies the implementer guard: a
+// project task whose reflection claims "done" but has no PR on the project repo
+// is kept in_progress with a Next that walks the agent through opening the PR.
+// A real local git origin stands in for the project repo; the fake gh answers
+// `repo clone` (clones the origin), `repo view` (default branch) and `pr list`
+// (empty — nothing shipped).
+func TestRunTick_DoneWithoutPRStaysInProgress(t *testing.T) {
+	origin := t.TempDir()
+	gitIn := func(dir string, args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	gitIn(origin, "init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(origin, "README.md"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(origin, "add", ".")
+	gitIn(origin, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init")
+
+	bindir := t.TempDir()
+	fakeGH := `#!/bin/sh
+if [ "$1" = "repo" ] && [ "$2" = "clone" ]; then
+  exec git clone -q "file://$MAGO_TEST_ORIGIN" "$4"
+fi
+if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
+  echo main
+  exit 0
+fi
+echo '[]'
+`
+	if err := os.WriteFile(filepath.Join(bindir, "gh"), []byte(fakeGH), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+	t.Setenv("MAGO_TEST_BAD_REFLECTION", "1")
+	t.Setenv("MAGO_TEST_ORIGIN", origin)
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+	fakeClaude(t, `{"summary":"shipped it","task_status":"done","next":"","cadence_signal":"idle"}`)
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\nprovider: claude\nimplements: true\n---\n")
+	if err := os.WriteFile(c.projectsConfigFile(), []byte(`{"web":"acme/web"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	task, err := c.tasks.AddTask("Ship the feature", "web")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := c.tasks.Assign(task, "dev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	res, err := runTick(c, "dev")
+	if err != nil {
+		t.Fatalf("runTick error: %v", err)
+	}
+	if res.status != "in_progress" {
+		t.Errorf("status = %q, want in_progress (done rejected: no PR shipped)", res.status)
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if ts[0].Status != "in_progress" {
+		t.Errorf("task status = %q, want in_progress", ts[0].Status)
+	}
+	if !strings.Contains(ts[0].Body, "gh pr create") {
+		t.Errorf("task body should carry the open-the-PR instructions, got:\n%s", ts[0].Body)
 	}
 }
 
