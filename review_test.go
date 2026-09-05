@@ -337,6 +337,7 @@ exit 0
 	}
 
 	tauScript := `#!/bin/sh
+echo "$@" >> "${TAU_LOG:-/dev/null}"
 printf '%s\n' "$TAU_OUT"
 `
 	t.Setenv("TAU_OUT", tauContent)
@@ -446,5 +447,43 @@ func TestReviewPR_UnparseableVerdict(t *testing.T) {
 	got := string(log)
 	if strings.Contains(got, "pr comment") || strings.Contains(got, "pr merge") {
 		t.Errorf("unparseable verdict must not comment or merge, log:\n%s", got)
+	}
+}
+
+// TestReviewPR_DiffTruncated verifies that an oversized diff is capped before it
+// reaches the model: the review prompt must carry the truncation marker instead of
+// the raw tail of a >12000-byte diff (prompt-size guard for the reviewer call).
+func TestReviewPR_DiffTruncated(t *testing.T) {
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	dir := t.TempDir()
+	tauLog := filepath.Join(dir, "tau.log")
+	t.Setenv("TAU_LOG", tauLog)
+	writeFakeReviewBins(t, "diff --git a/big b/big\n+"+strings.Repeat("x", 13000)+"\n",
+		`{"content":"{\"verdict\":\"approve\",\"comment\":\"ok\"}"}`)
+
+	if !c.reviewPR("acme/backlog", 10) {
+		t.Fatal("reviewPR() = false, want true for a completed review")
+	}
+
+	log, err := os.ReadFile(tauLog)
+	if err != nil {
+		t.Fatalf("read tau log: %v", err)
+	}
+	got := string(log)
+	if !strings.Contains(got, "...(diff truncated)") {
+		t.Error("oversized diff should reach the model with the truncation marker")
+	}
+	if strings.Contains(got, strings.Repeat("x", 13000)) {
+		t.Error("the full oversized diff must not reach the model prompt")
 	}
 }
