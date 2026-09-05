@@ -313,6 +313,20 @@ func TestWorkerStop_KillsRunningWorker(t *testing.T) {
 	}
 }
 
+func TestDaemonizeWorker_StartError(t *testing.T) {
+	c := newTestCompany(t)
+
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	// Return a path in an existing directory that does not name an executable,
+	// so exec.Start fails before the supervisor is launched.
+	executablePath = func() (string, error) { return filepath.Join(t.TempDir(), "no-such-binary"), nil }
+
+	if err := daemonizeWorker(c, []string{}); err == nil {
+		t.Fatal("daemonizeWorker should surface a start error")
+	}
+}
+
 // TestSuperviseWorker_CrashRestart covers the non-zero-exit branch in superviseWorker:
 // the worker crashes once, the supervisor logs and waits for the backoff, then it
 // restarts and exits cleanly.
