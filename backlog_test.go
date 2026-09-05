@@ -328,6 +328,116 @@ func TestProposeBacklog_FocusCompleteHoldsWithActive(t *testing.T) {
 	}
 }
 
+// fakeTauFocusComplete installs a fake `tau` binary on PATH whose completion output is the
+// planner's FOCUS_COMPLETE verdict.
+func fakeTauFocusComplete(t *testing.T) {
+	t.Helper()
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	body := "#!/bin/sh\nprintf '%s\\n' '{\"content\":\"FOCUS_COMPLETE\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+}
+
+// captureStderr runs fn with os.Stderr redirected to a pipe and returns what was written.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	old := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+	fn()
+	w.Close()
+	out, _ := io.ReadAll(r)
+	return string(out)
+}
+
+// TestProposeBacklog_FocusCompleteAdvancesRoadmap covers the outcome-loop switch in
+// proposeBacklog when the planner reports FOCUS_COMPLETE and the backlog is fully drained
+// (active == 0): with a real ## Now and ## Next the roadmap advances; with Now set but no
+// Next it holds; in mission-mode (no ROADMAP.md at all) it simply does nothing.
+func TestProposeBacklog_FocusCompleteAdvancesRoadmap(t *testing.T) {
+	fakeTauFocusComplete(t)
+
+	newPlannedCompany := func(t *testing.T) *Company {
+		c := newTestCompany(t)
+		c.tasks = &localBackend{c: c}
+		writeAgentFile(t, c, "hop", "---\nname: hop\ntitle: Head of Product\nplans: true\nprovider: deepseek\n---\nYou plan.")
+		return c
+	}
+
+	t.Run("advances Now to Next", func(t *testing.T) {
+		c := newPlannedCompany(t)
+		roadmap := "# co — ROADMAP\n\n## Now\nShip the CLI.\n\n## Next\nHarden the worker.\n\n## Later\n(none yet)\n"
+		if err := os.WriteFile(c.roadmapFile(), []byte(roadmap), 0o644); err != nil {
+			t.Fatalf("write roadmap: %v", err)
+		}
+
+		var got int
+		out := captureStderr(t, func() { got = c.proposeBacklog() })
+		if got != 0 {
+			t.Errorf("proposeBacklog() = %d, want 0", got)
+		}
+		if now := c.roadmapNow(); now != "Harden the worker." {
+			t.Errorf("roadmapNow() = %q, want %q (advanced from Next)", now, "Harden the worker.")
+		}
+		rm, err := os.ReadFile(c.roadmapFile())
+		if err != nil {
+			t.Fatalf("read roadmap: %v", err)
+		}
+		if !strings.Contains(string(rm), "## Done") || !strings.Contains(string(rm), "Ship the CLI.") {
+			t.Errorf("completed focus should be archived into ## Done, got:\n%s", rm)
+		}
+		if !strings.Contains(out, "advanced ROADMAP") {
+			t.Errorf("stderr should report the roadmap advance, got:\n%s", out)
+		}
+	})
+
+	t.Run("holds when no Next", func(t *testing.T) {
+		c := newPlannedCompany(t)
+		roadmap := "# co — ROADMAP\n\n## Now\nShip the CLI.\n\n## Next\n(none yet)\n"
+		if err := os.WriteFile(c.roadmapFile(), []byte(roadmap), 0o644); err != nil {
+			t.Fatalf("write roadmap: %v", err)
+		}
+
+		var got int
+		out := captureStderr(t, func() { got = c.proposeBacklog() })
+		if got != 0 {
+			t.Errorf("proposeBacklog() = %d, want 0", got)
+		}
+		if now := c.roadmapNow(); now != "Ship the CLI." {
+			t.Errorf("roadmapNow() = %q, want unchanged %q", now, "Ship the CLI.")
+		}
+		if !strings.Contains(out, "no Next set") {
+			t.Errorf("stderr should explain the hold (no Next), got:\n%s", out)
+		}
+	})
+
+	t.Run("no roadmap is a no-op", func(t *testing.T) {
+		c := newPlannedCompany(t)
+		// Mission-mode: no ROADMAP.md; STATE.md ## Mission supplies the focus, and
+		// FOCUS_COMPLETE must NOT try to rotate a roadmap that does not exist.
+		mission := "# co\n\n## Mission\nShip a delightful CLI.\n\n## Shipped\n(none)\n\n## In flight\n(none)\n\n## Decisions\n(none)\n\n## Activity log\n"
+		if err := os.WriteFile(c.stateFile(), []byte(mission), 0o644); err != nil {
+			t.Fatalf("write state: %v", err)
+		}
+
+		var got int
+		captureStderr(t, func() { got = c.proposeBacklog() })
+		if got != 0 {
+			t.Errorf("proposeBacklog() = %d, want 0", got)
+		}
+		if _, err := os.Stat(c.roadmapFile()); !os.IsNotExist(err) {
+			t.Errorf("no ROADMAP.md should have been created, stat err=%v", err)
+		}
+	})
+}
+
 func TestOrNone(t *testing.T) {
 	cases := []struct {
 		in, want string
