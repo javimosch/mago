@@ -116,7 +116,11 @@ func workerStop(dir string) error {
 	if err != nil {
 		return err
 	}
-	_, hadPidfile := readWorkerPid(c)
+	// Check whether a pidfile existed before we remove it, so a stale pidfile
+	// (worker crashed, pid no longer alive) is treated as a stopped worker
+	// rather than an error.
+	_, err = os.ReadFile(workerPidFile(c))
+	hadPidfile := err == nil
 	os.Remove(workerPidFile(c))
 	// A pidfile tracks only ONE supervisor; duplicates can accumulate (e.g. re-runs) and then fight
 	// silently on the relay. So kill EVERY `mago serve … -C <this dir>` process — supervisors first

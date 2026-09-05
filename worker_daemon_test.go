@@ -249,6 +249,28 @@ func TestWorkerStatus_InvalidCompany(t *testing.T) {
 	}
 }
 
+func TestWorkerStop_StalePidfile(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_GH_REPO", "")
+
+	pidFile := workerPidFile(c)
+	if err := os.WriteFile(pidFile, []byte("999999\n"), 0o644); err != nil {
+		t.Fatalf("write pidfile: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := workerStop(c.Dir); err != nil {
+			t.Fatalf("workerStop: %v", err)
+		}
+	})
+	if !strings.Contains(out, "0 process") {
+		t.Errorf("output = %q, want '0 process'", out)
+	}
+	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+		t.Errorf("stale pidfile should be removed, got err = %v", err)
+	}
+}
+
 func TestWorkerStop_InvalidCompany(t *testing.T) {
 	dir := t.TempDir()
 	err := workerStop(dir)
@@ -310,5 +332,90 @@ func TestWorkerStop_KillsRunningWorker(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Errorf("process %d was not reaped", cmd.Process.Pid)
 		}
+	}
+}
+
+func TestDaemonizeWorker_StartError(t *testing.T) {
+	c := newTestCompany(t)
+
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	// Return a path in an existing directory that does not name an executable,
+	// so exec.Start fails before the supervisor is launched.
+	executablePath = func() (string, error) { return filepath.Join(t.TempDir(), "no-such-binary"), nil }
+
+	if err := daemonizeWorker(c, []string{}); err == nil {
+		t.Fatal("daemonizeWorker should surface a start error")
+	}
+}
+
+// TestSuperviseWorker_CrashRestart covers the non-zero-exit branch in superviseWorker:
+// the worker crashes once, the supervisor logs and waits for the backoff, then it
+// restarts and exits cleanly.
+func TestSuperviseWorker_CrashRestart(t *testing.T) {
+	counter := filepath.Join(t.TempDir(), "counter")
+	if err := os.WriteFile(counter, []byte("0"), 0o644); err != nil {
+		t.Fatalf("write counter: %v", err)
+	}
+
+	script := `countf="${STUB_COUNTER}"
+if [ ! -f "$countf" ]; then
+	echo 0 > "$countf"
+fi
+n=$(cat "$countf")
+n=$((n + 1))
+echo "$n" > "$countf"
+if [ "$n" -lt 2 ]; then
+	exit 1
+fi
+exit 0`
+	stub := writeStubExe(t, script)
+	t.Setenv("STUB_COUNTER", counter)
+
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return stub, nil }
+
+	if err := superviseWorker([]string{}); err != nil {
+		t.Fatalf("superviseWorker: %v", err)
+	}
+
+	b, err := os.ReadFile(counter)
+	if err != nil {
+		t.Fatalf("read counter: %v", err)
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		t.Fatalf("counter %q: %v", b, err)
+	}
+	if n < 2 {
+		t.Fatalf("worker ran %d time(s), want at least 2", n)
+	}
+}
+
+// TestChildPids_NoSuchPID verifies that a pid with no /proc entry yields nil rather
+// than an error — childPids is a best-effort helper used during worker teardown.
+func TestChildPids_NoSuchPID(t *testing.T) {
+	if got := childPids(1 << 30); got != nil {
+		t.Errorf("childPids(nonexistent) = %v, want nil", got)
+	}
+}
+
+// TestKillProcessTree_Guards covers the early-return branches: non-positive pids and
+// pids already recorded in killed must be skipped without signalling anything.
+func TestKillProcessTree_Guards(t *testing.T) {
+	killed := map[int]bool{}
+
+	killProcessTree(0, killed)
+	killProcessTree(-42, killed)
+	if len(killed) != 0 {
+		t.Fatalf("non-positive pids must not be killed, got %v", killed)
+	}
+
+	// A pid already in the map is a no-op (prevents cycles in /proc children).
+	killed[os.Getpid()] = true
+	killProcessTree(os.Getpid(), killed)
+	if len(killed) != 1 {
+		t.Fatalf("already-killed pid must not be re-processed, got %v", killed)
 	}
 }
