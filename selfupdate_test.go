@@ -201,6 +201,26 @@ func TestMaybeSelfUpdate_AutoModeSurfacesError(t *testing.T) {
 	}
 }
 
+// TestMaybeSelfUpdate_AlreadyInFlight verifies that a second concurrent self-update
+// call bails out at the CAS guard instead of spawning a duplicate download/re-exec.
+func TestMaybeSelfUpdate_AlreadyInFlight(t *testing.T) {
+	lastNudgeVer = ""
+	updating = 1
+	t.Setenv("MAGO_WORKER_ID", "test-worker")
+	t.Setenv("MAGO_UPDATE", "auto")
+	defer func() { updating = 0 }()
+
+	w := &eventWorker{comp: &Company{Dir: t.TempDir()}}
+	w.maybeSelfUpdate("new-ver")
+
+	if lastNudgeVer != "" {
+		t.Errorf("in-flight auto mode should not nudge; lastNudgeVer = %q", lastNudgeVer)
+	}
+	if updating != 1 {
+		t.Errorf("updating = %d, want 1 (no self-update attempt started)", updating)
+	}
+}
+
 // TestSelfUpdate_HashMismatch verifies that selfUpdate rejects a downloaded binary whose
 // sha256[:12] does not match the advertised version, and that the temporary download is
 // cleaned up so a mid-deploy race cannot leave a stray .new.<pid> file behind.

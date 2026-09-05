@@ -627,6 +627,38 @@ func TestCmdWorkerMode_All(t *testing.T) {
 	}
 }
 
+// TestCmdWorker_Doctor_Success verifies that `mago worker doctor` routes through
+// to workerDoctor and exits 0 when every diagnostic check passes.
+func TestCmdWorker_Doctor_Success(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("MAGO_TEST_CMDWORKER_DOCTOR_SUCCESS_CHILD")) == "1" {
+		t.Setenv("MAGO_PROVIDER", "")
+		t.Setenv("MAGO_GH_REPO", "")
+		t.Setenv("OPENCODE_API_KEY", "test-key")
+
+		dir := t.TempDir()
+		for _, name := range []string{"tau", "gh"} {
+			path := filepath.Join(dir, name)
+			if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+		cmdWorker([]string{"doctor"})
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestCmdWorker_Doctor_Success")
+	cmd.Env = append(os.Environ(), "MAGO_TEST_CMDWORKER_DOCTOR_SUCCESS_CHILD= 1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("cmdWorker doctor success exited with %v:\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "All checks passed") {
+		t.Errorf("output missing success message:\n%s", out)
+	}
+}
+
 // TestWorkerDoctor_FailuresExit101 verifies that workerDoctor exits with code 101
 // (integration error per AGENTS.md) when any diagnostic check fails. Because
 // workerDoctor calls os.Exit, the test runs it in a subprocess so the main test
