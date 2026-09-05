@@ -556,3 +556,191 @@ func TestCmdAnswer_TaskNotFound(t *testing.T) {
 		t.Fatal("expected error for missing task")
 	}
 }
+
+// TestCmdTask_BareFlagRejected verifies `mago task -C` with no directory value is
+// rejected by parseCompanyDir rather than silently treated as a task action.
+func TestCmdTask_BareFlagRejected(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	err := cmdTask([]string{"-C"})
+	if err == nil {
+		t.Fatal("expected error for bare -C")
+	}
+	if !strings.Contains(err.Error(), "-C") {
+		t.Errorf("error = %q, want mention of -C", err.Error())
+	}
+}
+
+// TestCmdTask_NoAction verifies `mago task` with no sub-action fails with the
+// add usage line.
+func TestCmdTask_NoAction(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	err := cmdTask([]string{"-C", t.TempDir()})
+	if err == nil {
+		t.Fatal("expected usage error for missing action")
+	}
+	if !strings.Contains(err.Error(), "usage: mago task add") {
+		t.Errorf("error = %q, want task add usage", err.Error())
+	}
+}
+
+// TestCmdTask_UnknownActionNoSuggestion verifies an unrelated action name produces the
+// plain "unknown task action" error — nearestAction should not offer a misleading
+// "did you mean" for input nothing is close to.
+func TestCmdTask_UnknownActionNoSuggestion(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	err := cmdTask([]string{"-C", t.TempDir(), "zzz"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if !strings.Contains(err.Error(), `unknown task action "zzz"`) {
+		t.Errorf("error = %q, want unknown action", err.Error())
+	}
+	if strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("error = %q, want no suggestion for unrelated input", err.Error())
+	}
+}
+
+// TestCmdTask_NotACompany verifies cmdTask surfaces the loadCompany error when -C
+// points at a directory with no .mago/.
+func TestCmdTask_NotACompany(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	err := cmdTask([]string{"-C", t.TempDir(), "add", "x"})
+	if err == nil {
+		t.Fatal("expected error for directory without .mago/")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
+
+// TestCmdProject_BareFlagRejected verifies `mago project -C` with no directory value is
+// rejected by parseCompanyDir.
+func TestCmdProject_BareFlagRejected(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	err := cmdProject([]string{"-C"})
+	if err == nil {
+		t.Fatal("expected error for bare -C")
+	}
+	if !strings.Contains(err.Error(), "-C") {
+		t.Errorf("error = %q, want mention of -C", err.Error())
+	}
+}
+
+// TestCmdProject_NotACompany verifies cmdProject surfaces the loadCompany error when -C
+// points at a directory with no .mago/.
+func TestCmdProject_NotACompany(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	err := cmdProject([]string{"-C", t.TempDir(), "list"})
+	if err == nil {
+		t.Fatal("expected error for directory without .mago/")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
+
+// TestCmdProject_UnknownActionNoSuggestion verifies an unrelated action name produces the
+// plain "unknown project action" error with no misleading "did you mean" suggestion.
+func TestCmdProject_UnknownActionNoSuggestion(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+
+	err := cmdProject([]string{"-C", dir, "zzz"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if !strings.Contains(err.Error(), `unknown project action "zzz"`) {
+		t.Errorf("error = %q, want unknown action", err.Error())
+	}
+	if strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("error = %q, want no suggestion for unrelated input", err.Error())
+	}
+}
+
+// TestCmdProject_AddWithMirror verifies `mago project add --mirror` persists the
+// mirror_issue flag and reports it in both the add output and `project list`.
+func TestCmdProject_AddWithMirror(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	out := captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "add", "web", "--repo", "acme/web", "--mirror"}); err != nil {
+			t.Fatalf("cmdProject: %v", err)
+		}
+	})
+	if !strings.Contains(out, `project "web" ready -> acme/web`) {
+		t.Errorf("unexpected add output: %q", out)
+	}
+	if !strings.Contains(out, "[mirror-issue on]") {
+		t.Errorf("expected mirror-issue marker in add output, got: %q", out)
+	}
+
+	out = captureStdout(t, func() {
+		if err := cmdProject([]string{"-C", dir, "list"}); err != nil {
+			t.Fatalf("cmdProject list: %v", err)
+		}
+	})
+	if !strings.Contains(out, "web -> acme/web") || !strings.Contains(out, "[mirror-issue]") {
+		t.Errorf("expected mirrored project in list, got: %q", out)
+	}
+}
+
+// TestCmdStatus_BareFlagRejected verifies `mago status -C` with no directory value is
+// rejected by parseCompanyDir.
+func TestCmdStatus_BareFlagRejected(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	err := cmdStatus([]string{"-C"})
+	if err == nil {
+		t.Fatal("expected error for bare -C")
+	}
+	if !strings.Contains(err.Error(), "-C") {
+		t.Errorf("error = %q, want mention of -C", err.Error())
+	}
+}
+
+// TestCmdStatus_NotACompany verifies cmdStatus surfaces the loadCompany error when -C
+// points at a directory with no .mago/.
+func TestCmdStatus_NotACompany(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	err := cmdStatus([]string{"-C", t.TempDir()})
+	if err == nil {
+		t.Fatal("expected error for directory without .mago/")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
+
+// TestCmdAnswer_BareFlagRejected verifies `mago answer -C` with no directory value is
+// rejected by parseCompanyDir.
+func TestCmdAnswer_BareFlagRejected(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	err := cmdAnswer([]string{"-C"})
+	if err == nil {
+		t.Fatal("expected error for bare -C")
+	}
+	if !strings.Contains(err.Error(), "-C") {
+		t.Errorf("error = %q, want mention of -C", err.Error())
+	}
+}
+
+// TestCmdAnswer_NotACompany verifies cmdAnswer surfaces the loadCompany error when -C
+// points at a directory with no .mago/.
+func TestCmdAnswer_NotACompany(t *testing.T) {
+	t.Setenv("MAGO_COMPANY", "")
+	t.Setenv("MAGO_GH_REPO", "")
+	err := cmdAnswer([]string{"-C", t.TempDir(), "1", "x"})
+	if err == nil {
+		t.Fatal("expected error for directory without .mago/")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
