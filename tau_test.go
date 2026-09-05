@@ -168,3 +168,28 @@ func TestRunTau(t *testing.T) {
 		t.Errorf("runTau = %q, want reflection", got)
 	}
 }
+
+// TestRunTau_NotOnPath verifies that runTau returns a clear integration error
+// when the tau binary is missing from PATH.
+func TestRunTau_NotOnPath(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	_, err := runTau(t.TempDir(), &Agent{Provider: "opencode", Model: "qwen2.5"}, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runTau: expected error when tau is not on PATH")
+	}
+	if !strings.Contains(err.Error(), "starting tau") || !strings.Contains(err.Error(), "PATH") {
+		t.Errorf("runTau should surface a PATH hint, got: %v", err)
+	}
+}
+
+// TestRunTau_BadReflection verifies the test hook that forces malformed model output.
+func TestRunTau_BadReflection(t *testing.T) {
+	t.Setenv("MAGO_TEST_BAD_REFLECTION", "1")
+	got, err := runTau(t.TempDir(), &Agent{Provider: "opencode", Model: "qwen2.5"}, "system prompt", "user prompt")
+	if err != nil {
+		t.Fatalf("runTau: unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "DSML") {
+		t.Errorf("runTau = %q, want DSML markup", got)
+	}
+}
