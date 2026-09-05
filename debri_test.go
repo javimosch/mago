@@ -148,6 +148,25 @@ func TestExtractDebriFinalContent_NoOutput(t *testing.T) {
 	}
 }
 
+// TestExtractDebriFinalContent_SkipsNoise verifies blank lines and non-JSON noise in the
+// NDJSON stream are skipped rather than aborting the parse or corrupting the result.
+func TestExtractDebriFinalContent_SkipsNoise(t *testing.T) {
+	lines := []string{
+		"",
+		"   ",
+		"this is not json",
+		`{"event":"chunk","content":"x"}`,
+		`{"event":"done","content":"final","elapsed_ms":5}`,
+	}
+	got, err := extractDebriFinalContent(lines)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "final" {
+		t.Errorf("got %q, want %q", got, "final")
+	}
+}
+
 func TestDebriJSONResult_Success(t *testing.T) {
 	got, err := debriJSONResult([]byte(`{"content":"the answer","elapsed_ms":42}`))
 	if err != nil {
@@ -265,5 +284,42 @@ func TestRunDebri_NotOnPath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "starting debri") || !strings.Contains(err.Error(), "PATH") {
 		t.Errorf("runDebri should surface a PATH hint, got: %v", err)
+	}
+}
+
+// TestRunDebri_EmptyDoneNonZeroExit verifies the case where debri emits a legitimate
+// {"event":"done"} with no content (not a debri-reported error) but the process still
+// exits non-zero: the wait error must be surfaced rather than swallowed as empty success.
+func TestRunDebri_EmptyDoneNonZeroExit(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "debri")
+	body := "#!/bin/sh\necho '{\"event\":\"done\",\"content\":\"\"}'\nexit 1\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	a := &Agent{Model: "SWE-1.6"}
+	_, err := runDebri(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runDebri: expected an error for empty done + non-zero exit, got nil")
+	}
+	if !strings.Contains(err.Error(), "debri failed") {
+		t.Errorf("runDebri should surface the wait error, got: %v", err)
+	}
+}
+
+// TestRunDebri_PromptFileError verifies runDebri wraps a prompt-file write failure
+// (e.g. TMPDIR pointing at a missing directory) instead of exec'ing debri.
+func TestRunDebri_PromptFileError(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "does-not-exist"))
+
+	a := &Agent{Model: "SWE-1.6"}
+	_, err := runDebri(t.TempDir(), a, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runDebri: expected an error when the prompt file cannot be written")
+	}
+	if !strings.Contains(err.Error(), "writing prompt file") {
+		t.Errorf("runDebri should wrap the prompt-file error, got: %v", err)
 	}
 }
