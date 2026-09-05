@@ -147,6 +147,12 @@ func TestClassifyEvent(t *testing.T) {
 			wantOK: false,
 		},
 		{
+			name:   "PR merged on non-task branch is ignored",
+			event:  "pull_request",
+			body:   `{"action":"closed","pull_request":{"number":11,"title":"done","merged":true,"head":{"ref":"feature"}},"repository":{"full_name":"acme/corp"}}`,
+			wantOK: false,
+		},
+		{
 			name:       "PR merged on mago/task branch wakes comms",
 			event:      "pull_request",
 			body:       `{"action":"closed","pull_request":{"number":10,"title":"done","merged":true,"head":{"ref":"mago/task-1"}},"repository":{"full_name":"acme/corp"}}`,

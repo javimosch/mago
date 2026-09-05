@@ -22,7 +22,7 @@ func TestUsage(t *testing.T) {
 }
 
 // TestMain_Dispatch exercises the top-level command router for commands that
-// return without calling os.Exit: version, help, and a simple init. This keeps
+// return without calling os.Exit: version, help, init, and feedback. This keeps
 // the dispatch switch covered as new commands are added.
 func TestMain_Dispatch(t *testing.T) {
 	origArgs := os.Args
@@ -51,5 +51,39 @@ func TestMain_Dispatch(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".mago")); err != nil {
 		t.Errorf("init did not create .mago/: %v", err)
+	}
+
+	// feedback returns without failing the caller even when offline, and emits
+	// the JSON response expected by agents driving the CLI.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USER", "tester")
+	t.Setenv("FEEDBACK_RELAY", "off")
+	os.Args = []string{"mago", "feedback", "dispatch", "test"}
+	out = captureStdout(t, main)
+	if !strings.Contains(out, `"ok":true`) {
+		t.Errorf("feedback output missing ok=true: %q", out)
+	}
+	if !strings.Contains(out, `"relayed":0`) {
+		t.Errorf("feedback output should show relayed=0 with FEEDBACK_RELAY=off: %q", out)
+	}
+}
+
+// TestMain_DispatchStatus verifies the status command routes through main() and
+// prints the company report without an error.
+func TestMain_DispatchStatus(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	dir := t.TempDir()
+	os.Args = []string{"mago", "init", dir}
+	_ = captureStdout(t, main)
+
+	os.Args = []string{"mago", "status", "-C", dir}
+	out := captureStdout(t, main)
+	if !strings.Contains(out, "# company:") {
+		t.Errorf("status output missing company header: %q", out)
+	}
+	if !strings.Contains(out, "## Tasks") {
+		t.Errorf("status output missing tasks section: %q", out)
 	}
 }
