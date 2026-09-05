@@ -287,6 +287,97 @@ func TestRecoverReflection_Success(t *testing.T) {
 	}
 }
 
+// TestRunTick_UnknownAgent verifies runTick surfaces the loadAgent error when the
+// named agent has no definition file, instead of starting a tick.
+func TestRunTick_UnknownAgent(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+
+	_, err := runTick(c, "ghost")
+	if err == nil {
+		t.Fatal("runTick for an unknown agent should error")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error should name the agent, got: %v", err)
+	}
+}
+
+// TestRunTick_TauStartFails verifies that a missing tau binary propagates as an
+// error (not a crash) after the task is claimed — the tick reports the failure so
+// the caller can surface a 100-class integration error.
+func TestRunTick_TauStartFails(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+	t.Setenv("MAGO_TEST_BAD_REFLECTION", "")
+	t.Setenv("PATH", t.TempDir()) // guarantee no tau binary is found
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\nimplements: true\n---\n")
+
+	task, err := c.tasks.AddTask("Do the work", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := c.tasks.Assign(task, "dev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	_, err = runTick(c, "dev")
+	if err == nil {
+		t.Fatal("runTick should error when tau cannot be started")
+	}
+	if !strings.Contains(err.Error(), "tau") {
+		t.Errorf("error should mention tau, got: %v", err)
+	}
+}
+
+// TestRunTick_BadReflectionSelfHeals verifies the no-parseable-reflection path:
+// the raw output is saved, the task stays claimed (in_progress) for the next
+// tick, and the tick still reports work so the loop doesn't stall.
+func TestRunTick_BadReflectionSelfHeals(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_TEST_BAD_REFLECTION", "2") // recovery ALSO fails
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\nimplements: true\n---\n")
+
+	task, err := c.tasks.AddTask("Write the report", "")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if err := c.tasks.Assign(task, "dev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	res, err := runTick(c, "dev")
+	if err != nil {
+		t.Fatalf("runTick error: %v", err)
+	}
+	if !res.worked {
+		t.Error("self-heal path should report worked=true")
+	}
+	if res.signal != "working" {
+		t.Errorf("signal = %q, want working", res.signal)
+	}
+
+	raws, err := filepath.Glob(filepath.Join(c.runsDir(), "dev", "*-RAW.txt"))
+	if err != nil || len(raws) == 0 {
+		t.Fatalf("expected a saved *-RAW.txt under .mago/runs/dev, got %v (err %v)", raws, err)
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if ts[0].Status != "in_progress" || ts[0].Assignee != "dev" {
+		t.Errorf("task should stay claimed for the next tick, got status=%q assignee=%q", ts[0].Status, ts[0].Assignee)
+	}
+}
+
 // TestCmdRun_MissingArgs verifies cmdRun surfaces usage when no agent is given.
 func TestCmdRun_MissingArgs(t *testing.T) {
 	err := cmdRun([]string{})
