@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -417,5 +418,67 @@ func TestKillProcessTree_Guards(t *testing.T) {
 	killProcessTree(os.Getpid(), killed)
 	if len(killed) != 1 {
 		t.Fatalf("already-killed pid must not be re-processed, got %v", killed)
+	}
+}
+
+// daemonizeWorker surfaces an executablePath failure instead of trying to spawn
+// a supervisor it cannot locate.
+func TestDaemonizeWorker_ExecutablePathError(t *testing.T) {
+	c := newTestCompany(t)
+
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return "", errors.New("no executable") }
+
+	if err := daemonizeWorker(c, []string{}); err == nil {
+		t.Fatal("daemonizeWorker should surface an executablePath error")
+	}
+}
+
+// daemonizeWorker surfaces a logfile open failure (e.g. .mago/worker.log is a
+// directory) before spawning the supervisor.
+func TestDaemonizeWorker_LogFileError(t *testing.T) {
+	c := newTestCompany(t)
+	if err := os.Mkdir(workerLogFile(c), 0o755); err != nil {
+		t.Fatalf("mkdir worker.log: %v", err)
+	}
+
+	stub := writeStubExe(t, "exit 0")
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return stub, nil }
+
+	if err := daemonizeWorker(c, []string{}); err == nil {
+		t.Fatal("daemonizeWorker should surface a logfile open error")
+	}
+}
+
+// daemonizeWorker surfaces a pidfile write failure (e.g. .mago/worker.pid is a
+// directory) after the supervisor process has started.
+func TestDaemonizeWorker_PidFileError(t *testing.T) {
+	c := newTestCompany(t)
+	if err := os.Mkdir(workerPidFile(c), 0o755); err != nil {
+		t.Fatalf("mkdir worker.pid: %v", err)
+	}
+
+	stub := writeStubExe(t, "exit 0")
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return stub, nil }
+
+	if err := daemonizeWorker(c, []string{}); err == nil {
+		t.Fatal("daemonizeWorker should surface a pidfile write error")
+	}
+}
+
+// superviseWorker surfaces an executablePath failure before entering the
+// restart loop — it cannot spawn a worker it cannot locate.
+func TestSuperviseWorker_ExecutablePathError(t *testing.T) {
+	orig := executablePath
+	defer func() { executablePath = orig }()
+	executablePath = func() (string, error) { return "", errors.New("no executable") }
+
+	if err := superviseWorker([]string{}); err == nil {
+		t.Fatal("superviseWorker should surface an executablePath error")
 	}
 }
