@@ -118,6 +118,23 @@ func TestDownloadFile(t *testing.T) {
 	}
 }
 
+// TestDownloadFile_DestOpenError verifies that an unwritable destination path
+// (a parent directory that does not exist) is surfaced as an error after a
+// successful 200 fetch — the download itself is fine, the local write is not.
+func TestDownloadFile_DestOpenError(t *testing.T) {
+	dir := t.TempDir()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("payload"))
+	}))
+	defer ts.Close()
+
+	dst := filepath.Join(dir, "no-such-dir", "mago.new")
+	if err := downloadFile(ts.URL, dst); err == nil {
+		t.Fatal("downloadFile should error when the destination cannot be created")
+	}
+}
+
 // TestDownloadFile_ConnectionError verifies that a completely unreachable
 // platform URL is reported as an error rather than being swallowed.
 func TestDownloadFile_ConnectionError(t *testing.T) {
