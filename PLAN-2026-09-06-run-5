@@ -1,0 +1,32 @@
+mago maintenance plan — 2026-09-06, run 5
+
+Recon
+- javimosch/mago has 0 open GitHub issues (gh issue list --state open empty).
+- Open AM PR queue: #248 MERGEABLE (AGENTS.md triage note + debri/relay/route edge
+  tests), #251 MERGEABLE (proposeBacklog cap/error and planner/mission edges),
+  #247 CONFLICTING (cmdRun/runTick error branches) — needs rebase against master.
+- Master is green at 90.7% statement coverage. Remaining <70% functions are process-level
+  (main, serve.run, cmdServe, etc.) and are the documented stop condition.
+
+Triage
+1. QA: verify #248 and #251 with the full core+platform gate and a private TMPDIR:
+     TMPDIR=/tmp/<run> go test ./... ; go vet ./... ; gofmt -l .
+     cd platform && go test ./... && go vet ./...
+   If green, mark them as ready to land (they are already MERGEABLE).
+2. Dev: rebase #247 against master; after #249/#250 merged, diff it for duplication.
+   If the cmdRun/runTick branches are now already covered by merged work, close #247
+   as duplicate/stale. Otherwise resolve conflicts and resubmit as a focused test PR.
+   Do NOT let a CONFLICTING PR sit.
+
+Next unclaimed coverage (only after the open queue is clear)
+- worker_daemon.go — daemonizeWorker "already running" / executablePath stub,
+  superviseWorker error branches. worker_daemon_test.go is unclaimed.
+- tau.go / pi.go — provider dispatch and missing-binary paths. tau_test.go/pi_test.go
+  are unclaimed.
+- state_compact.go — compactState edge branches.
+- review.go — reviewPR error branches.
+All are >70% helper-level; stop at process-level / os.Exit paths. Keep commits tiny,
+one helper per commit, stdlib-only, conventional `test(<scope>):` messages.
+
+Fallback
+- If a real open issue appears, drop coverage work and land a focused `fix:` PR.
