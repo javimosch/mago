@@ -1,0 +1,41 @@
+mago maintenance plan — 2026-09-06 run 7
+
+Recon
+- `gh issue list --state open` is empty — 0 open GitHub issues. Per AGENTS.md triage
+  rules, the open PR queue IS the work list.
+- Open PRs: #248, #252, #253 are MERGEABLE/CLEAN (merger owns landing).
+- #247 (test(tick): cover cmdRun and runTick error branches) is CONFLICTING — but the
+  ONLY conflict is the architect scratch file `PLAN-2026-09-06`
+  (`git merge-tree --write-tree origin/master pr247` shows no other conflicted path).
+- Verified #247's test content is NOT duplicated on master: it adds 10 unique test
+  funcs (TestCmdRun_*, TestRunTick_PickActiveTaskError, TestCmdDigest_*,
+  TestCmdWorker_ModeDispatch, TestDownloadFile_DestOpenError) — none exist on master.
+- Residual coverage branches are all claimed by in-flight #253 (git_state push/prep/
+  pushDefs, reviewPR errors, compactState). Remaining <70% funcs are process-level —
+  the documented stop condition. No new coverage PR this run.
+
+Plan
+1. Dev: unblock #247 — the whole PR is green except the scratch-file conflict.
+     git fetch origin pull/247/head:pr247
+     git checkout -b am/am-2aab7d-dl85nakxs414-f63777db pr247   (or checkout the
+       remote branch directly if it exists locally)
+     git merge origin/master
+     # resolve the single conflict: PLAN-2026-09-06 is architect scratch — take
+     # master's version (it carries the newest run updates):
+     git checkout --theirs PLAN-2026-09-06 && git add PLAN-2026-09-06
+     git commit   # completes the merge
+   Then run the full gate with a private TMPDIR before pushing:
+     TMPDIR=/tmp/<run> go test ./... && go vet ./... && gofmt -l .
+     cd platform && go test ./... && go vet ./...
+   If green, push to the PR branch: git push origin HEAD:am/am-2aab7d-dl85nakxs414-f63777db
+   Fallback if pushing to another run's branch is out of scope: `gh pr comment 247`
+   documenting that the sole conflict is PLAN-2026-09-06 + this exact recipe, and
+   leave it merger-owned.
+2. QA: re-run the full core+platform gate on master to confirm green; spot-check
+   `gh pr list` still shows #248/#252/#253 CLEAN after any #247 update.
+3. If a real open issue appears mid-run, drop triage and land a focused `fix:` PR.
+
+Boundaries
+- Do NOT open a competing coverage PR for tick/worker/digest — that duplicates #247.
+- Do NOT touch files claimed by #248/#252/#253 for unrelated work.
+- Core stays stdlib-only; commits stay conventional.
