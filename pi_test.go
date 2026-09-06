@@ -217,3 +217,59 @@ func TestPiComplete_FinalFailure(t *testing.T) {
 		t.Fatal("piComplete: expected an error when all attempts fail")
 	}
 }
+
+// TestRunPi_FailedExit verifies that when pi exits non-zero and emitted no
+// content, runPi surfaces the wait error ("pi failed: ...") rather than the
+// empty-output parse error.
+func TestRunPi_FailedExit(t *testing.T) {
+	dir := t.TempDir()
+	piBin := filepath.Join(dir, "pi")
+	body := "#!/bin/sh\nexit 1\n"
+	if err := os.WriteFile(piBin, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := runPi(t.TempDir(), &Agent{Model: "openrouter/test"}, "system prompt", "user prompt")
+	if err == nil {
+		t.Fatal("runPi: expected an error when pi exits non-zero")
+	}
+	if !strings.Contains(err.Error(), "pi failed") {
+		t.Errorf("runPi should surface 'pi failed', got: %v", err)
+	}
+}
+
+// TestPiComplete_NoContent covers the branch where pi exits cleanly but emits
+// no parseable content: the extract error becomes lastErr and retries exhaust.
+func TestPiComplete_NoContent(t *testing.T) {
+	dir := t.TempDir()
+	piBin := filepath.Join(dir, "pi")
+	body := "#!/bin/sh\necho 'not json'\n"
+	if err := os.WriteFile(piBin, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := piComplete(&Agent{Model: "openrouter/test"}, "prompt")
+	if err == nil {
+		t.Fatal("piComplete: expected an error for unparseable output")
+	}
+	if !strings.Contains(err.Error(), "no output from pi") {
+		t.Errorf("piComplete should surface 'no output from pi', got: %v", err)
+	}
+}
+
+// extractPiFinalContent skips malformed (non-JSON) lines instead of failing on them.
+func TestExtractPiFinalContent_SkipsMalformed(t *testing.T) {
+	lines := []string{
+		"not json at all",
+		`{"type":"turn_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}`,
+	}
+	got, err := extractPiFinalContent(lines)
+	if err != nil {
+		t.Fatalf("extractPiFinalContent: unexpected error: %v", err)
+	}
+	if got != "ok" {
+		t.Errorf("extractPiFinalContent = %q, want %q", got, "ok")
+	}
+}
