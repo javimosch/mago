@@ -1,0 +1,42 @@
+mago maintenance plan — 2026-09-06, run 6 (architect)
+
+Recon
+- javimosch/mago still has 0 open GitHub issues (API-confirmed).
+- Open PR queue (all AM-authored, triage — nothing stale/duplicate/style-only to close):
+    #247 test(tick): cmdRun/runTick error branches  — CONFLICTING/DIRTY, merger owns rebase.
+    #248 docs(agents) + debri/relay/route edge tests — MERGEABLE/CLEAN.
+    #252 test(commands): cmd* parseCompanyDir/loadCompany errors — MERGEABLE/CLEAN.
+- Master gate green: gofmt -l . clean, coverage 90.9%.
+- Stop condition per AGENTS.md: remaining <70% funcs are process-level
+  (main 26%, serve run 27%, cmdServe 46%). Do not chase them.
+- Residual unclaimed branches verified against cover.out — ALL in files/functions NOT
+  claimed by #247/#248/#252:
+    git_state.go: prepProjectWorkspace ensureClone-err (68) + fetch-default-err (76-78);
+      pushState ensureStateRepo-err (100-103) + push mago-state-err (117-119);
+      ensureStateRepo init-err (133-135), symbolic-ref-err (150-152), orphan-err (165-167);
+      pushDefs origin/main branch (180-181), commit-tree-err (184-187),
+      worktree-add-err (190-193), push main-err (204-206).
+      All are stderr-logged best-effort paths — testable with a local git repo whose
+      origin points at a nonexistent path; no network, no process spawn.
+    review.go: reviewPR error branches (85-89, 98-101, 107-109, 119-121, 126-128).
+    state_compact.go: non-"- " log-line skip (54-55), synthesis-fail -> skip (68-72,
+      stub tauComplete), final write-err (95-97, unwritable STATE.md).
+- OFF-LIMITS: every file claimed by #247/#248/#252 (incl. tick_test.go, digest_test.go,
+  account_readCreds_test.go, backend_test.go, selfupdate_test.go, worker_test.go,
+  commands_edge_test.go, loop_test.go, pi_test.go, tau_dispatch_test.go,
+  worker_daemon_test.go, debri_edges_test.go, relay_edges_test.go, route_edges_test.go,
+  AGENTS.md, PLAN-2026-09-06*). Also skip account.go and commands.go cmd* error
+  branches — #247/#252 already cover them; duplicating creates merge noise.
+
+Plan
+1. Dev: ONE small PR (1-3 focused commits), unclaimed files only:
+     - NEW git_state_edges_test.go — the git_state.go error/push branches above.
+     - review coverage — append to review_test.go or NEW review_edges_test.go.
+     - state_compact.go residual — append to state_compact_test.go or new file.
+   Stdlib-only tests, conventional `test(<scope>): cover ...` commits, private TMPDIR,
+   delete cover.out before staging.
+2. QA: full core+platform gate:
+     TMPDIR=/tmp/<run> go test ./... ; go vet ./... ; gofmt -l .
+     cd platform && go test ./... && go vet ./...
+3. If a real open issue appears mid-run, drop coverage work and land a focused fix: PR.
+4. Merger (not this team): rebase #247, land #248/#252.
