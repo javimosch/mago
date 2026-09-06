@@ -123,7 +123,7 @@ func parseMode(base workerMode, tokens []string) (workerMode, error) {
 		default:
 			k, v, ok := strings.Cut(t, "=")
 			if !ok {
-				return m, fmt.Errorf("unknown mode token %q (try: reactive | proactive[=secs] | review | verified | comms=on|off | merge=review|verified|on | pr-cap=N | issue-cap=N | update=auto|manual)", t)
+				return m, &cliErr{80, fmt.Sprintf("unknown mode token %q (try: reactive | proactive[=secs] | review | verified | comms=on|off | merge=review|verified|on | pr-cap=N | issue-cap=N | update=auto|manual)", t)}
 			}
 			switch k {
 			case "proactive":
@@ -132,7 +132,7 @@ func parseMode(base workerMode, tokens []string) (workerMode, error) {
 				m.Comms = v == "on" || v == "true" || v == "1"
 			case "merge":
 				if v != "review" && v != "verified" && v != "on" {
-					return m, fmt.Errorf("merge must be review|verified|on, got %q", v)
+					return m, &cliErr{80, fmt.Sprintf("merge must be review|verified|on, got %q", v)}
 				}
 				m.Merge = v
 			case "pr-cap", "prs":
@@ -141,11 +141,11 @@ func parseMode(base workerMode, tokens []string) (workerMode, error) {
 				m.IssueCap = int(atoiSafe(v))
 			case "update":
 				if v != "auto" && v != "manual" {
-					return m, fmt.Errorf("update must be auto|manual, got %q", v)
+					return m, &cliErr{80, fmt.Sprintf("update must be auto|manual, got %q", v)}
 				}
 				m.Update = v
 			default:
-				return m, fmt.Errorf("unknown mode key %q", k)
+				return m, &cliErr{80, fmt.Sprintf("unknown mode key %q", k)}
 			}
 		}
 	}

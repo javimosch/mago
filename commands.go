@@ -90,16 +90,16 @@ func cmdTask(args []string) error {
 		return err
 	}
 	if len(rest) == 0 {
-		return fmt.Errorf("usage: mago task add \"<title>\" [-C dir]")
+		return &cliErr{80, "usage: mago task add \"<title>\" [-C dir]"}
 	}
 	if rest[0] != "add" {
 		if s := nearestAction(rest[0], taskActions); s != "" {
-			return fmt.Errorf("unknown task action %q — did you mean %q?\nrun `mago task --help` for usage", rest[0], s)
+			return &cliErr{80, fmt.Sprintf("unknown task action %q — did you mean %q?\nrun `mago task --help` for usage", rest[0], s)}
 		}
-		return fmt.Errorf("unknown task action %q (valid: add)\nrun `mago task --help` for usage", rest[0])
+		return &cliErr{80, fmt.Sprintf("unknown task action %q (valid: add)\nrun `mago task --help` for usage", rest[0])}
 	}
 	if len(rest) < 2 {
-		return fmt.Errorf("usage: mago task add \"<title>\" [-C dir]")
+		return &cliErr{80, "usage: mago task add \"<title>\" [-C dir]"}
 	}
 	project := ""
 	var words []string
@@ -184,11 +184,11 @@ func cmdProject(args []string) error {
 		// Unknown action (not a valid action missing its args): point at the
 		// nearest valid sub-action instead of dumping the full usage block.
 		if s := nearestAction(pos[0], projectActions); s != "" {
-			return fmt.Errorf("unknown project action %q — did you mean %q?\nrun `mago project` for usage", pos[0], s)
+			return &cliErr{80, fmt.Sprintf("unknown project action %q — did you mean %q?\nrun `mago project` for usage", pos[0], s)}
 		}
-		return fmt.Errorf("unknown project action %q (valid: add, list)\nrun `mago project` for usage", pos[0])
+		return &cliErr{80, fmt.Sprintf("unknown project action %q (valid: add, list)\nrun `mago project` for usage", pos[0])}
 	}
-	return fmt.Errorf("usage:\n  mago project add <name> --repo owner/repo [--mirror] [-C dir]\n  mago project add owner/repo [-C dir]\n  mago project list [-C dir]")
+	return &cliErr{80, "usage:\n  mago project add <name> --repo owner/repo [--mirror] [-C dir]\n  mago project add owner/repo [-C dir]\n  mago project list [-C dir]"}
 }
 
 func ifStr(cond bool, a, b string) string {
@@ -244,7 +244,7 @@ func cmdAnswer(args []string) error {
 		return err
 	}
 	if len(rest) < 2 {
-		return fmt.Errorf("usage: mago answer <task-id> \"<text>\" [-C dir]")
+		return &cliErr{80, "usage: mago answer <task-id> \"<text>\" [-C dir]"}
 	}
 	comp, err := loadCompany(dir)
 	if err != nil {
