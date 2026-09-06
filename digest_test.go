@@ -310,6 +310,37 @@ None yet.
 	}
 }
 
+// TestCmdDigest_ListTasksError verifies cmdDigest surfaces a task-backend list error
+// instead of crashing or omitting the backlog section.
+func TestCmdDigest_ListTasksError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".mago"), 0o755); err != nil {
+		t.Fatalf("setup: mkdir .mago: %v", err)
+	}
+	// Make tasks a regular file so the local backend's os.ReadDir fails.
+	if err := os.WriteFile(filepath.Join(dir, "tasks"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("setup: write tasks file: %v", err)
+	}
+	t.Setenv("MAGO_GH_REPO", "")
+
+	comp, err := loadCompany(dir)
+	if err != nil {
+		t.Fatalf("loadCompany: %v", err)
+	}
+	if comp.ghRepo != "" {
+		t.Fatalf("expected no ghRepo, got %q", comp.ghRepo)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Backlog: (could not list tasks:") {
+		t.Errorf("digest should surface the list error, got:\n%s", out)
+	}
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()

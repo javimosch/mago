@@ -1,0 +1,19 @@
+mago maintenance plan — 2026-09-06
+
+Recon
+- javimosch/mago has 0 open GitHub issues.
+- One open AM PR: #244 (test/account: cover readCreds --email override, plus cmdMode and
+  selectSkillsText branches, and a 2-line AGENTS.md coverage-note). It is MERGEABLE/CLEAN.
+
+Plan
+1. QA: verify PR #244 with the full core+platform gate and a private TMPDIR:
+     TMPDIR=/tmp/<run> go test ./... ; go vet ./... ; gofmt -l .
+     cd platform && go test ./... && go vet ./...
+   If green, squash-merge with a title that reflects all three test scopes.
+2. Dev: once #244 is merged, pick the next unclaimed low-coverage helpers, one per small PR:
+     - relay.go — workerID env/hostname fallback
+     - debri.go — writeDebriPromptFile success/cleanup path
+     - loop.go — cmdLoop / parseLoopArgs error branches
+   Each must be stdlib-only, a conventional `test(<scope>):` commit, and pass the full gate.
+3. If a real open issue appears, drop coverage work and land a focused `fix:` PR.
+4. Until then, treat the open PR queue as the "open issues" list and keep triage first.
