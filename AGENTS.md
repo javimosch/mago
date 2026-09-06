@@ -142,6 +142,8 @@ requests, not issues. Triage the open PR queue rather than inventing new work:
 - Close bundle/duplicate PRs, especially those that reintroduce regressions such as
   removing `strings.TrimSpace` from an environment-value check.
 - Only after the open queue is clear should dev pick small, unclaimed test-coverage wins.
+  Use `go test -coverprofile=cover.out ./... && go tool cover -func=cover.out` to find
+  the lowest-coverage, non-process-level helpers, then delete `cover.out` before staging.
 - Respect open AM PR file claims. Before starting new work, review the panel's
   "Files claimed by open PRs" notice and `gh pr view <n> --json files` for every open
   AM pull request. Avoid editing those paths unless the assigned objective explicitly
