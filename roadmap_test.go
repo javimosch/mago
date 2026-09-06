@@ -203,3 +203,23 @@ func TestAdvanceRoadmap_ExistingDone(t *testing.T) {
 		t.Errorf("Done section should contain both new and old entries:\n%s", raw)
 	}
 }
+
+// TestAdvanceRoadmap_EmptyDoneSection covers the case where a ## Done section already
+// exists but has an empty body: the archived entry is written without prepending a
+// previous body.
+func TestAdvanceRoadmap_EmptyDoneSection(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	c := &Company{Dir: dir, Name: "co"}
+
+	os.WriteFile(c.roadmapFile(), []byte(
+		"# co — ROADMAP\n\n## Done\n\n## Now\nShip A.\n\n## Next\nShip B.\n"), 0o644)
+
+	if !c.advanceRoadmap() {
+		t.Fatal("advanceRoadmap should succeed with an empty Done section")
+	}
+	raw := c.roadmapRaw()
+	if !strings.Contains(raw, "Ship A.") {
+		t.Errorf("old Now should be archived into the empty Done section:\n%s", raw)
+	}
+}

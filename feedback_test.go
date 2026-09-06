@@ -243,3 +243,11 @@ func TestPostFeedback(t *testing.T) {
 		t.Error("postFeedback on invalid URL should return false")
 	}
 }
+
+// TestPostFeedback_UnparseableURL covers the http.NewRequest error branch: a URL
+// that fails to parse must return false rather than panic.
+func TestPostFeedback_UnparseableURL(t *testing.T) {
+	if postFeedback("http://exa mple/v1/feedback", map[string]any{"message": "x"}) {
+		t.Error("postFeedback with an unparseable URL should return false")
+	}
+}

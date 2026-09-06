@@ -55,3 +55,44 @@ func TestSelectSkillsText_LLMSelect(t *testing.T) {
 		t.Error("did not expect skill-b body; it was not selected and has no SKILL.md")
 	}
 }
+
+// TestSelectSkillsText_TauFailureFallsBackToKeywords covers the llmSelectSkills
+// failure path: when tau is unavailable/fails, selection falls back to keywordSelect
+// so relevant skills are still injected.
+func TestSelectSkillsText_TauFailureFallsBackToKeywords(t *testing.T) {
+	c := newTestCompany(t)
+
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	var index strings.Builder
+	for i := 0; i < 7; i++ {
+		name := fmt.Sprintf("skill-%c", 'a'+i)
+		hook := "hook " + name
+		if name == "skill-a" {
+			hook = "retry git push failures"
+		}
+		index.WriteString("- " + name + " — " + hook + "\n")
+		dir := filepath.Join(c.skillsDir(), name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("body of "+name+"\n"), 0o644); err != nil {
+			t.Fatalf("write %s body: %v", name, err)
+		}
+	}
+	if err := os.WriteFile(c.skillsIndex(), []byte(index.String()), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+
+	a := &Agent{Provider: "openai", Model: "gpt-4"}
+	got := c.selectSkillsText(a, &Task{Title: "fix git push retry", Body: "the push fails"})
+
+	if !strings.Contains(got, "--- skill: skill-a ---") {
+		t.Errorf("expected keyword fallback to inject skill-a body, got:\n%s", got)
+	}
+}

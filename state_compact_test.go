@@ -486,3 +486,54 @@ func TestSynthesizeState(t *testing.T) {
 		})
 	}
 }
+
+// TestCompactState_SynthesisFailure covers the best-effort path where the activity log
+// exceeds the threshold but tau synthesis fails: compactState logs and returns nil
+// without rewriting STATE.md. Blank/non-entry lines in the log are skipped while
+// counting.
+func TestCompactState_SynthesisFailure(t *testing.T) {
+	bindir := t.TempDir()
+	tauScript := filepath.Join(bindir, "tau")
+	if err := os.WriteFile(tauScript, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	stateFile := c.stateFile()
+
+	var logLines []string
+	for i := 1; i <= stateCompactThreshold+1; i++ {
+		logLines = append(logLines, fmt.Sprintf("- 2024-01-%02d [cto] did work %d", i%30+1, i))
+	}
+	logLines = append(logLines, "", "not an entry")
+
+	content := fmt.Sprintf(`# test — company state
+
+## Mission
+Keep mission.
+
+## Shipped
+(none)
+
+## In flight
+(none)
+
+## Decisions
+(none)
+
+## Activity log
+%s
+`, strings.Join(logLines, "\n"))
+	if err := os.WriteFile(stateFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("write STATE.md: %v", err)
+	}
+
+	if err := c.compactState(); err != nil {
+		t.Fatalf("compactState should swallow synthesis errors, got %v", err)
+	}
+	got, _ := os.ReadFile(stateFile)
+	if string(got) != content {
+		t.Errorf("STATE.md must be unchanged when synthesis fails:\n%s", diff(content, string(got)))
+	}
+}

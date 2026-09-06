@@ -154,3 +154,19 @@ func TestRunClaude(t *testing.T) {
 		t.Errorf("runClaude = %q, want done", got)
 	}
 }
+
+// TestRunClaude_CommandError covers the runErr != nil path: when the claude CLI exits
+// non-zero, runClaude logs the command error and still classifies the printed result.
+func TestRunClaude_CommandError(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\ncat >/dev/null 2>/dev/null\necho '{\"result\": \"boom\", \"is_error\": true, \"subtype\": \"x\"}'\nexit 1\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	if _, err := runClaude(t.TempDir(), &Agent{}, "sys", "user"); err == nil {
+		t.Fatal("expected runClaude to surface the model error")
+	}
+}
