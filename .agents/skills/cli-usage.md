@@ -10,6 +10,7 @@ Account (thin HTTP client to the platform; token+license cached in `~/.mago/conf
 mago register [--email <e>] [--password <p>]   # → token; creds also from $MAGO_PASSWORD or prompt
 mago login    [--email <e>] [--password <p>]
 mago subscribe                                 # prints the Stripe checkout link (€20/mo)
+mago billing                                   # Stripe customer-portal link (manage/cancel)
 mago account status                            # plan + license; caches license_key for the worker
 mago link --installation <id>                  # claim a GitHub App installation (entitles your repos)
 mago link list                                 # linked installations + entitled repos
@@ -21,12 +22,19 @@ mago init [dir]                                # scaffold .mago/, STATE.md, task
 mago task add "<title>" [--project <p>] [-C d] # add a task (GitHub issue when MAGO_GH_REPO set)
 mago project add <name> --repo owner/repo [--mirror] [-C d]  # register a project (--mirror = open+close a tracking issue on the project repo per task)
 mago project list [-C d]
-mago serve [-C d] [--relay] [--heartbeat <s>] [--addr :8099] [--secret <hmac>]   # the worker
+mago serve [-C d] [--relay] [--daemon] [--heartbeat <s>] [--addr :8099] [--secret <hmac>]
+                  [--until HH:MM] [--start-delay <dur>]          # the worker
+mago serve stop | status [-C d]                # control/inspect a --daemon worker
+mago mode [show | <tokens>] [-C d]             # switch a LOCAL worker's mode live (no restart)
+mago worker mode <tokens> --worker <id>|--all  # switch a REMOTE worker's mode over the relay
+mago worker doctor                             # validate gh auth + LLM harness (exits 101 on failure)
 mago run <agent> [-C d]                        # one tick   ·   mago tick [-C d] = reconcile once
 mago loop <agent> [-C d]                       # adaptive-cadence ticks
 mago status [-C d]                             # STATE.md, projects, tasks, pending HITL
 mago digest [-C d]                             # "what your company did": backlog, PRs (24h), HITL, budget
 mago answer <task-id> "<text>" [-C d]          # answer a needs_human task
+mago skills [<name>]                           # embedded operator guides, version-matched to the binary
+mago feedback "<msg>" [--type bug|friction|feature|question]   # report friction/bugs to the mago team
 ```
 
 Autonomy (let a company run unattended): `MAGO_PROACTIVE=<secs>` ticks the planner to file
@@ -51,7 +59,9 @@ issues; adding the label to an existing issue triggers pickup (the `issues.label
 only for this human-applied label, never mago's own labels).
 
 Env: `MAGO_COMPANY` (default `-C`), `MAGO_GH_REPO` (GitHub-backed company), `MAGO_PLATFORM_URL`
-(default `http://localhost:9100`), `MAGO_PASSWORD`, `MAGO_PROVIDER`/`MAGO_MODEL` (override the
+(default `http://localhost:9100`), `MAGO_PASSWORD`, `MAGO_WEBHOOK_SECRET` (webhook HMAC for
+`mago serve`; same as `--secret`), `MAGO_UPDATE=auto` (self-update the worker binary when the
+platform advertises a newer release), `MAGO_PROVIDER`/`MAGO_MODEL` (override the
 agents' provider/model — `opencode-go`/`deepseek-v4-flash` for tau, **`claude`/`sonnet`** to run
 agents on Claude Code (local subscription, no API key — see agent-runtime.md "Claude Code harness"),
 or **`debri`/`SWE-1.6`** to run agents on devin via debri (local devin login, no API key — see
