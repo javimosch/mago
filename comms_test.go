@@ -208,3 +208,16 @@ func TestAgentCompleteDispatch(t *testing.T) {
 		}
 	}
 }
+
+func TestMarketingAgentSkipsUnloadable(t *testing.T) {
+	dir := t.TempDir()
+	// "provder" is an unknown frontmatter key, so loadAgent rejects the file;
+	// the roster scan must skip it and still find the CMO.
+	writeAgent(t, dir, "broken", "---\nname: broken\nprovder: openai\n---\n")
+	writeAgent(t, dir, "cmo", "---\nname: cmo\n---\n")
+	c := &Company{Dir: dir}
+	got := c.marketingAgent()
+	if got == nil || got.Name != "cmo" {
+		t.Fatalf("marketingAgent() = %v, want cmo despite the unloadable file", got)
+	}
+}
