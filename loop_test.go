@@ -180,3 +180,16 @@ func TestCmdLoop_ParseCompanyDirError(t *testing.T) {
 		t.Errorf("error = %q, want '-C needs a directory value'", err.Error())
 	}
 }
+
+// With no agent argument, cmdLoop's tick runs the full reconcileOnce path. On a
+// company with an empty agents dir reconcileOnce reports "no agents" as a tick
+// error, which driveLoop logs and backs off from — the loop still returns nil.
+// A zero base keeps the real time.Sleep between ticks instant.
+func TestCmdLoop_NoAgentReconcileError(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t) // .mago/agents exists but is empty
+
+	if err := cmdLoop([]string{"-C", c.Dir, "--base", "0", "--max-ticks", "2"}); err != nil {
+		t.Fatalf("cmdLoop error: %v", err)
+	}
+}
