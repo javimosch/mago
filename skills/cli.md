@@ -57,4 +57,6 @@ mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/b
   `.mago/mode.json` wins and is read live each cycle (see the `fleet` skill, "Runtime mode").
 
 ## Exit codes
-`0` ok · `1` error · `80` usage/user error · `100-109` integration error (missing/unauth dependency).
+`0` ok · `1` generic error · `80-89` user/usage · `90-99` resource (not found, already exists) ·
+`100-109` integration (network, missing/unauth dependency) · `110-119` internal. Scripts should
+branch on these ranges, not exact codes.
