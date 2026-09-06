@@ -556,3 +556,13 @@ func TestCmdAnswer_TaskNotFound(t *testing.T) {
 		t.Fatal("expected error for missing task")
 	}
 }
+
+// TestCmdAnswer_InvalidCompany verifies cmdAnswer surfaces a loadCompany error
+// (e.g. not a mago company directory) before reaching the answer logic.
+func TestCmdAnswer_InvalidCompany(t *testing.T) {
+	dir := t.TempDir() // empty, no .mago/
+
+	if err := cmdAnswer([]string{"-C", dir, "1", "nope"}); err == nil {
+		t.Fatal("expected error for invalid company dir")
+	}
+}
