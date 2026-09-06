@@ -1,0 +1,39 @@
+mago maintenance plan — 2026-09-06
+
+Recon
+- javimosch/mago has 0 open GitHub issues; the only open AM item is PR #245.
+- PR #245 (chore(architect): 2026-09-06 plan) is a bundle/mislabel: it adds this PLAN
+  file and also modifies digest_test.go. The digest test is good, but it does not belong
+  under a `chore(architect):` title.
+- This branch is 3 commits ahead of origin/master and the full verify gate is green:
+  - test(selfupdate): cover downloadFile unwritable-destination branch
+  - test(backend): cover PickActiveTask ListTasks error passthrough
+  - test(account): cover readCreds interactive prompt paths
+- Core coverage: 90.4% of statements. go test ./..., go vet ./..., gofmt -l . and
+  the platform equivalent (cd platform && go test ./... && go vet ./...) are all green
+  when run with a private TMPDIR.
+
+Triage (do first)
+1. Close PR #245 as a bundle/mislabel. The TestCmdDigest_ListTasksError change is a
+   legitimate `test(digest): cover cmdDigest list tasks error` PR and should be
+   resubmitted on its own.
+2. Land the 3 green test commits on this branch as small, focused `test(<scope>):`
+   PRs (or one combined coverage PR if already squashed by the harness). QA must
+   re-verify with a private TMPDIR and delete any cover.out/cover.html before commit.
+
+Next (after the queue is clear)
+3. Dev picks the next unclaimed, low-coverage core helper for a small stdlib-only
+   error-branch test, one file per PR:
+   - relay.go — workerID env/hostname fallback (empty MAGO_WORKER_ID, os.Hostname
+     error, default "worker")
+   - debri.go — writeDebriPromptFile success/cleanup and WriteString error paths
+   - loop.go — cmdLoop / parseLoopArgs error branches (bad company dir, missing
+     --base/--max value, loadCompany errors)
+4. QA runs the full core+platform verify gate and confirms gofmt -l . is empty.
+5. If a real open issue appears, drop coverage work and land a focused `fix:` PR.
+
+Invariants
+- Core stays stdlib-only; no third-party dependencies in the root module.
+- Respect open AM PR file claims. Until #245 is closed/merged, avoid PLAN-2026-09-06
+  and digest_test.go for unrelated work.
+- Do not invent new issues when the issue list is empty.
