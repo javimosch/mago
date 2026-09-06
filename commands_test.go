@@ -594,3 +594,15 @@ func TestCmdAnswer_InvalidCompany(t *testing.T) {
 		t.Fatal("expected error for invalid company dir")
 	}
 }
+
+// TestCmdStatus_ParseCompanyDirError verifies cmdStatus surfaces a bare -C error from
+// parseCompanyDir before it tries to load the company.
+func TestCmdStatus_ParseCompanyDirError(t *testing.T) {
+	err := cmdStatus([]string{"-C"})
+	if err == nil {
+		t.Fatal("expected error for bare -C")
+	}
+	if !strings.Contains(err.Error(), "-C needs a directory value") {
+		t.Errorf("error = %q, want '-C needs a directory value'", err.Error())
+	}
+}
