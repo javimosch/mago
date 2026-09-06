@@ -370,6 +370,20 @@ func TestCmdProject_UnknownActionSuggests(t *testing.T) {
 	}
 }
 
+func TestCmdProject_UnknownActionNoSuggest(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	err := cmdProject([]string{"-C", dir, "remove"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("unexpected suggestion for unrelated action: %v", err)
+	}
+}
+
 func TestCmdProject_MissingArgs(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
@@ -535,6 +549,20 @@ func TestCmdTask_UnknownActionSuggests(t *testing.T) {
 	}
 }
 
+func TestCmdTask_UnknownActionNoSuggest(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	err := cmdTask([]string{"-C", dir, "remove", "title"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("unexpected suggestion for unrelated action: %v", err)
+	}
+}
+
 // TestCmdAnswer_MissingArgs verifies cmdAnswer rejects fewer than two positional args.
 func TestCmdAnswer_MissingArgs(t *testing.T) {
 	if err := cmdAnswer([]string{}); err == nil {
@@ -554,5 +582,15 @@ func TestCmdAnswer_TaskNotFound(t *testing.T) {
 
 	if err := cmdAnswer([]string{"-C", c.Dir, "99", "nope"}); err == nil {
 		t.Fatal("expected error for missing task")
+	}
+}
+
+// TestCmdAnswer_InvalidCompany verifies cmdAnswer surfaces a loadCompany error
+// (e.g. not a mago company directory) before reaching the answer logic.
+func TestCmdAnswer_InvalidCompany(t *testing.T) {
+	dir := t.TempDir() // empty, no .mago/
+
+	if err := cmdAnswer([]string{"-C", dir, "1", "nope"}); err == nil {
+		t.Fatal("expected error for invalid company dir")
 	}
 }
