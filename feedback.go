@@ -86,7 +86,7 @@ func postFeedback(url string, body map[string]any) bool {
 func cmdFeedback(args []string) error {
 	msg, kind := parseFeedbackArgs(args)
 	if msg == "" {
-		return fmt.Errorf("usage: mago feedback \"<message>\" [--type bug|friction|feature|question] [--context \"<what you were doing>\"]")
+		return &cliErr{80, "usage: mago feedback \"<message>\" [--type bug|friction|feature|question] [--context \"<what you were doing>\"]"}
 	}
 	ctx := parseContext(args)
 	id := genFeedbackID()

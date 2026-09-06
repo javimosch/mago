@@ -82,7 +82,7 @@ func validateAgentFrontmatter(name string, fm map[string]string) error {
 	}
 	for _, boolKey := range []string{"reviews", "plans", "implements"} {
 		if v := fm[boolKey]; v != "" && v != "true" && v != "false" {
-			return fmt.Errorf("agent %q: key %q must be \"true\" or \"false\", got %q — remove the key or correct the value", name, boolKey, v)
+			return &cliErr{80, fmt.Sprintf("agent %q: key %q must be \"true\" or \"false\", got %q — remove the key or correct the value", name, boolKey, v)}
 		}
 	}
 	return nil

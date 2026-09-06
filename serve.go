@@ -102,7 +102,7 @@ func cmdServe(args []string) error {
 	if startDelay != "" {
 		d, err := time.ParseDuration(startDelay)
 		if err != nil {
-			return fmt.Errorf("--start-delay must be a duration (e.g. 15m, 900s): %w", err)
+			return &cliErr{80, fmt.Sprintf("--start-delay must be a duration (e.g. 15m, 900s): %v", err)}
 		}
 		fmt.Fprintf(os.Stderr, "[lifecycle] start-delay %s before serving\n", d)
 		time.Sleep(d)
@@ -263,7 +263,7 @@ func (w *eventWorker) heartbeatLoop(every time.Duration) {
 func untilDuration(hhmm string) (time.Duration, error) {
 	t, err := time.Parse("15:04", strings.TrimSpace(hhmm))
 	if err != nil {
-		return 0, fmt.Errorf("--until must be HH:MM 24h (e.g. 09:00): %w", err)
+		return 0, &cliErr{80, fmt.Sprintf("--until must be HH:MM 24h (e.g. 09:00): %v", err)}
 	}
 	now := time.Now()
 	target := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
