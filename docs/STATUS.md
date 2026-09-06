@@ -14,17 +14,24 @@ own module). `mago` commands:
 
 | Command | What it does |
 |---|---|
-| `mago register` / `login` / `subscribe` / `account status` | platform account (token+license in `~/.mago/config.json`) |
+| `mago register` / `login` / `subscribe` / `billing` / `account status` | platform account (token+license in `~/.mago/config.json`) |
 | `mago link --installation <id>` / `link list` | claim a GitHub App installation (entitles your repos) |
 | `mago init [dir]` | scaffold a company: `.mago/` (agents, skills, runs, inbox), `STATE.md`, `tasks/`, `workspace/`, `projects/` |
 | `mago task add "<title>" [--project p]` | create a task (local file or GitHub issue) |
-| `mago project add <name> --repo owner/repo` / `add owner/repo` / `project list` | register/inspect a project (maps to a GitHub repo for clone→PR) |
+| `mago project add <name> --repo owner/repo [--mirror]` / `add owner/repo` / `project list` | register/inspect a project (maps to a GitHub repo for clone→PR) |
 | `mago run <agent>` | run ONE tick for one agent |
 | `mago tick` | reconcile once: route open tasks to best-fit agents, then run each |
 | `mago loop [<agent>]` | run ticks on an adaptive cadence (no agent = loop the full reconcile) |
 | `mago status` | show STATE.md, tasks, pending HITL |
+| `mago digest` | "what your company did": backlog, PRs (24h), HITL, autonomy budget |
 | `mago answer <id> "<text>"` | answer a needs-human task so it resumes (local mode) |
-| `mago serve` | event-driven worker: GitHub webhooks wake a reconcile in real time (`--addr`, `--secret`, `--heartbeat`) |
+| `mago mode [show \| <tokens>]` | switch a LOCAL worker's mode live (reactive/proactive/verified/comms) |
+| `mago worker mode <tokens> --worker <id>\|--all` | switch a REMOTE worker's mode over the relay |
+| `mago worker doctor` | validate gh auth + the configured LLM harness (exits 101 on failure) |
+| `mago serve` | event-driven worker: GitHub webhooks wake a reconcile in real time (`--addr`, `--secret`, `--heartbeat`, `--relay`, `--daemon`, `--until`, `--start-delay`) |
+| `mago serve stop` / `serve status` | control/inspect a `--daemon` worker |
+| `mago skills [<name>]` | embedded operator guides (cli, fleet, operating), version-matched to the binary |
+| `mago feedback "<msg>" [--type t]` | report friction/bugs/requests to the mago team |
 
 Env knobs (BYOK — keys stay on this machine, used by tau):
 `MAGO_PROVIDER` / `MAGO_MODEL` (override the agent's tau provider/model),
