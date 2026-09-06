@@ -535,6 +535,20 @@ func TestCmdTask_UnknownActionSuggests(t *testing.T) {
 	}
 }
 
+func TestCmdTask_UnknownActionNoSuggest(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	err := cmdTask([]string{"-C", dir, "remove", "title"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("unexpected suggestion for unrelated action: %v", err)
+	}
+}
+
 // TestCmdAnswer_MissingArgs verifies cmdAnswer rejects fewer than two positional args.
 func TestCmdAnswer_MissingArgs(t *testing.T) {
 	if err := cmdAnswer([]string{}); err == nil {
