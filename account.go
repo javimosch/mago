@@ -139,7 +139,7 @@ func readCreds(rest []string, knownEmail string) (email, password string, err er
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" || password == "" {
-		return "", "", fmt.Errorf("email and password are required")
+		return "", "", &cliErr{80, "email and password are required"}
 	}
 	return email, password, nil
 }
@@ -320,7 +320,7 @@ func cmdAccount(args []string) error {
 		return err
 	}
 	if len(rest) == 0 || rest[0] != "status" {
-		return fmt.Errorf("usage: mago account status")
+		return &cliErr{80, "usage: mago account status"}
 	}
 	cfg := loadConfig()
 	out, err := fetchAccount(cfg)

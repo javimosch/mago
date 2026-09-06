@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 )
@@ -9,7 +10,8 @@ const version = "0.0.2-poc"
 
 // cliErr is an error that carries a semantic exit code per AGENTS.md's exit-code table
 // (80–89 user errors, 90–99 resource errors, 100–109 integration errors). cmd* functions
-// return it so main() can propagate the right code instead of always using 1.
+// return it so main() can propagate the right code; uncategorized errors exit 110
+// (software/internal) — never a bare 1, which sits outside the table agents branch on.
 type cliErr struct {
 	code int
 	msg  string
@@ -85,12 +87,19 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		code := 1
-		if ce, ok := err.(*cliErr); ok {
-			code = ce.code
-		}
-		os.Exit(code)
+		os.Exit(exitCodeFor(err))
 	}
+}
+
+// exitCodeFor resolves the semantic exit code for a command error: a *cliErr's
+// code wins even when the error was wrapped, and anything else is an unexpected
+// software error (110 per AGENTS.md's table).
+func exitCodeFor(err error) int {
+	var ce *cliErr
+	if errors.As(err, &ce) {
+		return ce.code
+	}
+	return 110
 }
 
 func usage() {

@@ -21,7 +21,7 @@ func cmdRun(args []string) error {
 		return err
 	}
 	if len(rest) < 1 {
-		return fmt.Errorf("usage: mago run <agent> [-C dir]")
+		return &cliErr{80, "usage: mago run <agent> [-C dir]"}
 	}
 	comp, err := loadCompany(dir)
 	if err != nil {

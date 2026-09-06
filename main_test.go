@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,6 +67,22 @@ func TestMain_Dispatch(t *testing.T) {
 	}
 	if !strings.Contains(out, `"relayed":0`) {
 		t.Errorf("feedback output should show relayed=0 with FEEDBACK_RELAY=off: %q", out)
+	}
+}
+
+// TestExitCodeFor verifies the semantic-exit-code mapping: a *cliErr's code wins
+// even when the error was wrapped with %w, and uncategorized errors map to 110
+// (internal software error per AGENTS.md's table — never a bare 1).
+func TestExitCodeFor(t *testing.T) {
+	if got := exitCodeFor(&cliErr{80, "bad input"}); got != 80 {
+		t.Errorf("exitCodeFor(cliErr 80) = %d, want 80", got)
+	}
+	wrapped := fmt.Errorf("outer: %w", &cliErr{101, "integration down"})
+	if got := exitCodeFor(wrapped); got != 101 {
+		t.Errorf("exitCodeFor(wrapped cliErr 101) = %d, want 101", got)
+	}
+	if got := exitCodeFor(errors.New("boom")); got != 110 {
+		t.Errorf("exitCodeFor(plain error) = %d, want 110", got)
 	}
 }
 

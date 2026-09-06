@@ -52,10 +52,10 @@ func cmdWorkerMode(args []string) error {
 		}
 	}
 	if len(tokens) == 0 {
-		return fmt.Errorf("usage: mago worker mode <reactive|proactive[=secs]|review|verified|comms=on|off> (--worker <id> | --all)")
+		return &cliErr{80, "usage: mago worker mode <reactive|proactive[=secs]|review|verified|comms=on|off> (--worker <id> | --all)"}
 	}
 	if worker == "" && !all {
-		return fmt.Errorf("specify --worker <id> (its MAGO_WORKER_ID / hostname) or --all")
+		return &cliErr{80, "specify --worker <id> (its MAGO_WORKER_ID / hostname) or --all"}
 	}
 	if _, err := parseMode(workerMode{Merge: "review"}, tokens); err != nil { // validate before sending
 		return err
