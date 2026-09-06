@@ -148,3 +148,6 @@ requests, not issues. Triage the open PR queue rather than inventing new work:
   "Files claimed by open PRs" notice and `gh pr view <n> --json files` for every open
   AM pull request. Avoid editing those paths unless the assigned objective explicitly
   requires it, and never open a competing style or duplicate test-coverage PR.
+- When the open queue is a focused test-coverage PR and the remaining uncovered
+  helpers are process-level or `os.Exit` paths, verify/merge the PR and then stop
+  coverage-only work; wait for real open issues before resuming.
