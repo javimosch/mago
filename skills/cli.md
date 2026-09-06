@@ -20,8 +20,10 @@ mago link --installation <id> | mago link list  claim/list GitHub App installs (
 mago init [dir]                                 scaffold .mago/, STATE.md, tasks/, workspace/, exec team
 mago task add "<title>" [--project <p>] [-C d]  file an issue in the backlog repo; --project <p> tags
                                                 project:<p> so its PR lands on that project's repo
-mago project add <name> --repo owner/repo [-C d]  register a project repo (multi-project layout)
-mago serve [-C d] [--relay] [--daemon] [--until HH:MM] [--start-delay <dur>]  the worker
+mago project add <name> --repo owner/repo [--mirror] [-C d]   register a project repo
+                                                (--mirror = open+close a tracking issue on the project repo per task)
+mago serve [-C d] [--addr :8099] [--secret <hmac>] [--heartbeat <s>]
+                  [--relay] [--daemon] [--until HH:MM] [--start-delay <dur>]  the worker
 mago serve stop | status [-C d]                 control/inspect a --daemon worker
 mago mode [show | <tokens>] [-C d]              switch a LOCAL worker's mode live (no restart)
 mago worker mode <tokens> --worker <id>|--all   switch a REMOTE worker's mode over the relay
@@ -31,12 +33,16 @@ mago loop <agent> [-C d] [--base/--max/--max-ticks <s>]  run ticks on an adaptiv
 mago status [-C d]                              STATE.md, tasks, pending HITL
 mago digest [-C d]                              "what your company did": backlog, PRs (24h), HITL, budget
 mago answer <task-id> "<text>" [-C d]           answer a needs_human task
+mago worker doctor                              validate gh auth + the configured LLM harness (exit 101 on failure)
 mago skills [<name>]                            these embedded operator skills (version-matched to the binary)
 mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/bugs/requests to the mago team
 ```
 
 ## Environment
-- `MAGO_PLATFORM_URL` (default https://mago.intrane.fr), `MAGO_COMPANY` (default `-C`), `MAGO_PASSWORD`.
+- `MAGO_PLATFORM_URL` (default http://localhost:9100), `MAGO_COMPANY` (default `-C`), `MAGO_PASSWORD`,
+  `MAGO_WEBHOOK_SECRET` (webhook HMAC for `mago serve`; same as `--secret`).
+- `MAGO_UPDATE=auto` — self-update the worker binary when the platform advertises a newer release
+  (hash-verified, probe-run, atomic swap).
 - `MAGO_GH_REPO` — the backlog/issue repo (single-repo: the one worked repo; multi-project: the command
   center where issues are filed). `MAGO_TASK_LABEL=mago` — only act on labeled issues. See `operating`.
 - `MAGO_STATE_SYNC=1` — opt-in: publish the company's STATE.md + agent-defs into the repo (mago-state /
