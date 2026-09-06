@@ -370,6 +370,20 @@ func TestCmdProject_UnknownActionSuggests(t *testing.T) {
 	}
 }
 
+func TestCmdProject_UnknownActionNoSuggest(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "tasks"), 0o755)
+
+	err := cmdProject([]string{"-C", dir, "remove"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+	if strings.Contains(err.Error(), "did you mean") {
+		t.Errorf("unexpected suggestion for unrelated action: %v", err)
+	}
+}
+
 func TestCmdProject_MissingArgs(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".mago"), 0o755)
