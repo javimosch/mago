@@ -182,6 +182,29 @@ func TestRunTau_NotOnPath(t *testing.T) {
 	}
 }
 
+func TestParseReflection_InvalidJSON(t *testing.T) {
+	input := "```json\nnot valid json {\\n```"
+	_, err := parseReflection(input)
+	if err == nil {
+		t.Fatal("parseReflection: expected error for invalid JSON, got nil")
+	}
+	if !strings.Contains(err.Error(), "could not parse reflection JSON") {
+		t.Errorf("expected reflection parse error, got: %v", err)
+	}
+}
+
+func TestParseReflection_EmptySummary(t *testing.T) {
+	// Valid JSON but with an empty summary must be rejected.
+	input := "```json\n{\"summary\":\"\",\"state_delta\":\"x\"}\n```"
+	_, err := parseReflection(input)
+	if err == nil {
+		t.Fatal("parseReflection: expected error for empty summary, got nil")
+	}
+	if !strings.Contains(err.Error(), "could not parse reflection JSON") {
+		t.Errorf("expected reflection parse error, got: %v", err)
+	}
+}
+
 // TestRunTau_BadReflection verifies the test hook that forces malformed model output.
 func TestRunTau_BadReflection(t *testing.T) {
 	t.Setenv("MAGO_TEST_BAD_REFLECTION", "1")

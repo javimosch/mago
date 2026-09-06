@@ -1,50 +1,47 @@
-mago maintenance plan — 2026-09-06 (triage)
+mago maintenance plan — 2026-09-06
 
 Recon
 - javimosch/mago has 0 open GitHub issues.
-- The only open AM PR was #246 ([needs work] test(account): cover readCreds
-  interactive prompt paths). It bundled a PLAN-2026-09-06 update with three
-  legitimate, already-green test-coverage commits and conflicted with master
-  because the plan file was already added by #245.
-- Full core+platform verify gate is green on this branch:
-  core 90.5% coverage, go test ./..., go vet ./..., gofmt -l . and
-  cd platform && go test ./... && go vet ./... all pass when run with a
-  private TMPDIR.
+- One open AM PR: #244 (test/account: cover readCreds --email override, plus cmdMode and
+  selectSkillsText branches, and a 2-line AGENTS.md coverage-note). It is MERGEABLE/CLEAN.
 
-Triage (done)
-1. Closed PR #246 as a stale bundle/duplicate. The plan file it added was
-   already on master; the three test commits it contained are good and should
-   be resubmitted as focused, small PRs.
+Plan
+1. QA: verify PR #244 with the full core+platform gate and a private TMPDIR:
+     TMPDIR=/tmp/<run> go test ./... ; go vet ./... ; gofmt -l .
+     cd platform && go test ./... && go vet ./...
+   If green, squash-merge with a title that reflects all three test scopes.
+2. Dev: once #244 is merged, pick the next unclaimed low-coverage helpers, one per small PR:
+     - relay.go — workerID env/hostname fallback
+     - debri.go — writeDebriPromptFile success/cleanup path
+     - loop.go — cmdLoop / parseLoopArgs error branches
+   Each must be stdlib-only, a conventional `test(<scope>):` commit, and pass the full gate.
+3. If a real open issue appears, drop coverage work and land a focused `fix:` PR.
+4. Until then, treat the open PR queue as the "open issues" list and keep triage first.
 
-Next (dev)
-2. Re-land the three closed PR #246 test commits on a clean branch, one
-   conventional `test(<scope>):` commit per concern:
-   - test(account): cover readCreds interactive prompt paths
-     (account_readCreds_test.go; feed one line per prompt to avoid bufio
-     read-ahead starving the next prompt)
-   - test(backend): cover PickActiveTask ListTasks error passthrough
-     (backend_test.go; regular file at tasks path => ENOTDIR surfaced)
-   - test(selfupdate): cover downloadFile unwritable-destination branch
-     (selfupdate_test.go; 200 response with missing parent dir)
-3. QA runs the full core+platform verify gate with a private TMPDIR and
-   deletes cover.out / cover.html before any git add.
+Run 3 update (architect, 2026-09-06 ~12:30Z)
 
-After the queue is clear
-4. Dev picks the next unclaimed, low-coverage core helper for a small
-   stdlib-only error-branch test, one file per PR:
-   - relay.go — workerID env/hostname fallback (empty MAGO_WORKER_ID,
-     os.Hostname error, default "worker")
-   - debri.go — writeDebriPromptFile success/cleanup and WriteString error
-     paths
-   - loop.go — cmdLoop / parseLoopArgs error branches (bad company dir,
-     missing --base/--max value, loadCompany errors)
-5. QA runs the full gate.
-6. If a real open issue appears, drop coverage work and land a focused `fix:`
-   PR.
+Recon
+- Still 0 open GitHub issues; all historical issues are CLOSED.
+- Open PR queue: #247 (tick/cmdRun error branches), #248 (AGENTS.md triage note +
+  debri/relay/route edge tests), #249 (cmdRegister/state_compact/tau branches). All three
+  are AM-authored and MERGEABLE — nothing stale, duplicate, or style-only to close.
+  The merger owns landing them; triage yields no close actions.
+- Master gate is green; statement coverage 90.5%. Functions still <70% are process-level
+  (main 26%, serve run 27%, cmdServe 44%) — the stop condition #248 documents.
+- Residual unclaimed wins DO remain: uncovered `cmd*` wrapper error branches (bad `-C`,
+  missing `.mago`) and a few pure error paths in files NOT claimed by #247–#249.
 
-Invariants
-- Core stays stdlib-only; no third-party dependencies in the root module.
-- Use a private TMPDIR for test runs (e.g. TMPDIR=/tmp/<run> go test ./...)
-  when sibling agents share the worktree.
-- Delete cover.out / cover.html before staging; never commit them.
-- Do not invent new issues when the issue list is empty.
+Plan
+1. Dev: ONE small PR, unclaimed files only:
+     - loop_test.go — cmdLoop parseCompanyDir + loadCompany error branches
+       (`-C` dangling flag; `-C <empty tempdir>`), agent=="" reconcileOnce path if cheap.
+     - commands_test.go — cmdTask/cmdProject/cmdStatus/cmdAnswer loadCompany-error and
+       parseCompanyDir-error branches via `-C <empty tempdir>` / dangling `-C`.
+     - backlog_error_test.go — plannerAgent loadAgentNames error -> nil, setMission with
+       missing STATE.md -> no-op return.
+     - worker_daemon_test.go — daemonizeWorker "worker already running" branch via a
+       pidfile containing os.Getpid().
+   Skip anything needing process spawn, /proc, or network — that is the documented stop
+   condition. Do NOT touch files claimed by #247/#248/#249.
+2. QA: full core+platform gate with a private TMPDIR (see step 1 above for the recipe).
+3. If a real open issue appears mid-run, drop coverage work and land a focused `fix:` PR.

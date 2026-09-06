@@ -432,3 +432,15 @@ func TestProactiveLoop(t *testing.T) {
 		t.Fatal("proactiveLoop did not emit a proactive cadence event")
 	}
 }
+
+// TestCmdServe_ParseCompanyDirError verifies cmdServe surfaces a bare -C error from
+// parseCompanyDir before it starts the event loop or binds a listener.
+func TestCmdServe_ParseCompanyDirError(t *testing.T) {
+	err := cmdServe([]string{"-C"})
+	if err == nil {
+		t.Fatal("expected error for bare -C")
+	}
+	if !strings.Contains(err.Error(), "-C needs a directory value") {
+		t.Errorf("error = %q, want '-C needs a directory value'", err.Error())
+	}
+}

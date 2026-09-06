@@ -351,6 +351,65 @@ func TestAppendToSection(t *testing.T) {
 	}
 }
 
+// TestSynthesizeState_TauError verifies that a failed tau call is surfaced as an
+// error rather than being treated as an empty success.
+func TestSynthesizeState_TauError(t *testing.T) {
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	base := &stateSections{
+		Mission:   "original mission",
+		Shipped:   "original shipped",
+		InFlight:  "original in flight",
+		Decisions: "original decisions",
+	}
+
+	_, err := c.synthesizeState(base, []string{"- 2024-01-01 [cto] did work"})
+	if err == nil {
+		t.Fatal("synthesizeState: expected error when tau fails")
+	}
+	if !strings.Contains(err.Error(), "tau call") {
+		t.Errorf("expected tau call error, got: %v", err)
+	}
+}
+
+// TestSynthesizeState_MalformedJSON verifies that unparsable tau output is
+// reported as a JSON parse error.
+func TestSynthesizeState_MalformedJSON(t *testing.T) {
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	body := `#!/bin/sh
+cat <<'JSON'
+{"content":"not valid json {"}
+JSON
+`
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	base := &stateSections{
+		Mission:   "original mission",
+		Shipped:   "original shipped",
+		InFlight:  "original in flight",
+		Decisions: "original decisions",
+	}
+
+	_, err := c.synthesizeState(base, []string{"- 2024-01-01 [cto] did work"})
+	if err == nil {
+		t.Fatal("synthesizeState: expected error for malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "JSON parse") {
+		t.Errorf("expected JSON parse error, got: %v", err)
+	}
+}
+
 // TestSynthesizeState exercises the LLM state-synthesis path with a fake tau binary.
 func TestSynthesizeState(t *testing.T) {
 	bindir := t.TempDir()

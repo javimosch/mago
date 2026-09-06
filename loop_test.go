@@ -168,3 +168,15 @@ func TestCmdLoop_AgentTick(t *testing.T) {
 		t.Fatalf("cmdLoop error: %v", err)
 	}
 }
+
+// cmdLoop surfaces a parseCompanyDir error (e.g. a bare -C with no directory) before
+// it tries to load the company or enter the tick loop.
+func TestCmdLoop_ParseCompanyDirError(t *testing.T) {
+	err := cmdLoop([]string{"-C"})
+	if err == nil {
+		t.Fatal("expected error for bare -C")
+	}
+	if !strings.Contains(err.Error(), "-C needs a directory value") {
+		t.Errorf("error = %q, want '-C needs a directory value'", err.Error())
+	}
+}

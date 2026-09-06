@@ -804,6 +804,46 @@ func TestCmdLogin_SaveError(t *testing.T) {
 	}
 }
 
+// TestCmdRegister_AccountFetchFailure verifies the default onboarding branch
+// when the account lookup after signup fails (e.g. transient platform error).
+func TestCmdRegister_AccountFetchFailure(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/auth/signup":
+			if r.Method != "POST" {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"token": "register-token"})
+		case "/api/account":
+			http.Error(w, "unavailable", http.StatusInternalServerError)
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	t.Setenv("MAGO_PLATFORM_URL", srv.URL)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = cmdRegister([]string{"--email", "dev@example.com", "--password", "secret"})
+	})
+	if err != nil {
+		t.Fatalf("cmdRegister: %v", err)
+	}
+	if !strings.Contains(out, "mago subscribe") {
+		t.Errorf("expected default onboarding message, got:\n%s", out)
+	}
+	if !strings.Contains(out, "registered dev@example.com") {
+		t.Errorf("missing registration message:\n%s", out)
+	}
+}
+
 // TestCmdRegister_PlanBranches covers the trial and default onboarding branches
 // of cmdRegister that TestCmdRegister (founding plan) does not exercise.
 func TestCmdRegister_PlanBranches(t *testing.T) {

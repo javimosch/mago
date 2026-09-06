@@ -118,3 +118,14 @@ func TestTaskActionsSuggestThemselves(t *testing.T) {
 		}
 	}
 }
+
+func TestNearestActionSingleChar(t *testing.T) {
+	// A 1-char input halves to maxDist 0 and is clamped back to 1: it can still
+	// match on prefix, but an unrelated char suggests nothing.
+	if got := nearestAction("l", projectActions); got != "list" {
+		t.Errorf("nearestAction(\"l\", projectActions) = %q, want \"list\"", got)
+	}
+	if got := nearestAction("x", projectActions); got != "" {
+		t.Errorf("nearestAction(\"x\", projectActions) = %q, want \"\"", got)
+	}
+}
