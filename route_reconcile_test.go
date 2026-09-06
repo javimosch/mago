@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -68,6 +69,32 @@ func (s *stubListTasks) ClearClarify(t *Task) error {
 	t.Clarify = false
 	t.Go = false
 	return nil
+}
+
+// stubListTasksErr wraps localBackend but forces ListTasks to fail.
+type stubListTasksErr struct {
+	*localBackend
+	err error
+}
+
+func (s *stubListTasksErr) ListTasks() ([]*Task, error) {
+	return nil, s.err
+}
+
+// TestReconcileOnce_ListTasksError verifies that reconcileOnce surfaces a task-list
+// failure instead of proceeding with an empty roster.
+func TestReconcileOnce_ListTasksError(t *testing.T) {
+	c := newTestCompany(t)
+	c.tasks = &stubListTasksErr{localBackend: &localBackend{c: c}, err: errors.New("list boom")}
+	writeAgentFile(t, c, "cto", "---\nname: cto\ntitle: CTO\nimplements: true\n---\n")
+
+	_, err := reconcileOnce(c)
+	if err == nil {
+		t.Fatal("expected error when ListTasks fails")
+	}
+	if !strings.Contains(err.Error(), "list boom") {
+		t.Errorf("error = %v, want it to contain 'list boom'", err)
+	}
 }
 
 // TestReconcileOnce_GoPromotesClarifyTask verifies that a task still in clarification
