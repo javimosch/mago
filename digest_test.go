@@ -341,6 +341,114 @@ func TestCmdDigest_ListTasksError(t *testing.T) {
 	}
 }
 
+// TestCmdDigest_DanglingCFlag verifies a bare -C (no directory value) surfaces the
+// parseCompanyDir error instead of being treated as a positional arg.
+func TestCmdDigest_DanglingCFlag(t *testing.T) {
+	err := cmdDigest([]string{"-C"})
+	if err == nil {
+		t.Fatal("cmdDigest with dangling -C should error")
+	}
+	if !strings.Contains(err.Error(), "flag -C needs a directory value") {
+		t.Errorf("error = %q, want -C usage hint", err.Error())
+	}
+}
+
+// TestCmdDigest_NotACompany verifies cmdDigest surfaces loadCompany's error when
+// the target directory has no .mago/ scaffold.
+func TestCmdDigest_NotACompany(t *testing.T) {
+	dir := t.TempDir() // no .mago/
+	err := cmdDigest([]string{"-C", dir})
+	if err == nil {
+		t.Fatal("cmdDigest in a non-company dir should error")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
+
+// TestCmdDigest_PendingHITL exercises the non-empty HITL branch: an unanswered
+// question in .mago/inbox must appear under "Needs you (HITL)" so the CEO sees
+// what is blocking the company.
+func TestCmdDigest_PendingHITL(t *testing.T) {
+	c := newTestCompany(t)
+	t.Setenv("MAGO_GH_REPO", "")
+	t.Setenv("MAGO_DAILY_BUDGET", "")
+
+	if err := os.WriteFile(filepath.Join(c.inboxDir(), "task-7.md"),
+		[]byte("from: cto\ntask: #7 ship it\n\nQUESTION:\napprove the deploy?\n"), 0o644); err != nil {
+		t.Fatalf("write inbox file: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmdDigest([]string{"-C", c.Dir}); err != nil {
+			t.Fatalf("cmdDigest: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Needs you (HITL):\n") {
+		t.Errorf("digest should list pending HITL items, got:\n%s", out)
+	}
+	if !strings.Contains(out, "approve the deploy?") {
+		t.Errorf("digest should include the question text, got:\n%s", out)
+	}
+	if strings.Contains(out, "Needs you (HITL): none") {
+		t.Errorf("digest should not report 'none' with a pending item, got:\n%s", out)
+	}
+}
+
+// TestCmdDigest_BudgetCap exercises the capped-autonomy branch: with
+// MAGO_DAILY_BUDGET set the digest shows "used / cap work cycles", and once the
+// day's usage reaches the cap it prints the paused notice.
+func TestCmdDigest_BudgetCap(t *testing.T) {
+	writeUsage := func(t *testing.T, c *Company, actions int) {
+		t.Helper()
+		b, err := json.Marshal(budgetUsage{Day: utcDay(), Actions: actions})
+		if err != nil {
+			t.Fatalf("marshal usage: %v", err)
+		}
+		if err := os.WriteFile(c.usageFile(), b, 0o644); err != nil {
+			t.Fatalf("write usage.json: %v", err)
+		}
+	}
+
+	t.Run("under cap shows usage without pause", func(t *testing.T) {
+		c := newTestCompany(t)
+		t.Setenv("MAGO_GH_REPO", "")
+		t.Setenv("MAGO_DAILY_BUDGET", "5")
+		writeUsage(t, c, 1)
+
+		out := captureStdout(t, func() {
+			if err := cmdDigest([]string{"-C", c.Dir}); err != nil {
+				t.Fatalf("cmdDigest: %v", err)
+			}
+		})
+		if !strings.Contains(out, "1 / 5 work cycles") {
+			t.Errorf("digest should show '1 / 5 work cycles', got:\n%s", out)
+		}
+		if strings.Contains(out, "paused") {
+			t.Errorf("digest should not be paused under the cap, got:\n%s", out)
+		}
+	})
+
+	t.Run("at cap shows paused notice", func(t *testing.T) {
+		c := newTestCompany(t)
+		t.Setenv("MAGO_GH_REPO", "")
+		t.Setenv("MAGO_DAILY_BUDGET", "2")
+		writeUsage(t, c, 2)
+
+		out := captureStdout(t, func() {
+			if err := cmdDigest([]string{"-C", c.Dir}); err != nil {
+				t.Fatalf("cmdDigest: %v", err)
+			}
+		})
+		if !strings.Contains(out, "2 / 2 work cycles") {
+			t.Errorf("digest should show '2 / 2 work cycles', got:\n%s", out)
+		}
+		if !strings.Contains(out, "paused") {
+			t.Errorf("digest should show the paused notice at the cap, got:\n%s", out)
+		}
+	})
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
