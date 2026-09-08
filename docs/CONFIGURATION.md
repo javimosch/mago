@@ -83,6 +83,7 @@ When `MAGO_PROVIDER=claude`, mago authenticates via your local Claude Code subsc
 | --- | --- | --- |
 | `MAGO_COMPANY` | current working directory | Default company directory when `-C <dir>` is not passed. |
 | `MAGO_GH_REPO` | *(unset — local mode)* | `owner/repo` of the backlog repo. In GitHub mode, tasks become **issues**, PRs are opened against the repo, and human-in-the-loop happens in **comments**. Required when a company has multiple distinct project repos and the backlog repo is ambiguous. |
+| `MAGO_GH_TOKEN` | *(unset — uses `gh` auth)* | Personal Access Token (repo scope) for GitHub API calls in GitHub-backed mode. When set, mago passes it to the `gh` CLI as `GH_TOKEN`; when unset, `gh` uses its own login (`gh auth login`). `mago worker doctor` verifies it is set in GitHub-backed mode. |
 | `MAGO_TASK_LABEL` | *(unset)* | Scope the backlog to issues carrying this label. Lets `MAGO_GH_REPO` point at a real project repo while mago only acts on opted-in issues. |
 | `MAGO_STATE_SYNC` | *(off)* | Set to `1` to push the company's state into `MAGO_GH_REPO`: runtime exhaust (STATE.md, `.mago/runs\|skills\|memory\|inbox`) to a `mago-state` branch, and agent definitions (`.mago/agents`, config, projects) to `main`. Off by default so mago doesn't pollute a user's project repo with its own branches — state always lives locally in the company dir regardless. Only meaningful when `MAGO_GH_REPO` is set. |
 
@@ -201,6 +202,5 @@ These are used for development, packaging, or smoke tests — most operators nev
 | `MAGO_CLI_DIR` | Directory the platform serves CLI binaries from (`mago-<os>-<arch>`). |
 | `MAGO_CLI_BINARY` | Legacy single-file CLI binary fallback for `linux/amd64`. |
 | `FEEDBACK_RELAY` | Override the default feedback relay URL (default `https://feedback.intrane.fr`), or set to `off` to disable the relay write. |
+| `MAGO_FEEDBACK_REPO` | Platform-side `owner/repo`. When set, `mago feedback` submissions are also filed as `feedback`-labeled triage issues on that repo via the GitHub App (never `mago`-labeled, so they are not auto-implemented). |
 | `MAGO_TEST_BAD_REFLECTION` | Test hook that forces a malformed reflection. |
-</content>
-</invoke>
