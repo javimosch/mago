@@ -177,6 +177,7 @@ account commands:
 | `-C <dir>` | all company commands | cwd, or `$MAGO_COMPANY` | Company directory to operate on. |
 | `--project <p>` | `task add` | *(none)* | Attach the new task to a specific project. |
 | `--repo owner/repo` | `project add` | — | Repo for the project being registered. |
+| `--mirror` | `project add` | off | Opt-in: mago opens a tracking issue on the project repo that the deliverable PR closes (stored as `mirror_issue` in `.mago/projects.json`). |
 | `--base <secs>` | `loop` | `3` | Cadence interval when the last tick did work. |
 | `--max <secs>` | `loop` | `60` | Upper bound the interval doubles toward while idle. |
 | `--max-ticks <n>` | `loop` | `5` | Number of ticks before the loop stops. |
