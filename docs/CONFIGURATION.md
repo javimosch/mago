@@ -83,6 +83,7 @@ When `MAGO_PROVIDER=claude`, mago authenticates via your local Claude Code subsc
 | --- | --- | --- |
 | `MAGO_COMPANY` | current working directory | Default company directory when `-C <dir>` is not passed. |
 | `MAGO_GH_REPO` | *(unset — local mode)* | `owner/repo` of the backlog repo. In GitHub mode, tasks become **issues**, PRs are opened against the repo, and human-in-the-loop happens in **comments**. Required when a company has multiple distinct project repos and the backlog repo is ambiguous. |
+| `MAGO_GH_TOKEN` | *(unset — uses `gh` auth)* | Personal Access Token (repo scope) for GitHub API calls in GitHub-backed mode. When set, mago passes it to the `gh` CLI as `GH_TOKEN`; when unset, `gh` uses its own login (`gh auth login`). `mago worker doctor` verifies it is set in GitHub-backed mode. |
 | `MAGO_TASK_LABEL` | *(unset)* | Scope the backlog to issues carrying this label. Lets `MAGO_GH_REPO` point at a real project repo while mago only acts on opted-in issues. |
 | `MAGO_STATE_SYNC` | *(off)* | Set to `1` to push the company's state into `MAGO_GH_REPO`: runtime exhaust (STATE.md, `.mago/runs\|skills\|memory\|inbox`) to a `mago-state` branch, and agent definitions (`.mago/agents`, config, projects) to `main`. Off by default so mago doesn't pollute a user's project repo with its own branches — state always lives locally in the company dir regardless. Only meaningful when `MAGO_GH_REPO` is set. |
 
@@ -140,6 +141,9 @@ check and control when an approved PR is auto-merged.
 | `--secret <hmac>` | *(unset)* | HMAC secret (alternative to `MAGO_WEBHOOK_SECRET`). |
 | `--heartbeat <secs>` | — | Heartbeat interval. |
 | `--relay` | off | Dial out to the platform's webhook relay instead of exposing a tunnel (NAT-friendly). |
+| `--daemon` | off | Detach a supervisor that keeps the worker running (pidfile + log, restart on crash). Control it with `mago serve stop` / `mago serve status`. |
+| `--until HH:MM` | — | Stop cleanly at the next occurrence of that wall-clock time (24h) — a native scheduled stop, no cron kill needed. |
+| `--start-delay <dur>` | — | Wait this duration (e.g. `15m`, `900s`) before serving — staggers fleet workers without an OS `sleep` wrapper. |
 
 ---
 
@@ -173,6 +177,7 @@ account commands:
 | `-C <dir>` | all company commands | cwd, or `$MAGO_COMPANY` | Company directory to operate on. |
 | `--project <p>` | `task add` | *(none)* | Attach the new task to a specific project. |
 | `--repo owner/repo` | `project add` | — | Repo for the project being registered. |
+| `--mirror` | `project add` | off | Opt-in: mago opens a tracking issue on the project repo that the deliverable PR closes (stored as `mirror_issue` in `.mago/projects.json`). |
 | `--base <secs>` | `loop` | `3` | Cadence interval when the last tick did work. |
 | `--max <secs>` | `loop` | `60` | Upper bound the interval doubles toward while idle. |
 | `--max-ticks <n>` | `loop` | `5` | Number of ticks before the loop stops. |
@@ -201,6 +206,5 @@ These are used for development, packaging, or smoke tests — most operators nev
 | `MAGO_CLI_DIR` | Directory the platform serves CLI binaries from (`mago-<os>-<arch>`). |
 | `MAGO_CLI_BINARY` | Legacy single-file CLI binary fallback for `linux/amd64`. |
 | `FEEDBACK_RELAY` | Override the default feedback relay URL (default `https://feedback.intrane.fr`), or set to `off` to disable the relay write. |
+| `MAGO_FEEDBACK_REPO` | Platform-side `owner/repo`. When set, `mago feedback` submissions are also filed as `feedback`-labeled triage issues on that repo via the GitHub App (never `mago`-labeled, so they are not auto-implemented). |
 | `MAGO_TEST_BAD_REFLECTION` | Test hook that forces a malformed reflection. |
-</content>
-</invoke>
