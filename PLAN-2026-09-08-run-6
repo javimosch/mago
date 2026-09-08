@@ -1,0 +1,33 @@
+# PLAN — 2026-09-08 run 6 (architect)
+
+Objective: "Fix open GitHub issues. Small PRs, conventional commits."
+
+## Live queue (re-verified)
+
+- `gh issue list --state open` -> 0 open issues. Nothing to fix directly.
+- Open PRs: **#247, #248, #252, #253** — all `MERGEABLE` / `CLEAN`, no drafts,
+  no veto labels, all created 2026-09-06 (well past any age gate).
+- `gofmt -l .` and `cd platform && gofmt -l .` are clean.
+- The four PRs touch disjoint file sets — no intra-queue conflicts.
+- No stale style-only PRs, no bundle/duplicates to close.
+
+## Plan
+
+- **No new code this run.** The open PR queue is the only work.
+- **am-merger** to land #247, #248, #252, #253:
+  - All are test/doc/plan-only; safe under the AM pass-2 relaxed gate
+    (effective line count excludes tests/docs/generated after a pass-1
+    line-count fail).
+  - Safe PR types (`test:`, `docs:`, `chore:`), not drafts, `MERGEABLE`.
+- Once landed, the open PR queue is clear and the coverage stop can be
+  re-evaluated on the next run.
+- **dev/qa stand down** until the queue is clear. Do not start new coverage
+  PRs while #247/#248/#252/#253 claim their file sets.
+
+## Coverage stop / do not
+
+- Core coverage is ~91%; remaining sub-75% functions are process-level
+  (`main`, `serve.run`, `cmdServe`) or already claimed by the open PRs.
+- Do not invent new coverage on files claimed by open PRs (see panel
+  "Files claimed by open PRs" notice).
+- Do not open duplicate or competing style/coverage PRs.
