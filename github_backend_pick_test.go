@@ -112,3 +112,26 @@ func TestGithubBackendPickActiveTask_ListError(t *testing.T) {
 		t.Errorf("error %q should mention the failing gh subcommand and stderr", err.Error())
 	}
 }
+
+// TestGithubBackendPickActiveTask_IgnoresOtherAgent verifies that an open issue
+// assigned to a different agent is not picked when there is no in-progress work.
+func TestGithubBackendPickActiveTask_IgnoresOtherAgent(t *testing.T) {
+	fake := fakeGh(t, `if [ "$3" = "issue" ] && [ "$4" = "list" ]; then
+		case "$*" in
+			*mago:hitl*) echo '[]'; exit 0 ;;
+		esac
+		echo '[{"number":9,"title":"other task","state":"open","labels":[{"name":"agent:other"}]}]'
+		exit 0
+	fi
+	exit 1`)
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	b := &githubBackend{repo: "acme/web"}
+	task, err := b.PickActiveTask("dev")
+	if err != nil {
+		t.Fatalf("PickActiveTask: %v", err)
+	}
+	if task != nil {
+		t.Errorf("PickActiveTask = %v, want nil when open task is assigned to another agent", task)
+	}
+}

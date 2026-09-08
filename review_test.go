@@ -338,6 +338,11 @@ exit 0
 
 	tauScript := `#!/bin/sh
 echo "$@" >> "${TAU_LOG:-/dev/null}"
+if [ -n "$TAU_PROMPT" ]; then
+	last=""
+	for a in "$@"; do last="$a"; done
+	printf '%s' "$last" > "$TAU_PROMPT"
+fi
 printf '%s\n' "$TAU_OUT"
 `
 	t.Setenv("TAU_OUT", tauContent)
@@ -485,5 +490,72 @@ func TestReviewPR_DiffTruncated(t *testing.T) {
 	}
 	if strings.Contains(got, strings.Repeat("x", 13000)) {
 		t.Error("the full oversized diff must not reach the model prompt")
+	}
+}
+
+// TestReviewPR_DirectionContext verifies that when a company has VISION.md/ROADMAP.md,
+// reviewPR injects the direction pack into the reviewer prompt and adds the 5th
+// criterion that gates out-of-scope / no-touch work.
+func TestReviewPR_DirectionContext(t *testing.T) {
+	t.Setenv("MAGO_NO_MERGE", "")
+	t.Setenv("MAGO_VERIFY", "")
+	t.Setenv("MAGO_VERIFY_CMD", "")
+	t.Setenv("MAGO_MERGE_UNVERIFIED", "")
+	t.Setenv("MAGO_PROVIDER", "")
+	t.Setenv("MAGO_MODEL", "")
+
+	c := newTestCompany(t)
+	c.ghRepo = "acme/backlog"
+	writeAgentFile(t, c, "reviewer", "---\nname: reviewer\ntitle: Reviewer\nreviews: true\n---\n")
+
+	vision := `# Test — VISION
+
+## North star
+Build the best widget.
+
+## Constraints
+Do not touch core/go.mod.
+`
+	roadmap := `# Test — ROADMAP
+
+## Now
+Improve review coverage.
+
+## Out of scope
+Polymarket integration.
+`
+	if err := os.WriteFile(c.visionFile(), []byte(vision), 0o644); err != nil {
+		t.Fatalf("write VISION.md: %v", err)
+	}
+	if err := os.WriteFile(c.roadmapFile(), []byte(roadmap), 0o644); err != nil {
+		t.Fatalf("write ROADMAP.md: %v", err)
+	}
+
+	promptLog := filepath.Join(t.TempDir(), "tau.prompt")
+	t.Setenv("TAU_PROMPT", promptLog)
+
+	_ = writeFakeReviewBins(t, "diff --git a/f b/f\n+one line\n",
+		`{"content":"{\"verdict\":\"approve\",\"comment\":\"meets criteria\"}"}`)
+
+	if !c.reviewPR("acme/backlog", 11) {
+		t.Fatal("reviewPR() = false, want true when direction context is present")
+	}
+
+	prompt, err := os.ReadFile(promptLog)
+	if err != nil {
+		t.Fatalf("read tau prompt: %v", err)
+	}
+	ps := string(prompt)
+	if !strings.Contains(ps, "COMPANY DIRECTION") {
+		t.Error("review prompt should contain COMPANY DIRECTION when direction context is set")
+	}
+	if !strings.Contains(ps, "5. It does NOT modify a no-touch area") {
+		t.Error("review prompt should include the 5th direction criterion")
+	}
+	if !strings.Contains(ps, "Build the best widget.") {
+		t.Error("review prompt should include the north star from VISION.md")
+	}
+	if !strings.Contains(ps, "Polymarket integration.") {
+		t.Error("review prompt should include out-of-scope items from ROADMAP.md")
 	}
 }
