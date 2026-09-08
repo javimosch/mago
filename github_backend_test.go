@@ -480,6 +480,19 @@ func TestGhWrapperNonAuthError(t *testing.T) {
 	}
 }
 
+func TestGhWrapperMissingBinary(t *testing.T) {
+	// Force PATH to an empty temp dir so gh is not found and the "not an ExitError"
+	// branch in the gh() wrapper is exercised.
+	t.Setenv("PATH", t.TempDir())
+	_, err := gh("issue", "list")
+	if err == nil {
+		t.Fatal("expected error when gh binary is missing")
+	}
+	if strings.Contains(err.Error(), "GitHub authentication failed") {
+		t.Errorf("missing gh binary should not be reported as an auth error: %v", err)
+	}
+}
+
 func TestGithubBackendSetStatus(t *testing.T) {
 	fake := fakeGh(t, `if [ "$3" = "issue" ]; then
 		exit 0
