@@ -141,6 +141,9 @@ check and control when an approved PR is auto-merged.
 | `--secret <hmac>` | *(unset)* | HMAC secret (alternative to `MAGO_WEBHOOK_SECRET`). |
 | `--heartbeat <secs>` | — | Heartbeat interval. |
 | `--relay` | off | Dial out to the platform's webhook relay instead of exposing a tunnel (NAT-friendly). |
+| `--daemon` | off | Detach a supervisor that keeps the worker running (pidfile + log, restart on crash). Control it with `mago serve stop` / `mago serve status`. |
+| `--until HH:MM` | — | Stop cleanly at the next occurrence of that wall-clock time (24h) — a native scheduled stop, no cron kill needed. |
+| `--start-delay <dur>` | — | Wait this duration (e.g. `15m`, `900s`) before serving — staggers fleet workers without an OS `sleep` wrapper. |
 
 ---
 
