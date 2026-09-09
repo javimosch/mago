@@ -313,3 +313,65 @@ func TestCmdRun_Idle(t *testing.T) {
 		t.Errorf("output = %q, want idle message", out)
 	}
 }
+
+// TestCmdRun_DanglingCFlag verifies a bare -C (no directory value) surfaces the
+// parseCompanyDir error instead of being swallowed as a positional arg.
+func TestCmdRun_DanglingCFlag(t *testing.T) {
+	err := cmdRun([]string{"dev", "-C"})
+	if err == nil {
+		t.Fatal("cmdRun with dangling -C should error")
+	}
+	if !strings.Contains(err.Error(), "flag -C needs a directory value") {
+		t.Errorf("error = %q, want -C usage hint", err.Error())
+	}
+}
+
+// TestCmdRun_NotACompany verifies cmdRun surfaces loadCompany's error when the
+// target directory has no .mago/ scaffold.
+func TestCmdRun_NotACompany(t *testing.T) {
+	dir := t.TempDir() // no .mago/
+	err := cmdRun([]string{"-C", dir, "dev"})
+	if err == nil {
+		t.Fatal("cmdRun in a non-company dir should error")
+	}
+	if !strings.Contains(err.Error(), "not a mago company") {
+		t.Errorf("error = %q, want 'not a mago company'", err.Error())
+	}
+}
+
+// TestCmdRun_RunTickError verifies a tick failure (here: the named agent has no
+// agent file) propagates out of cmdRun rather than being reported as idle.
+func TestCmdRun_RunTickError(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t) // .mago/ exists, but no agents/dev.md
+
+	err := cmdRun([]string{"-C", c.Dir, "dev"})
+	if err == nil {
+		t.Fatal("cmdRun with a missing agent file should error")
+	}
+	if !strings.Contains(err.Error(), "dev") {
+		t.Errorf("error = %q, want it to name the missing agent", err.Error())
+	}
+}
+
+// TestRunTick_PickActiveTaskError verifies a backend failure while picking the
+// active task surfaces as an error (not an idle tick). A regular file where the
+// tasks/ directory belongs makes ListTasks fail with ENOTDIR.
+func TestRunTick_PickActiveTaskError(t *testing.T) {
+	t.Setenv("MAGO_GH_REPO", "")
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "dev", "---\nname: dev\ntitle: Developer\n---\n")
+
+	if err := os.Remove(c.tasksDir()); err != nil {
+		t.Fatalf("remove tasks dir: %v", err)
+	}
+	if err := os.WriteFile(c.tasksDir(), []byte("not a dir"), 0o644); err != nil {
+		t.Fatalf("replace tasks dir with file: %v", err)
+	}
+
+	_, err := runTick(c, "dev")
+	if err == nil {
+		t.Fatal("runTick with an unreadable tasks dir should error")
+	}
+}

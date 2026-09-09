@@ -708,3 +708,25 @@ func TestCmdWorker_Doctor_Exit101(t *testing.T) {
 		t.Fatalf("cmdWorker doctor exit code = %d, want 101", exit.ExitCode())
 	}
 }
+
+// TestCmdWorker_ModeDispatch verifies `mago worker mode ...` routes through the
+// cmdWorker switch into cmdWorkerMode — the dispatch line itself, so a future
+// refactor can't silently drop the subcommand.
+func TestCmdWorker_ModeDispatch(t *testing.T) {
+	err := cmdWorker([]string{"mode"})
+	if err == nil {
+		t.Fatal("cmdWorker mode with no tokens should error")
+	}
+	if !strings.Contains(err.Error(), "usage: mago worker mode") {
+		t.Errorf("error = %q, want mode usage", err.Error())
+	}
+
+	// Tokens flow through dispatch into cmdWorkerMode's validation.
+	err = cmdWorker([]string{"mode", "reactive"})
+	if err == nil {
+		t.Fatal("cmdWorker mode without --worker/--all should error")
+	}
+	if !strings.Contains(err.Error(), "specify --worker") {
+		t.Errorf("error = %q, want 'specify --worker'", err.Error())
+	}
+}

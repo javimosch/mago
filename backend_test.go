@@ -304,6 +304,22 @@ func TestLocalBackendPickActiveTask(t *testing.T) {
 	}
 }
 
+// TestLocalBackendPickActiveTask_ListError verifies that a real ListTasks failure
+// (e.g. the tasks path is a regular file, so ReadDir fails with ENOTDIR) is
+// propagated rather than treated as an empty task list.
+func TestLocalBackendPickActiveTask_ListError(t *testing.T) {
+	dir := t.TempDir()
+	c := &Company{Dir: dir}
+	if err := os.WriteFile(c.tasksDir(), []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b := &localBackend{c: c}
+
+	if picked, err := b.PickActiveTask("dev"); err == nil || picked != nil {
+		t.Fatalf("PickActiveTask on unreadable tasks dir = %v, %v; want nil, error", picked, err)
+	}
+}
+
 func taskIDs(tasks []*Task) []string {
 	out := make([]string, len(tasks))
 	for i, t := range tasks {
