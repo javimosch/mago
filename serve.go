@@ -10,7 +10,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -27,7 +31,9 @@ func webhookSecret() string {
 func cmdServe(args []string) error {
 	dir, rest, err := parseCompanyDir(args)
 	if err != nil {
-		return err
+		// cli-daemon-spec: if no company dir is configured, still start a minimal
+		// server with /_health and /_shutdown so the daemon lifecycle works.
+		return serveMinimal(args)
 	}
 	// Lifecycle subcommands: `mago serve stop|status [-C dir]`.
 	if len(rest) > 0 {
@@ -55,6 +61,11 @@ func cmdServe(args []string) error {
 		case "--addr":
 			if i+1 < len(rest) {
 				addr = rest[i+1]
+				i++
+			}
+		case "--port":
+			if i+1 < len(rest) {
+				addr = ":" + rest[i+1]
 				i++
 			}
 		case "--secret":
@@ -87,7 +98,9 @@ func cmdServe(args []string) error {
 	}
 	comp, err := loadCompany(dir)
 	if err != nil {
-		return err
+		// cli-daemon-spec: if no company is configured, still start a minimal
+		// server with /_health and /_shutdown so the daemon lifecycle works.
+		return serveMinimal(args)
 	}
 	// --daemon: detach a supervisor (pidfile + log) and return; the worker runs in the background.
 	if daemon {
@@ -149,12 +162,33 @@ func cmdServe(args []string) error {
 	}
 
 	// Tunnel/direct mode: bind the local webhook listener.
+	// cli-daemon-spec: default to loopback; only bind 0.0.0.0 if explicitly requested.
+	bindAddr := addr
+	if strings.HasPrefix(addr, ":") {
+		bindAddr = "127.0.0.1" + addr
+	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/_health", func(rw http.ResponseWriter, _ *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(rw, `{"ok":true,"service":"mago","version":%q,"pid":%d}`, version, os.Getpid())
+	})
+	mux.HandleFunc("/_shutdown", func(rw http.ResponseWriter, r *http.Request) {
+		// Loopback-only: no token needed when bound to 127.0.0.1
+		if !strings.HasPrefix(bindAddr, "127.0.0.1") && !strings.HasPrefix(bindAddr, "localhost") {
+			token := r.Header.Get("Authorization")
+			if token == "" {
+				rw.WriteHeader(401)
+				return
+			}
+		}
+		rw.WriteHeader(200)
+		go func() { time.Sleep(100 * time.Millisecond); os.Exit(0) }()
+	})
 	mux.HandleFunc("/health", func(rw http.ResponseWriter, _ *http.Request) { fmt.Fprintln(rw, "ok") })
 	mux.HandleFunc("/webhook/github", w.handleWebhook(secret))
 	fmt.Fprintf(os.Stderr, "mago serve: company %q (repos: %s) listening on %s; webhook at /webhook/github\n",
-		comp.Name, reposStr, addr)
-	return http.ListenAndServe(addr, mux)
+		comp.Name, reposStr, bindAddr)
+	return http.ListenAndServe(bindAddr, mux)
 }
 
 // wakeEvent carries why we woke and how to act: a single agent to wake (target), a PR to
@@ -399,4 +433,159 @@ func classifyEvent(event string, body []byte) (wakeEvent, bool) {
 		}
 	}
 	return wakeEvent{}, false
+}
+
+// cmdDaemon implements `mago daemon start|stop|status` per cli-daemon-spec.
+func cmdDaemon(args []string) error {
+	if len(args) == 0 {
+		typedError(85, "invalid_argument", "usage: mago daemon start|stop|status [--port N]", false, nil)
+	}
+	sub := args[0]
+	port := "8099"
+	host := "127.0.0.1"
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--port" && i+1 < len(args) {
+			port = args[i+1]
+			i++
+		}
+		if args[i] == "--host" && i+1 < len(args) {
+			host = args[i+1]
+			i++
+		}
+	}
+	switch sub {
+	case "start":
+		daemonStart(host, port)
+	case "stop":
+		daemonStop(host, port)
+	case "status":
+		daemonStatus(host, port)
+	default:
+		typedError(85, "invalid_argument", "unknown daemon subcommand: "+sub, false, nil)
+	}
+	return nil
+}
+
+func daemonHealthProbe(host, port string) bool {
+	resp, err := http.Get("http://" + host + ":" + port + "/_health")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
+func daemonStart(host, port string) {
+	if daemonHealthProbe(host, port) {
+		fmt.Println(`{"ok":true,"daemon":"already_running","host":"` + host + `","port":` + port + `}`)
+		return
+	}
+	home, _ := os.UserHomeDir()
+	logDir := filepath.Join(home, ".mago")
+	os.MkdirAll(logDir, 0755)
+	logPath := filepath.Join(logDir, "daemon.log")
+	cmd := exec.Command(os.Args[0], "serve", "--port", port, "--host", host)
+	logFile, _ := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if logFile != nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		typedError(100, "upstream_error", "failed to start daemon: "+err.Error(), true, nil)
+	}
+	for i := 0; i < 50; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if daemonHealthProbe(host, port) {
+			pid := 0
+			if cmd.Process != nil {
+				pid = cmd.Process.Pid
+			}
+			fmt.Println(`{"ok":true,"daemon":"started","host":"` + host + `","port":` + port + `,"pid":` + strconv.Itoa(pid) + `,"log":"` + logPath + `"}`)
+			cmd.Process.Release()
+			if logFile != nil {
+				logFile.Close()
+			}
+			return
+		}
+	}
+	tail := ""
+	if logFile != nil {
+		logFile.Close()
+	}
+	data, _ := os.ReadFile(logPath)
+	if len(data) > 300 {
+		tail = string(data[len(data)-300:])
+	} else if len(data) > 0 {
+		tail = string(data)
+	}
+	typedError(100, "upstream_error", "daemon did not become healthy within 5s. log tail: "+tail, true, nil)
+}
+
+func daemonStop(host, port string) {
+	if !daemonHealthProbe(host, port) {
+		fmt.Println(`{"ok":true,"daemon":"already_stopped"}`)
+		return
+	}
+	resp, err := http.Post("http://"+host+":"+port+"/_shutdown", "application/json", nil)
+	if err != nil {
+		typedError(110, "internal_error", "failed to POST /_shutdown: "+err.Error(), false, nil)
+	}
+	resp.Body.Close()
+	for i := 0; i < 50; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if !daemonHealthProbe(host, port) {
+			fmt.Println(`{"ok":true,"daemon":"stopped"}`)
+			return
+		}
+	}
+	typedError(110, "internal_error", "daemon did not stop within 5s", false, nil)
+}
+
+func daemonStatus(host, port string) {
+	if daemonHealthProbe(host, port) {
+		fmt.Println(`{"ok":true,"daemon":"running","host":"` + host + `","port":` + port + `}`)
+		os.Exit(0)
+	}
+	fmt.Println(`{"ok":true,"daemon":"stopped","host":"` + host + `","port":` + port + `}`)
+	os.Exit(3)
+}
+// serveMinimal starts a minimal HTTP server with just /_health and /_shutdown,
+// used when no company directory is configured. This lets the cli-daemon-spec
+// lifecycle (daemon start/stop/status) work without a full mago setup.
+func serveMinimal(args []string) error {
+	addr := ":8099"
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--port" && i+1 < len(args) {
+			addr = ":" + args[i+1]
+			i++
+		}
+		if args[i] == "--addr" && i+1 < len(args) {
+			addr = args[i+1]
+			i++
+		}
+	}
+	bindAddr := addr
+	if strings.HasPrefix(addr, ":") {
+		bindAddr = "127.0.0.1" + addr
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/_health", func(rw http.ResponseWriter, _ *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(rw, `{"ok":true,"service":"mago","version":%q,"pid":%d}`, version, os.Getpid())
+	})
+	mux.HandleFunc("/_shutdown", func(rw http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(bindAddr, "127.0.0.1") && !strings.HasPrefix(bindAddr, "localhost") {
+			token := r.Header.Get("Authorization")
+			if token == "" {
+				rw.WriteHeader(401)
+				return
+			}
+		}
+		rw.WriteHeader(200)
+		fmt.Fprintf(rw, `{"ok":true,"stopping":true}`)
+		go func() { time.Sleep(100 * time.Millisecond); os.Exit(0) }()
+	})
+	fmt.Fprintf(os.Stderr, "[serve] listening on http://%s\n", bindAddr)
+	return http.ListenAndServe(bindAddr, mux)
 }
