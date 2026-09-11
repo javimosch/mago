@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -47,6 +48,8 @@ func main() {
 		err = cmdTick(os.Args[2:])
 	case "serve":
 		err = cmdServe(os.Args[2:])
+	case "daemon":
+		err = cmdDaemon(os.Args[2:])
 	case "status":
 		err = cmdStatus(os.Args[2:])
 	case "answer":
@@ -74,16 +77,30 @@ func main() {
 	case "worker":
 		err = cmdWorker(os.Args[2:])
 	case "version", "-v", "--version":
-		fmt.Println(version)
+		jsonFlag := false
+		for _, a := range os.Args[2:] {
+			if a == "--json" {
+				jsonFlag = true
+			}
+		}
+		if jsonFlag {
+			out, _ := json.Marshal(map[string]string{"name": "mago", "version": version})
+			fmt.Println(string(out))
+		} else {
+			fmt.Println(version)
+		}
+	case "help-json":
+		err = cmdHelpJSON(os.Args[2:])
+	case "guide":
+		err = cmdGuide(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 	default:
-		fmt.Fprintf(os.Stderr, "mago: unknown command %q\n", cmd)
+		sugg := []string{"Run: mago help"}
 		if s := suggestCommand(cmd); s != "" {
-			fmt.Fprintf(os.Stderr, "\nDid you mean %q?\n", s)
+			sugg = append([]string{fmt.Sprintf("Did you mean: mago %s", s)}, sugg...)
 		}
-		fmt.Fprintln(os.Stderr, "\nRun 'mago help' to see all commands.")
-		os.Exit(80)
+		typedError(85, "invalid_argument", fmt.Sprintf("unknown command %q", cmd), false, sugg)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
