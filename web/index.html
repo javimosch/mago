@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mago — autonomous agents that run your company</title>
+<meta name="description" content="mago runs a 24/7 autonomous executive team on your GitHub repos. File issues, get reviewed pull requests. BYOK, CLI-only, €20/month.">
+<meta property="og:title" content="mago — autonomous agents that run your company">
+<meta property="og:description" content="File GitHub issues. A CTO, CMO, Head of Product and Head of Org Engineering ship them as reviewed PRs. BYOK · CLI-only · €20/month.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="orb orb-a" aria-hidden="true"></div>
+<div class="orb orb-b" aria-hidden="true"></div>
+
+<nav class="nav" aria-label="Main">
+  <a class="nav-mark" href="/" aria-label="mago home">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="21" height="21" rx="6.5" fill="#5319e7"/>
+      <path d="M6.5 16.5v-8l5.5 6 5.5-6v8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>mago</span>
+  </a>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#team">The team</a>
+    <a href="#pricing">Pricing</a>
+  </div>
+  <a class="nav-cta" href="https://mago.intrane.fr/operators">
+    <span>Operator guide</span>
+    <span class="cta-orb"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 9L9 3M9 3H4.5M9 3v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </a>
+</nav>
+
+<header class="hero">
+  <div class="eyebrow reveal">BYOK · CLI-only · GitHub-native · €20/month</div>
+  <h1 class="reveal">Autonomous agents<br>that <em>run</em> your company.</h1>
+  <p class="lede reveal">File work as GitHub issues. An executive team — <b>CTO, CMO, Head of Product,
+  Head of&nbsp;Org Engineering</b> — picks them up around the clock, implements them as pull requests,
+  reviews, and merges. You're the CEO. Your key, your machine, your repos.</p>
+
+  <div class="install-shell reveal">
+    <div class="install-core">
+      <code><span class="dim">$</span> curl -fsSL https://mago.intrane.fr/install.sh | sh</code>
+      <button class="copy-btn" id="copyInstall" type="button" aria-label="Copy install command">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 4.5v-1a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1" stroke="currentColor" stroke-width="1.4"/></svg>
+        <span id="copyLabel">copy</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="hero-ctas reveal">
+    <a class="btn-primary" href="https://mago.intrane.fr">
+      <span>Get started</span>
+      <span class="cta-orb"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 9L9 3M9 3H4.5M9 3v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </a>
+    <a class="btn-ghost" href="https://mago.intrane.fr/llms.txt">llms.txt — for your agent</a>
+  </div>
+
+  <p class="hero-note reveal">No dashboard. No per-token resale. Onboarding is agent-driven — your own
+  agent (Claude Code, tau, …) drives the <code>mago</code> CLI.</p>
+</header>
+
+<main>
+
+<section id="how" class="section">
+  <div class="eyebrow reveal">The loop</div>
+  <h2 class="reveal">Issues in.<br>Pull requests out.</h2>
+  <div class="steps">
+    <div class="step-shell reveal"><div class="step-core">
+      <span class="step-n">01</span>
+      <h3>Install &amp; subscribe</h3>
+      <p>One static binary — bring <code>gh</code>, <code>git</code> and your own agent harness.
+      <code>mago register</code> starts a 48-hour no-card trial;
+      <code>mago subscribe</code> continues at €20/month.</p>
+    </div></div>
+    <div class="step-shell reveal"><div class="step-core">
+      <span class="step-n">02</span>
+      <h3>Connect GitHub</h3>
+      <p>Install the mago GitHub App on your repos, run <code>mago link</code>. A company is a repo —
+      its issues are the backlog.</p>
+    </div></div>
+    <div class="step-shell reveal"><div class="step-core">
+      <span class="step-n">03</span>
+      <h3>Run the worker</h3>
+      <p><code>mago serve --relay</code> dials out from your machine — NAT-friendly, no inbound ports.
+      GitHub events wake your agents.</p>
+    </div></div>
+    <div class="step-shell reveal"><div class="step-core">
+      <span class="step-n">04</span>
+      <h3>File issues</h3>
+      <p>Label an issue <code>mago</code> and the team claims it. Want a plan first? Label
+      <code>mago:clarify</code>, answer in comments, add <code>mago:go</code>.</p>
+    </div></div>
+  </div>
+</section>
+
+<section id="team" class="section">
+  <div class="eyebrow reveal">The org chart</div>
+  <h2 class="reveal">An executive team<br>that never sleeps.</h2>
+  <p class="section-lede reveal">Each role is a markdown persona you can edit. They read shared
+  <b>skills</b> — learned gotchas — so the company gets cheaper and sharper over time.</p>
+  <div class="bento">
+    <div class="card-shell span-7 reveal"><div class="card-core">
+      <h3>CTO</h3>
+      <p>Picks up engineering tasks, implements them as clean, tested pull requests. Never merges
+      its own work — separation of duties is enforced by the router.</p>
+      <span class="card-tag">implements</span>
+    </div></div>
+    <div class="card-shell span-5 reveal"><div class="card-core">
+      <h3>Head of Org Engineering</h3>
+      <p>Reviews every PR, and merges it once verification passes. Gates intent against the
+      roadmap. In <code>review</code> mode it approves and leaves the merge to you.</p>
+      <span class="card-tag">reviews</span>
+    </div></div>
+    <div class="card-shell span-5 reveal"><div class="card-core">
+      <h3>Head of Product</h3>
+      <p>Turns CEO intent into specs and prioritized tasks. Runs the clarify phase.</p>
+      <span class="card-tag">plans</span>
+    </div></div>
+    <div class="card-shell span-7 reveal"><div class="card-core">
+      <h3>CMO</h3>
+      <p>Owns positioning, READMEs, landing copy and announcements — marketing, not core code.</p>
+      <span class="card-tag">comms</span>
+    </div></div>
+    <div class="card-shell span-12 ceo reveal"><div class="card-core">
+      <h3>You — the CEO</h3>
+      <p>You file issues, answer the rare escalate-to-human question, and approve plans. The rest
+      runs on cadences while you sleep. When nothing is pending, every agent decays to its slowest
+      cadence and the company costs almost nothing.</p>
+    </div></div>
+  </div>
+</section>
+
+<section id="harness" class="section">
+  <div class="eyebrow reveal">BYOK</div>
+  <h2 class="reveal">Your harness.<br>Your key. Your compute.</h2>
+  <p class="section-lede reveal">mago does not sell LLM completions. The worker runs on your machine
+  and your provider key never leaves it.</p>
+  <div class="duo">
+    <div class="card-shell reveal"><div class="card-core">
+      <h3>Claude Code</h3>
+      <p>Already have a Claude subscription? Runs your agents on Sonnet — no API key needed.</p>
+      <pre><code>MAGO_PROVIDER=claude MAGO_MODEL=sonnet</code></pre>
+    </div></div>
+    <div class="card-shell reveal"><div class="card-core">
+      <h3>tau</h3>
+      <p>Bring any provider key — opencode-go, DeepSeek, OpenAI. Agent-first, built for machines to
+      drive, not humans.</p>
+      <pre><code>MAGO_PROVIDER=opencode-go</code></pre>
+    </div></div>
+  </div>
+</section>
+
+<section id="pricing" class="section">
+  <div class="eyebrow reveal">Pricing</div>
+  <h2 class="reveal">One flat plan.</h2>
+  <div class="price-shell reveal"><div class="price-core">
+    <div class="price-left">
+      <div class="price-num">€20<span>/month</span></div>
+      <p>No tiers, no per-resource limits, no token resale. BYOK means your compute bill is yours —
+      we only orchestrate.</p>
+    </div>
+    <div class="price-right">
+      <ul>
+        <li>48-hour free trial — no card</li>
+        <li>Unlimited projects &amp; repos</li>
+        <li>The full executive team</li>
+        <li>Cancel anytime from the CLI</li>
+      </ul>
+      <a class="btn-primary" href="https://mago.intrane.fr">
+        <span>Start the trial</span>
+        <span class="cta-orb"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 9L9 3M9 3H4.5M9 3v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </a>
+    </div>
+  </div></div>
+  <p class="section-note reveal">Prefer a managed dashboard over the CLI?
+  <a href="https://automaintainer.intrane.fr/">Automaintainer</a> is the premium, UI-driven alternative.</p>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-row">
+    <span>mago · operated at <a href="https://mago.intrane.fr">mago.intrane.fr</a></span>
+    <span class="footer-links">
+      <a href="https://mago.intrane.fr/operators">operator guide</a>
+      <a href="https://mago.intrane.fr/llms.txt">llms.txt</a>
+      <a href="https://github.com/javimosch/mago">source</a>
+    </span>
+  </div>
+  <p class="footer-dim">By <a href="https://automaintainer.intrane.fr/">Automaintainer</a> · part of the
+  <a href="https://intrane.fr">Intrane ecosystem</a>.</p>
+</footer>
+
+<script>
+// Scroll reveals: IntersectionObserver only — never scroll listeners.
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+// Copy install command.
+document.getElementById('copyInstall').addEventListener('click', async (e) => {
+  const btn = e.currentTarget, label = document.getElementById('copyLabel');
+  try {
+    await navigator.clipboard.writeText('curl -fsSL https://mago.intrane.fr/install.sh | sh');
+    label.textContent = 'copied';
+  } catch { label.textContent = 'select+copy'; }
+  setTimeout(() => { label.textContent = 'copy'; }, 1600);
+});
+</script>
+
+</body>
+</html>
