@@ -55,6 +55,14 @@ func runTick(comp *Company, agentName string) (tickResult, error) {
 	// PRs via the pull_request event path (reviewPR), not task routing. Bounce it (unassign +
 	// reopen) so it re-routes to an implementer — no model call, no stall.
 	if isReviewerRole(a) {
+		// PickActiveTask's "resume in-progress" and "first unrouted task" tiers match on an
+		// EMPTY assignee, so they hand work to whichever agent ticks first regardless of role —
+		// routeTask's reviewer exclusion is bypassed entirely. Leave a task nobody assigned to
+		// this reviewer alone: bouncing it would unassign and reopen an already-unassigned task,
+		// churning a label edit and a comment on every reviewer tick.
+		if task.Assignee != agentName {
+			return tickResult{worked: false, signal: "idle"}, nil
+		}
 		fmt.Fprintf(os.Stderr, "[guard] %s is review-only — bouncing #%s for re-routing\n", agentName, task.ID)
 		comp.tasks.Bounce(task)
 		return tickResult{worked: true, signal: "working"}, nil
