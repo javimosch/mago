@@ -280,12 +280,35 @@ func backfillAgentFlag(path, key, val string) {
 }
 
 // starterTeam is the executive team seeded by `mago init`. The CEO is the human.
+// Every persona carries the same guardrails — they bound the company, not a role.
 var starterTeam = map[string]string{
-	"cto.md":                     personaCTO,
-	"cmo.md":                     personaCMO,
-	"head-of-product.md":         personaHeadProduct,
-	"head-of-org-engineering.md": personaHeadOrgEng,
+	"cto.md":                     personaCTO + personaGuardrails,
+	"cmo.md":                     personaCMO + personaGuardrails,
+	"head-of-product.md":         personaHeadProduct + personaGuardrails,
+	"head-of-org-engineering.md": personaHeadOrgEng + personaGuardrails,
 }
+
+// personaGuardrails bounds what every agent may do to the CEO's GitHub account, as opposed
+// to what it may do inside a repo. The loop this product advertises is issues in, pull
+// requests out — creating an account-level resource is outside it and nothing downstream
+// watches the result.
+//
+// From a real run: a tick on a one-line "ship web" issue created a new private repo,
+// pushed a branch and opened a PR there. The work was good and the reasoning was sound
+// (the task's project had no repo mapped), but no worker watched that repo, no review mode
+// gated it, and nothing deployed it — it would have sat unnoticed indefinitely. Repo
+// creation is not something merge:review can hold back, so the constraint belongs here.
+const personaGuardrails = `
+Boundaries — these apply to every role:
+- NEVER create, delete, rename, or change the visibility of a GitHub repository, and never
+  create organizations, teams, or other account-level resources. Your work lands as pull
+  requests in repositories that already exist.
+- If a task appears to need a repository that does not exist, do NOT create one. Say so via
+  needs_human, name the repo you would want and why, and stop. The CEO creates it and adds
+  it to the company; the task then proceeds normally.
+- Never delete branches other than your own task branch after it merges, and never force-push
+  a branch you do not own.
+`
 
 const personaCTO = `---
 name: cto
