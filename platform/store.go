@@ -395,13 +395,16 @@ func (s *Store) installRepos(id int64) []string {
 	return repos
 }
 
-// UpsertInstallation records an installation (from an `installation` webhook), replacing its
-// repo set but PRESERVING any account_id a prior `mago link` set.
+// UpsertInstallation records an installation (from an `installation` webhook, or a resync),
+// replacing its repo set but PRESERVING any account_id a prior `mago link` set. An empty login
+// (a resync that doesn't know it) does NOT clobber a previously-recorded login.
 func (s *Store) UpsertInstallation(id int64, login string, repos []string) error {
 	_, err := s.db.Exec(`
 INSERT INTO installations (installation_id, github_login, repos_json, updated_at)
 VALUES (?, ?, ?, ?)
-ON CONFLICT(installation_id) DO UPDATE SET github_login=excluded.github_login, repos_json=excluded.repos_json, updated_at=excluded.updated_at`,
+ON CONFLICT(installation_id) DO UPDATE SET
+  github_login=CASE WHEN excluded.github_login='' THEN installations.github_login ELSE excluded.github_login END,
+  repos_json=excluded.repos_json, updated_at=excluded.updated_at`,
 		id, login, reposToJSON(repos), time.Now().Unix())
 	return err
 }

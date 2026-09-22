@@ -139,6 +139,48 @@ func appInstallationToken(repo string) (string, error) {
 	return tok.Token, nil
 }
 
+// listInstallationRepos fetches the CURRENT, COMPLETE list of repos an installation can access,
+// straight from GitHub, rather than relying on the incrementally-built repos_json cache. Needed
+// because an "All repositories" installation does not include a repository list in its
+// `installation` webhook payload (only "Only select repositories" installs do) -- so repos_json
+// only ever grows via installation_repositories add/remove deltas and never reflects the true
+// full set for an all-repos install. Paginated; installs with hundreds of repos are common here.
+func listInstallationRepos(installationID int64) ([]string, error) {
+	jwt, err := appJWT()
+	if err != nil {
+		return nil, err
+	}
+	var tok struct {
+		Token string `json:"token"`
+	}
+	if err := ghDo(jwt, "POST", fmt.Sprintf("/app/installations/%d/access_tokens", installationID), nil, &tok); err != nil {
+		return nil, fmt.Errorf("mint installation token: %w", err)
+	}
+	if tok.Token == "" {
+		return nil, fmt.Errorf("empty installation token")
+	}
+	var all []string
+	for page := 1; ; page++ {
+		var resp struct {
+			Repositories []struct {
+				FullName string `json:"full_name"`
+			} `json:"repositories"`
+		}
+		if err := ghDo(tok.Token, "GET", fmt.Sprintf("/installation/repositories?per_page=100&page=%d", page), nil, &resp); err != nil {
+			return nil, fmt.Errorf("list installation repos (page %d): %w", page, err)
+		}
+		for _, r := range resp.Repositories {
+			if r.FullName != "" {
+				all = append(all, r.FullName)
+			}
+		}
+		if len(resp.Repositories) < 100 {
+			break
+		}
+	}
+	return all, nil
+}
+
 // appCreateIssue files an issue on repo as the App and returns its html_url. Labels are best-effort
 // (ensured then applied; if labeling fails the issue is still created unlabeled — the important part).
 func appCreateIssue(repo, title, body string, labels []string) (string, error) {

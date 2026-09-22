@@ -415,6 +415,16 @@ func (s *server) handleInstallations(w http.ResponseWriter, r *http.Request) {
 			httpErr(w, 404, err.Error())
 			return
 		}
+		// Best-effort full resync from GitHub: an "All repositories" install never gets a repo
+		// list via the installation webhook (only "select repositories" does), so repos_json can
+		// be permanently stale for repos added/existing before any installation_repositories
+		// delta touched them. Claiming is a natural, low-frequency moment to true it up. Never
+		// fail the claim itself if this errors (rate limit, transient API issue, etc.).
+		if repos, err := listInstallationRepos(in.InstallationID); err == nil {
+			s.store.UpsertInstallation(in.InstallationID, "", repos)
+		} else {
+			log.Printf("resync installation %d repos: %v", in.InstallationID, err)
+		}
 		s.store.LogEvent("linked", uid, fmt.Sprintf("installation %d (%d repos)", in.InstallationID, len(s.store.EntitledRepos(uid))))
 	}
 	writeJSON(w, 200, map[string]any{
