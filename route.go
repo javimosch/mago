@@ -64,8 +64,10 @@ func reconcileOnce(comp *Company) (bool, error) {
 	prCap := comp.modePRCap()  // open-PR backpressure per repo (0 = off)
 	atCap := map[string]bool{} // memoize the gh count per repo within this reconcile
 	knownAgents := map[string]bool{}
+	reviewerAgents := map[string]bool{}
 	for _, a := range agents {
 		knownAgents[a.Name] = true
+		reviewerAgents[a.Name] = isReviewerRole(a)
 	}
 	for _, t := range tasks {
 		// mago:go on a still-in-clarification task — promote it (drop planning state) so it
@@ -78,6 +80,19 @@ func reconcileOnce(comp *Company) (bool, error) {
 		// Bounce it so the router can reassign it to a real agent and the worker will pick it up.
 		if t.Assignee != "" && !knownAgents[t.Assignee] {
 			fmt.Fprintf(os.Stderr, "[route] task #%s: assignee %q not in roster — bouncing for re-routing\n", t.ID, t.Assignee)
+			if err := comp.tasks.Bounce(t); err != nil {
+				fmt.Fprintf(os.Stderr, "[route] task #%s: bounce failed: %v\n", t.ID, err)
+				continue
+			}
+		}
+		// A task sitting on a review-only agent is bounced here, in the routing phase, so the
+		// loop below re-routes it in this same pass. runTick bounces it too, but that happens
+		// during the tick phase and leaves it unassigned mid-pass — where PickActiveTask's
+		// role-blind "first unrouted task" tier hands it to whichever agent ticks next. That is
+		// how a Go parser fix reached the planner: the reviewer bounced it and the next agent in
+		// the roster picked it up without routeTask ever being consulted.
+		if t.Assignee != "" && reviewerAgents[t.Assignee] {
+			fmt.Fprintf(os.Stderr, "[route] task #%s: assignee %q is review-only — bouncing for re-routing\n", t.ID, t.Assignee)
 			if err := comp.tasks.Bounce(t); err != nil {
 				fmt.Fprintf(os.Stderr, "[route] task #%s: bounce failed: %v\n", t.ID, err)
 				continue
