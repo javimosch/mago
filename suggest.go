@@ -6,9 +6,10 @@ import "strings"
 // unknown-command "did you mean" suggestion and to keep that list in one place.
 // Keep in sync with the dispatch switch in main().
 var knownCommands = []string{
-	"init", "task", "project", "run", "loop", "tick", "serve", "status",
+	"init", "task", "project", "run", "loop", "tick", "serve", "daemon", "status",
 	"answer", "digest", "skills", "mode", "feedback", "register", "login",
 	"subscribe", "billing", "account", "link", "worker", "version", "help",
+	"help-json", "guide",
 }
 
 // levenshtein returns the edit distance between a and b (insertions, deletions,
@@ -61,6 +62,15 @@ func suggestCommand(input string) string {
 	input = strings.ToLower(strings.TrimSpace(input))
 	if input == "" {
 		return ""
+	}
+	// An exact command always suggests itself. Without this, the prefix rule below
+	// returns whichever related command comes first in the list, so a real command
+	// that extends another one ("help-json" vs "help") gets "corrected" to the
+	// shorter one.
+	for _, cmd := range knownCommands {
+		if cmd == input {
+			return cmd
+		}
 	}
 	// Allow at most 2 edits, and never more than half the input length, so very
 	// short inputs require a near-exact match.

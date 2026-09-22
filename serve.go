@@ -31,9 +31,13 @@ func webhookSecret() string {
 func cmdServe(args []string) error {
 	dir, rest, err := parseCompanyDir(args)
 	if err != nil {
-		// cli-daemon-spec: if no company dir is configured, still start a minimal
-		// server with /_health and /_shutdown so the daemon lifecycle works.
-		return serveMinimal(args)
+		// The only error parseCompanyDir returns is a malformed `-C` (flag present, value
+		// missing) — a usage error, which must surface. "No company configured" is a
+		// different condition: parseCompanyDir defaults the dir, and the cli-daemon-spec
+		// minimal-server fallback for it lives at the loadCompany call below. Treating a
+		// usage error as "unconfigured" meant `mago serve -C` silently bound the default
+		// port instead of reporting the typo.
+		return err
 	}
 	// Lifecycle subcommands: `mago serve stop|status [-C dir]`.
 	if len(rest) > 0 {
