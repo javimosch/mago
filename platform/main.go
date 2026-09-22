@@ -53,6 +53,9 @@ func main() {
 		case "setup-github": // create the GitHub App via the manifest flow (one browser click)
 			fail(cmdSetupGithub(os.Args[2:]))
 			return
+		case "reset-password": // operator password recovery; local DB access only, no HTTP surface
+			fail(cmdResetPassword(os.Args[2:]))
+			return
 		case "serve": // cli-daemon-spec §1: foreground primitive, --host/--port, loopback default
 			fail(cmdServe(os.Args[2:]))
 			return
@@ -120,8 +123,8 @@ func runServer(host, port string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") }) // legacy, kept for existing deploy verify
 	mux.HandleFunc("/_health", handleHealth)                                                               // cli-daemon-spec §2
-	mux.HandleFunc("/_shutdown", handleShutdown(host, shutdownToken))                                       // cli-daemon-spec §3
-	mux.HandleFunc("/", s.handleLanding) // public landing (also catches unmatched -> 404)
+	mux.HandleFunc("/_shutdown", handleShutdown(host, shutdownToken))                                      // cli-daemon-spec §3
+	mux.HandleFunc("/", s.handleLanding)                                                                   // public landing (also catches unmatched -> 404)
 	mux.HandleFunc("/install.sh", s.handleInstall)
 	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
 	mux.HandleFunc("/operators", s.handleOperators)

@@ -274,6 +274,14 @@ func (s *Store) Create(email, hash string) (*User, error) {
 	return s.GetByID(id), nil
 }
 
+// SetPassword replaces a user's bcrypt hash (the operator reset path, see resetpw.go). Kept
+// separate from Update, which only writes the plan/billing columns and would silently drop a
+// password change.
+func (s *Store) SetPassword(id int64, hash string) error {
+	_, err := s.db.Exec("UPDATE users SET password_hash=? WHERE id=?", hash, id)
+	return err
+}
+
 // Update loads the user, applies fn to it, and writes the mutated row back transactionally.
 func (s *Store) Update(id int64, fn func(*User)) error {
 	tx, err := s.db.Begin()

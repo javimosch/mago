@@ -284,7 +284,13 @@ func cmdHelpJSON() error {
 			"usage":        map[string]any{"args": []string{}, "flags": []string{}, "auth": true},
 			"webhook":      map[string]any{"args": []string{}, "flags": []string{}, "auth": true},
 			"setup-github": map[string]any{"args": []string{}, "flags": []string{}, "auth": true},
-			"help-json":    map[string]any{"args": []string{}, "flags": []string{}, "auth": false},
+			"reset-password": map[string]any{
+				"args":  []string{},
+				"flags": []string{"--email <e>", "--password <pw>"},
+				"auth":  false,
+				"note":  "operator password recovery; requires local DB access (DB_PATH), not exposed over HTTP. Generates and prints a password when --password is omitted.",
+			},
+			"help-json": map[string]any{"args": []string{}, "flags": []string{}, "auth": false},
 		},
 		"exit_codes": map[string]string{
 			"0":   "success",
