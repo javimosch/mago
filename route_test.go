@@ -411,3 +411,83 @@ func TestReconcileOnce_DoneTaskSkipped(t *testing.T) {
 		t.Errorf("done task should stay done, got status %q", ts[0].Status)
 	}
 }
+
+// TestReconcileOnce_ReviewerBounceReroutesInsteadOfBeingGrabbed is the regression guard for the
+// routing gap seen on co-memgraph: a Go parser fix (#21) landed on the PRODUCT role.
+//
+// The sequence: a task sits on the review-only agent, the reviewer's tick bounces it mid-pass,
+// and the task is left unassigned while the remaining agents still have ticks to run. The next
+// agent's PickActiveTask matches its role-blind "first unrouted task" tier and claims it —
+// routeTask, which carefully excludes reviewers and steers code work to the implementer, is
+// never consulted. Roster order decides who implements, not role.
+//
+// Agent names are chosen so the roster order is reviewer -> planner -> implementer, putting the
+// planner directly after the bounce.
+func TestReconcileOnce_ReviewerBounceReroutesInsteadOfBeingGrabbed(t *testing.T) {
+	bindir := t.TempDir()
+	script := filepath.Join(bindir, "tau")
+	// routeTask asks the model for an owner; the implementer is the correct answer here.
+	body := "#!/bin/sh\nprintf '%s\\n' '{\"content\":\"cimpl\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tau: %v", err)
+	}
+	t.Setenv("PATH", bindir+":"+os.Getenv("PATH"))
+
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "arev", "---\nname: arev\ntitle: Head of Org Engineering\nreviews: true\n---\n")
+	writeAgentFile(t, c, "bprod", "---\nname: bprod\ntitle: Head of Product\nplans: true\n---\n")
+	writeAgentFile(t, c, "cimpl", "---\nname: cimpl\ntitle: CTO\nimplements: true\n---\n")
+
+	task, err := c.tasks.AddTask("Fix command detection for global flags", "A Go argument parser bug.")
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	// The task starts out sitting on the reviewer, as it did live.
+	if err := c.tasks.Assign(task, "arev"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	if _, err := reconcileOnce(c); err != nil {
+		t.Fatalf("reconcileOnce: %v", err)
+	}
+
+	ts, err := c.tasks.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(ts) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(ts))
+	}
+	if got := ts[0].Assignee; got != "cimpl" {
+		t.Errorf("code task should be re-routed to the implementer, got %q "+
+			"(the planner grabbing it is the bug this guards)", got)
+	}
+}
+
+// TestRunTick_ReviewerLeavesUnassignedTaskAlone: a reviewer must not bounce work nobody gave it.
+// PickActiveTask's unrouted tier matches an EMPTY assignee, so it offers the task to every agent;
+// bouncing there would unassign an already-unassigned task, spending a label edit and a comment
+// on every reviewer tick forever.
+func TestRunTick_ReviewerLeavesUnassignedTaskAlone(t *testing.T) {
+	c := newTestCompany(t)
+	c.tasks = &localBackend{c: c}
+	writeAgentFile(t, c, "rev", "---\nname: rev\ntitle: Head of Org Engineering\nreviews: true\n---\n")
+
+	if _, err := c.tasks.AddTask("Unrouted work", ""); err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+
+	res, err := runTick(c, "rev")
+	if err != nil {
+		t.Fatalf("runTick: %v", err)
+	}
+	if res.worked {
+		t.Error("reviewer must report idle on a task nobody assigned to it, not claim work")
+	}
+
+	ts, _ := c.tasks.ListTasks()
+	if ts[0].Status != "open" || ts[0].Assignee != "" {
+		t.Errorf("task must be left untouched, got status=%q assignee=%q", ts[0].Status, ts[0].Assignee)
+	}
+}
