@@ -129,8 +129,13 @@ authenticated; fail with a clear `100–109` integration error, not a crash, whe
   so whitespace-only values are treated as unset. Match existing handling in `mode.go`,
   `review.go`, `verify.go`, and `worker.go`.
 - Self-update must remove the per-PID temp file (`.new.<pid>`) on hash mismatch, probe
-  failure, and download failure so a failed update cannot leave stale binaries beside the
-  live executable.
+  failure, download failure, and swap failure so a failed update cannot leave stale binaries
+  beside the live executable.
+- Self-update swaps via `.bak` per cli-update-spec §3 step 7: move the current binary to
+  `<exe>.bak`, move the staged file in, restore `.bak` on failure — never rename straight
+  over the live binary, and never delete the `.bak` on success. A filesystem-permission
+  failure (EACCES) is terminal: report once with the path and running user, latch
+  `updateDenied`, and fall back to the passive nudge — never retry-loop it.
 
 ## Open issue / PR triage
 

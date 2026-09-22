@@ -98,7 +98,7 @@ When `MAGO_PROVIDER=claude`, mago authenticates via your local Claude Code subsc
 | `MAGO_PROACTIVE_MAX` | `2` | Max new issues filed per planning cycle. Set to `1` for a slower drip. |
 | `MAGO_PR_CAP` | `0` (no cap) | Backpressure: stop starting new work on a repo once it has this many open `mago/task-*` PRs. Overridable live via `mago mode` / `.mago/mode.json` without a restart. |
 | `MAGO_ISSUE_CAP` | `0` (falls back to a default of 3) | Backpressure: the planner stops proposing new backlog once the repo has this many open issues. Overridable live via `mago mode` / `.mago/mode.json` without a restart. |
-| `MAGO_UPDATE` | *(manual)* | Self-update policy for the worker binary. Set to `auto` to download and atomically swap the binary on a new platform release; any other value (or unset) leaves it manual. Overridable live via `mago mode update=auto|manual`. |
+| `MAGO_UPDATE` | *(manual)* | Self-update policy for the worker binary. `auto` downloads and atomically swaps the binary on a new platform release (old binary kept at `<exe>.bak`); manual only prints a nudge. On demand there's `mago update [--check] [--force]` — see `docs/SELF-UPDATE.md`. Overridable live via `mago mode update=auto|manual`. The binary must live in a directory writable by the worker user (`mago install` → `~/.local/bin`). |
 
 ---
 

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -162,6 +164,211 @@ func TestDownloadFile_TruncatedBody(t *testing.T) {
 	}
 	if _, err := os.Stat(dst); err == nil {
 		t.Errorf("downloadFile left partial temp file %q after copy error", dst)
+	}
+}
+
+// TestSwapIn verifies the spec §3 step-7 sequence: the current install moves to
+// <target>.bak, the staged file lands in place, and the .bak is NOT deleted on
+// success — it's the operator's manual rollback.
+func TestSwapIn(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "mago")
+	tmp := filepath.Join(dir, "mago.new.1")
+	if err := os.WriteFile(target, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmp, []byte("new-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	bak, err := swapIn(tmp, target)
+	if err != nil {
+		t.Fatalf("swapIn: %v", err)
+	}
+	if bak != target+".bak" {
+		t.Errorf("bak = %q, want %q", bak, target+".bak")
+	}
+	if b, _ := os.ReadFile(target); string(b) != "new-binary" {
+		t.Errorf("target = %q, want new-binary", b)
+	}
+	if b, _ := os.ReadFile(bak); string(b) != "old-binary" {
+		t.Errorf(".bak = %q, want old-binary (kept for rollback)", b)
+	}
+}
+
+// TestSwapIn_RestoresOnFailure verifies the rollback guarantee: when the staged file
+// can't move into place, the .bak is restored so the tool is never left broken.
+func TestSwapIn_RestoresOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "mago")
+	if err := os.WriteFile(target, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// A staged path that does not exist forces the second rename to fail.
+	_, err := swapIn(filepath.Join(dir, "missing-tmp"), target)
+	if err == nil {
+		t.Fatal("swapIn should fail when the staged file is missing")
+	}
+	if b, _ := os.ReadFile(target); string(b) != "old-binary" {
+		t.Errorf("target = %q after failed swap, want old-binary (restored)", b)
+	}
+	if _, err := os.Stat(target + ".bak"); err == nil {
+		t.Error(".bak should be moved back into place after a failed swap")
+	}
+}
+
+// TestSwapIn_BackupFailure verifies that when the backup rename itself cannot run,
+// the target is left untouched and the error is reported.
+func TestSwapIn_BackupFailure(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "no-such-dir", "mago") // parent missing: rename fails at once
+	tmp := filepath.Join(dir, "mago.new.1")
+	if err := os.WriteFile(tmp, []byte("new-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := swapIn(tmp, target); err == nil {
+		t.Fatal("swapIn should fail when the backup rename cannot run")
+	}
+}
+
+// TestUpdateLock verifies the cross-process guard: a held flock makes a second
+// update report busy, and releasing it lets the next attempt through.
+func TestUpdateLock(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "mago")
+
+	release, err := updateLock(target)
+	if err != nil {
+		t.Fatalf("first updateLock: %v", err)
+	}
+	if _, err := updateLock(target); !errors.Is(err, errUpdateBusy) {
+		t.Errorf("second updateLock err = %v, want errUpdateBusy", err)
+	}
+	release()
+	if _, err := updateLock(target); err != nil {
+		t.Errorf("updateLock after release: %v", err)
+	}
+}
+
+// TestIsPermErr verifies permission failures are recognized (wrapped or bare)
+// and other errors are not — this distinction is what stops the retry loop.
+func TestIsPermErr(t *testing.T) {
+	pe := &os.PathError{Op: "open", Path: "/usr/local/bin/mago.new.1", Err: syscall.EACCES}
+	if !isPermErr(pe) {
+		t.Error("EACCES PathError should be a permission error")
+	}
+	if !isPermErr(fmt.Errorf("swap: %w", pe)) {
+		t.Error("wrapped EACCES should be a permission error")
+	}
+	if isPermErr(errors.New("HTTP 500")) {
+		t.Error("generic error must not be a permission error")
+	}
+	if isPermErr(errUpdateBusy) {
+		t.Error("errUpdateBusy must not be a permission error")
+	}
+}
+
+// TestStageUpdate exercises the stage half of an update end-to-end: download,
+// sha256[:12] verify, full-sha256 verify when advertised, chmod, probe — against a
+// real temp target so no test-binary tricks are needed.
+func TestStageUpdate(t *testing.T) {
+	dir := t.TempDir()
+	payload := []byte("#!/bin/sh\necho 0.0.2-poc\n")
+	fixture := filepath.Join(dir, "payload")
+	if err := os.WriteFile(fixture, payload, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sha12, shaFull := fileSHA12(fixture), fileSHA256(fixture)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write(payload)
+	}))
+	defer ts.Close()
+
+	target := filepath.Join(dir, "mago")
+
+	// Happy path: hash + full-sha match + probe pass -> staged temp returned.
+	tmp, err := stageUpdate(target, ts.URL, sha12, shaFull)
+	if err != nil {
+		t.Fatalf("stageUpdate: %v", err)
+	}
+	defer os.Remove(tmp)
+	if fi, err := os.Stat(tmp); err != nil || fi.Mode()&0o111 == 0 {
+		t.Fatalf("staged file missing or not executable: %v", err)
+	}
+
+	// A wrong full sha256 is rejected even when the 12-char version matches.
+	if _, err := stageUpdate(target, ts.URL, sha12, strings.Repeat("0", 64)); err == nil {
+		t.Error("full-sha256 mismatch should fail")
+	}
+	if _, err := os.Stat(fmt.Sprintf("%s.new.%d", target, os.Getpid())); err == nil {
+		t.Error("stageUpdate left a temp file behind after rejection")
+	}
+}
+
+// TestMaybeSelfUpdate_PermDeniedIsTerminal verifies the fix for the 163-failures-per-day
+// loop: once a self-update hits EACCES, the worker reports it once, latches the denial,
+// and only nudges thereafter — it never retries an operation that can't succeed until
+// the filesystem changes.
+func TestMaybeSelfUpdate_PermDeniedIsTerminal(t *testing.T) {
+	lastNudgeVer = ""
+	updateDenied = false
+	updating = 0
+	t.Setenv("MAGO_WORKER_ID", "test-worker")
+	t.Setenv("MAGO_UPDATE", "auto")
+
+	calls := 0
+	orig := selfUpdateFn
+	selfUpdateFn = func(string) (string, error) {
+		calls++
+		return "", &os.PathError{Op: "open", Path: "/usr/local/bin/mago.new.1", Err: syscall.EACCES}
+	}
+	defer func() { selfUpdateFn = orig; updateDenied = false; lastNudgeVer = "" }()
+
+	w := &eventWorker{comp: &Company{Dir: t.TempDir()}}
+	w.maybeSelfUpdate("new-ver")
+	w.maybeSelfUpdate("new-ver") // denied: must NOT attempt again
+	w.maybeSelfUpdate("new-ver")
+
+	if calls != 1 {
+		t.Errorf("selfUpdateFn called %d times, want 1 — perm-denied must be terminal", calls)
+	}
+	if !updateDenied {
+		t.Error("updateDenied should latch after a permission failure")
+	}
+	if lastNudgeVer != "new-ver" {
+		t.Errorf("lastNudgeVer = %q, want new-ver (fell back to the passive nudge)", lastNudgeVer)
+	}
+}
+
+// TestMaybeSelfUpdate_TransientErrorRetries verifies that a non-permission failure
+// (e.g. the platform mid-deploy) is NOT terminal: the next ping tries again.
+func TestMaybeSelfUpdate_TransientErrorRetries(t *testing.T) {
+	lastNudgeVer = ""
+	updateDenied = false
+	updating = 0
+	t.Setenv("MAGO_WORKER_ID", "test-worker")
+	t.Setenv("MAGO_UPDATE", "auto")
+
+	calls := 0
+	orig := selfUpdateFn
+	selfUpdateFn = func(string) (string, error) {
+		calls++
+		return "", errors.New("HTTP 502")
+	}
+	defer func() { selfUpdateFn = orig; updateDenied = false; lastNudgeVer = "" }()
+
+	w := &eventWorker{comp: &Company{Dir: t.TempDir()}}
+	w.maybeSelfUpdate("new-ver")
+	w.maybeSelfUpdate("new-ver")
+
+	if calls != 2 {
+		t.Errorf("selfUpdateFn called %d times, want 2 — transient failures retry", calls)
+	}
+	if updateDenied {
+		t.Error("a non-permission error must not latch updateDenied")
 	}
 }
 

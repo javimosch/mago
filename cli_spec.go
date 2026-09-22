@@ -54,9 +54,13 @@ func cmdHelpJSON(args []string) error {
 			{"name": "mode", "description": "Switch a LOCAL worker's mode live"},
 			{"name": "feedback", "description": "Report friction/bugs/requests to the mago team"},
 			{"name": "worker", "description": "Worker management (doctor, mode)"},
+			{"name": "update", "description": "Self-update this binary to the platform's latest release (--check, --force)"},
+			{"name": "install", "description": "Copy this binary into <prefix>/mago (default ~/.local/bin)"},
+			{"name": "uninstall", "description": "Remove the installed binary (no-op if absent)"},
 		},
 		"exit_codes": map[string]string{
 			"0":   "success",
+			"5":   "update --check: an update is available (not an error)",
 			"80":  "input_error",
 			"85":  "invalid_argument",
 			"90":  "resource_not_found",
@@ -123,6 +127,9 @@ func cmdGuide(args []string) error {
 			"mode":      "Switch agent mode",
 			"feedback":  "Report friction/bugs",
 			"worker":    "Worker management",
+			"update":    "Self-update this binary (--check exits 5 when an update is available)",
+			"install":   "Copy this binary into <prefix>/mago (default ~/.local/bin)",
+			"uninstall": "Remove the installed binary",
 		},
 		"examples": []string{
 			"mago init mycompany  # scaffold",
@@ -179,6 +186,9 @@ result, write back to STATE.md and task files.
   serve        Event-driven worker (webhooks)
   status       Show state + pending HITL
   digest       What your company did
+  update       Self-update this binary (--check, --force)
+  install      Copy this binary into <prefix>/mago (default ~/.local/bin)
+  uninstall    Remove the installed binary
 
 ## Merge modes (mago mode merge=<value>)
 
