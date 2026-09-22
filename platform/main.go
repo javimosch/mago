@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,9 +53,18 @@ func main() {
 		case "setup-github": // create the GitHub App via the manifest flow (one browser click)
 			fail(cmdSetupGithub(os.Args[2:]))
 			return
+		case "serve": // cli-daemon-spec §1: foreground primitive, --host/--port, loopback default
+			fail(cmdServe(os.Args[2:]))
+			return
+		case "daemon": // cli-daemon-spec §4: idempotent start|stop|status over /_health + /_shutdown
+			fail(cmdDaemon(os.Args[2:]))
+			return
+		case "help-json", "--help-json": // cli-output-spec §4: machine-readable command catalog
+			fail(cmdHelpJSON())
+			return
 		}
 	}
-	runServer(env("PORT", "9100")) // no-arg: run in foreground (dev convenience)
+	runServer(env("MAGO_PLATFORM_HOST", "127.0.0.1"), env("PORT", "9100")) // no-arg: run in foreground (dev convenience)
 }
 
 func fail(err error) {
@@ -76,8 +86,11 @@ func handleSubscribed(w http.ResponseWriter, r *http.Request) {
 		`<h2>mago</h2><p style="font-size:1.1rem">%s</p></body>`, msg)
 }
 
-// runServer boots the store, wires routes, and serves until killed. Blocks.
-func runServer(port string) {
+// runServer boots the store, wires routes, and serves until killed. Blocks. host defaults to
+// loopback everywhere it's called from (cli-daemon-spec §6) -- Traefik already reaches this
+// process via 127.0.0.1 in the dk1 deploy, so this closes the all-interfaces exposure with no
+// behavior change for the existing deployment.
+func runServer(host, port string) {
 	dbPath := expand(env("DB_PATH", "~/.mago-platform/platform.db"))
 	st, err := openStore(dbPath)
 	if err != nil {
@@ -99,8 +112,15 @@ func runServer(port string) {
 	// operator opts in (webhook-provisioned path). Off by default for local/single-tenant dev.
 	s.enforceEntitlement = s.ghAppID != "" || strings.TrimSpace(os.Getenv("GITHUB_ENFORCE_ENTITLEMENT")) == "1"
 
+	shutdownToken, err := writeShutdownToken()
+	if err != nil {
+		log.Fatalf("shutdown token: %v", err)
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") })
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") }) // legacy, kept for existing deploy verify
+	mux.HandleFunc("/_health", handleHealth)                                                               // cli-daemon-spec §2
+	mux.HandleFunc("/_shutdown", handleShutdown(host, shutdownToken))                                       // cli-daemon-spec §3
 	mux.HandleFunc("/", s.handleLanding) // public landing (also catches unmatched -> 404)
 	mux.HandleFunc("/install.sh", s.handleInstall)
 	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
@@ -120,8 +140,10 @@ func runServer(port string) {
 	mux.HandleFunc("/ws/worker", s.handleWorkerStream)         // worker dial-out (license-gated)
 	mux.HandleFunc("/webhooks/github/", s.handleGithubWebhook) // GitHub App ingress -> relay
 
-	log.Printf("mago-platform :%s  store=%s  stripe=%v price=%s gh-relay=%v gh-app=%v entitle=%v", port, dbPath, s.stripeKey != "", s.priceID, s.ghWebhookSecret != "", s.ghAppID != "", s.enforceEntitlement)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	addr := net.JoinHostPort(host, port)
+	log.Printf("mago-platform %s  store=%s  stripe=%v price=%s gh-relay=%v gh-app=%v entitle=%v", addr, dbPath, s.stripeKey != "", s.priceID, s.ghWebhookSecret != "", s.ghAppID != "", s.enforceEntitlement)
+	fmt.Fprintf(os.Stderr, "[serve] listening on http://%s\n", addr) // cli-daemon-spec §1: flushed before the accept loop
+	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
 func env(k, def string) string {

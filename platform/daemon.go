@@ -43,7 +43,7 @@ func parseStartFlags(args []string) (port string, daemonize bool) {
 func cmdStart(args []string) error {
 	port, daemonize := parseStartFlags(args)
 	if !daemonize {
-		runServer(port) // foreground; blocks (hotify mode)
+		runServer(env("MAGO_PLATFORM_HOST", "127.0.0.1"), port) // foreground; blocks (hotify mode)
 		return nil
 	}
 	if pid, alive := readPid(); alive {
