@@ -15,6 +15,7 @@ import (
 func TestCliVersion_MissingDirAndBinary(t *testing.T) {
 	// Empty (and whitespace-only) MAGO_CLI_DIR must short-circuit to empty.
 	t.Setenv("MAGO_CLI_DIR", "   ")
+	t.Setenv("MAGO_CLI_BINARY", "") // keep the legacy fallback out of this assertion
 	if got := cliVersion("linux-amd64"); got != "" {
 		t.Errorf("cliVersion with whitespace-only MAGO_CLI_DIR = %q, want empty", got)
 	}

@@ -36,6 +36,11 @@ mago answer <task-id> "<text>" [-C d]           answer a needs_human task
 mago worker doctor                              validate gh auth + the configured LLM harness (exit 101 on failure)
 mago skills [<name>]                            these embedded operator skills (version-matched to the binary)
 mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/bugs/requests to the mago team
+mago update [--check] [--force]                 self-update this binary (check→download→verify→
+                                                smoke→swap; old binary kept at <exe>.bak)
+mago install [--prefix <dir>]                   copy this binary into <dir>/mago (default
+                                                ~/.local/bin — the no-sudo spot self-update needs)
+mago uninstall [--prefix <dir>]                 remove <prefix>/mago (no-op if absent)
 ```
 
 ## Environment

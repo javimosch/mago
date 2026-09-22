@@ -11,7 +11,8 @@ Running at **https://mago.intrane.fr** on the **dk1** VM (`vpspoly1`) behind Tra
 (reuses AutoMaintainer's `sk_live_`; dedicated mago product/price/webhook). Signup grants a **48h
 no-card trial** (license issued immediately); `mago subscribe` converts to the €20/mo plan and
 `mago billing` opens the Stripe customer portal. Public surface: landing `/`, installer
-`/install.sh`, multi-arch binary `/dl/mago`, human guide `/operators`, agent guide `/llms.txt`.
+`/install.sh`, multi-arch binary `/dl/mago`, version endpoint `/version` (cli-update-spec §2),
+human guide `/operators`, agent guide `/llms.txt`.
 Operator metrics: `mago-platform activity` (see [metrics.md](metrics.md)).
 
 ## Endpoints (driven by the CLI, no UI)
@@ -24,6 +25,8 @@ Operator metrics: `mago-platform activity` (see [metrics.md](metrics.md)).
 | `POST /api/portal` | Stripe customer-portal link (manage/cancel) — `mago billing` |
 | `GET/POST /api/installations` | list / claim GitHub App installs (`mago link`) |
 | `POST /stripe/webhook` | `checkout.session.completed`→`plan=mago`+issue license; `subscription.deleted`→`free` |
+| `GET /dl/mago?os&arch` | prebuilt CLI binary download |
+| `GET /version?os&arch` | cli-update-spec §2: content-hash version + download path + full sha256 of the published binary (open) |
 | `GET /ws/worker?token&repos` | worker dial-out: NDJSON stream of relayed GitHub events (license-gated) |
 | `POST /webhooks/github/<install>` | GitHub App ingress → verify sig → relay to the worker |
 

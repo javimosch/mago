@@ -76,6 +76,12 @@ func main() {
 		err = cmdLink(os.Args[2:])
 	case "worker":
 		err = cmdWorker(os.Args[2:])
+	case "update":
+		err = cmdUpdate(os.Args[2:])
+	case "install":
+		err = cmdInstall(os.Args[2:])
+	case "uninstall":
+		err = cmdUninstall(os.Args[2:])
 	case "version", "-v", "--version":
 		jsonFlag := false
 		for _, a := range os.Args[2:] {
@@ -103,7 +109,11 @@ func main() {
 		typedError(85, "invalid_argument", fmt.Sprintf("unknown command %q", cmd), false, sugg)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		// An empty-message cliErr is a silent semantic exit — e.g. `update --check` exits 5 to
+		// signal "update available", which the spec explicitly says is not an error.
+		if msg := err.Error(); msg != "" {
+			fmt.Fprintf(os.Stderr, "error: %v\n", msg)
+		}
 		os.Exit(exitCodeFor(err))
 	}
 }
@@ -155,6 +165,12 @@ Usage:
   mago worker doctor               validate gh auth and the configured LLM harness (tau or claude per MAGO_PROVIDER; exits 101 on failure)
   mago skills [<name>]             embedded operator guide (operating, cli, fleet) — current with this binary
   mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/bugs/requests to the mago team
+
+  Binary (self-update, cli-update-spec):
+  mago update [--check] [--force]   self-update to the platform's latest release
+                                    (--check exits 5 when an update is available)
+  mago install [--prefix <dir>]     copy this binary into <dir>/mago (default ~/.local/bin)
+  mago uninstall [--prefix <dir>]   remove the installed binary (no-op if absent)
   mago version | help
 
 Flags:

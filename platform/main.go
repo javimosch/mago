@@ -127,6 +127,7 @@ func runServer(host, port string) {
 	mux.HandleFunc("/", s.handleLanding)                                                                   // public landing (also catches unmatched -> 404)
 	mux.HandleFunc("/install.sh", s.handleInstall)
 	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
+	mux.HandleFunc("/version", s.handleVersion)  // cli-update-spec §2: what /dl/mago currently serves
 	mux.HandleFunc("/operators", s.handleOperators)
 	mux.HandleFunc("/llms.txt", s.handleLLMs)       // agent-readable onboarding (the operator "skill")
 	mux.HandleFunc("/subscribed", handleSubscribed) // Stripe success/cancel landing (CLI onboarding)

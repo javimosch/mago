@@ -554,6 +554,7 @@ func daemonStatus(host, port string) {
 	fmt.Println(`{"ok":true,"daemon":"stopped","host":"` + host + `","port":` + port + `}`)
 	os.Exit(3)
 }
+
 // serveMinimal starts a minimal HTTP server with just /_health and /_shutdown,
 // used when no company directory is configured. This lets the cli-daemon-spec
 // lifecycle (daemon start/stop/status) work without a full mago setup.

@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -259,14 +258,14 @@ func platOf(osName, arch string) string {
 	return osName + "-" + arch
 }
 
-// cliVersion returns sha256[:12] of the published CLI binary for plat (mago-<plat> in MAGO_CLI_DIR),
-// or "" if it can't be read. Cached per file mtime so it isn't re-hashed on every ping frame.
-func cliVersion(plat string) string {
-	dir := strings.TrimSpace(os.Getenv("MAGO_CLI_DIR"))
-	if dir == "" {
+// cliSHA256 returns the full sha256 hex of the published CLI binary for plat (resolved by
+// cliBinaryPath, so the legacy MAGO_CLI_BINARY fallback advertises a version too), or "" if it
+// can't be read. Cached per path+mtime so it isn't re-hashed on every ping frame.
+func cliSHA256(plat string) string {
+	path := cliBinaryPath(plat)
+	if path == "" {
 		return ""
 	}
-	path := filepath.Join(dir, "mago-"+plat)
 	fi, err := os.Stat(path)
 	if err != nil {
 		return ""
@@ -274,8 +273,8 @@ func cliVersion(plat string) string {
 	mt := fi.ModTime().UnixNano()
 	cliVerMu.Lock()
 	defer cliVerMu.Unlock()
-	if c, ok := cliVerCache[plat]; ok && c.mtime == mt {
-		return c.ver
+	if c, ok := cliVerCache[plat]; ok && c.path == path && c.mtime == mt {
+		return c.sum
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -286,14 +285,23 @@ func cliVersion(plat string) string {
 	if _, err := io.Copy(h, f); err != nil {
 		return ""
 	}
-	ver := hex.EncodeToString(h.Sum(nil))[:12]
-	cliVerCache[plat] = cliVerEntry{mtime: mt, ver: ver}
-	return ver
+	sum := hex.EncodeToString(h.Sum(nil))
+	cliVerCache[plat] = cliVerEntry{path: path, mtime: mt, sum: sum}
+	return sum
+}
+
+// cliVersion is the content-hash version (sha256[:12]) advertised to workers on the relay.
+func cliVersion(plat string) string {
+	if sum := cliSHA256(plat); len(sum) >= 12 {
+		return sum[:12]
+	}
+	return ""
 }
 
 type cliVerEntry struct {
+	path  string
 	mtime int64
-	ver   string
+	sum   string
 }
 
 var (
