@@ -35,6 +35,9 @@ mago digest [-C d]                             # "what your company did": backlo
 mago answer <task-id> "<text>" [-C d]          # answer a needs_human task
 mago skills [<name>]                           # embedded operator guides, version-matched to the binary
 mago feedback "<msg>" [--type bug|friction|feature|question]   # report friction/bugs to the mago team
+mago update [--check] [--force]                # self-update to the platform's release (.bak kept; --check exits 5)
+mago install [--prefix <dir>]                  # copy binary to <dir>/mago (default ~/.local/bin — worker-writable)
+mago uninstall [--prefix <dir>]                # remove <dir>/mago (no-op if absent)
 ```
 
 Autonomy (let a company run unattended): `MAGO_PROACTIVE=<secs>` ticks the planner to file

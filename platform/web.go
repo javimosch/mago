@@ -34,6 +34,19 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, installScript, s.appURL)
 }
 
+// cliBinaryPath resolves the published CLI binary for plat (os-arch): mago-<plat> inside
+// MAGO_CLI_DIR, or — linux-amd64 only — the legacy single-file MAGO_CLI_BINARY fallback.
+// "" means nothing is published for that platform.
+func cliBinaryPath(plat string) string {
+	if dir := strings.TrimSpace(os.Getenv("MAGO_CLI_DIR")); dir != "" {
+		return filepath.Join(dir, "mago-"+plat) // plat is allowlisted — no traversal
+	}
+	if plat == "linux-amd64" {
+		return strings.TrimSpace(os.Getenv("MAGO_CLI_BINARY"))
+	}
+	return ""
+}
+
 // handleDownload serves the prebuilt mago client binary for the requested os/arch
 // (?os=darwin&arch=arm64; defaults to linux/amd64). Binaries live in MAGO_CLI_DIR as
 // mago-<os>-<arch>; MAGO_CLI_BINARY is the legacy single-file fallback for linux/amd64.
@@ -51,12 +64,7 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "unsupported platform "+plat+" (have: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64)")
 		return
 	}
-	bin := ""
-	if dir := strings.TrimSpace(os.Getenv("MAGO_CLI_DIR")); dir != "" {
-		bin = filepath.Join(dir, "mago-"+plat) // plat is allowlisted above — no traversal
-	} else if plat == "linux-amd64" {
-		bin = strings.TrimSpace(os.Getenv("MAGO_CLI_BINARY")) // legacy single-binary fallback
-	}
+	bin := cliBinaryPath(plat)
 	if bin == "" {
 		httpErr(w, 503, "cli binary not published for "+plat)
 		return
@@ -70,6 +78,29 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="mago"`)
 	io.Copy(w, f)
+}
+
+// handleVersion serves cli-update-spec §2: GET /version?os=&arch= returns the content-hash
+// version + download path + full sha256 of the CLI binary published for that platform.
+// Open (unauthenticated) — a `mago update` client needs it before it has any credentials.
+func (s *server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	plat := platOf(r.URL.Query().Get("os"), r.URL.Query().Get("arch"))
+	if !supportedPlatforms[plat] {
+		httpErr(w, 404, "unsupported platform "+plat+" (have: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64)")
+		return
+	}
+	sum := cliSHA256(plat)
+	if sum == "" {
+		httpErr(w, 404, "no cli binary published for "+plat)
+		return
+	}
+	osName, arch, _ := strings.Cut(plat, "-")
+	writeJSON(w, 200, map[string]any{
+		"ok":       true,
+		"version":  sum[:12],
+		"download": "/dl/mago?os=" + osName + "&arch=" + arch,
+		"sha256":   sum,
+	})
 }
 
 func (s *server) handleOperators(w http.ResponseWriter, r *http.Request) {

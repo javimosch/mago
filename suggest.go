@@ -8,8 +8,8 @@ import "strings"
 var knownCommands = []string{
 	"init", "task", "project", "run", "loop", "tick", "serve", "daemon", "status",
 	"answer", "digest", "skills", "mode", "feedback", "register", "login",
-	"subscribe", "billing", "account", "link", "worker", "version", "help",
-	"help-json", "guide",
+	"subscribe", "billing", "account", "link", "worker", "update", "install",
+	"uninstall", "version", "help", "help-json", "guide",
 }
 
 // levenshtein returns the edit distance between a and b (insertions, deletions,
@@ -80,6 +80,13 @@ func suggestCommand(input string) string {
 	}
 	if maxDist < 1 {
 		maxDist = 1
+	}
+	// An exact match always wins — otherwise a shorter command that is a prefix
+	// of the input would shadow it in the loop below (e.g. "help-json" -> "help").
+	for _, cmd := range knownCommands {
+		if cmd == input {
+			return cmd
+		}
 	}
 	best, bestDist := "", maxDist+1
 	for _, cmd := range knownCommands {

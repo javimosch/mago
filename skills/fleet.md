@@ -60,12 +60,22 @@ set a mode, the file wins.
 
 ## Worker self-update (no reship, no ssh)
 A relay worker learns the latest CLI version (a content hash) from the platform on its existing
-connection and can update itself:
-- `update=manual` (**default**) — the worker logs a one-time nudge when a newer binary is published;
-  you update it yourself (`mago serve stop` → swap binary → relaunch).
-- `update=auto` — on a new release the worker downloads `/dl/mago` for its os/arch, verifies the hash,
-  atomically swaps its own binary, and re-execs in place (same PID — a `--daemon` supervisor neither
-  double-spawns nor needs restarting). Flip it live: `mago worker mode update=auto --all`.
+connection and can update itself (cli-update-spec — see `docs/SELF-UPDATE.md`):
+- `update=manual` (**default**) — the worker logs a one-time nudge when a newer binary is
+  published; you update it on demand with `mago update` (or `--check` first: exits 5 when an
+  update is available). The nudge never updates anything by itself.
+- `update=auto` — on a new release the worker downloads `/dl/mago` for its os/arch, verifies the
+  hash, smoke-tests the download, atomically swaps its own binary (the old one is kept at
+  `<exe>.bak` — roll back by hand with `mv mago.bak mago`), and re-execs in place (same PID — a
+  `--daemon` supervisor neither double-spawns nor needs restarting). Flip it live:
+  `mago worker mode update=auto --all`.
+
+**Install location matters:** the swap stages a temp file beside the binary, so the binary's
+directory must be writable by the user the worker runs as. Install to the worker user's own
+`~/.local/bin` (`mago install` as that user) — NOT a root-owned shared prefix like
+`/usr/local/bin`, where self-update can never write. If a worker is already under an unwritable
+prefix, `update=auto` reports the permission error once (path + user) and falls back to nudging;
+relocate it with `mago install && ~/.local/bin/mago update` and restart from the new path.
 
 So shipping a release to the whole fleet is: rebuild the matrix → scp the new `mago-<os>-<arch>` into
 the platform's `cli/` dir → auto workers pick it up within ~25s; manual workers nudge until updated.

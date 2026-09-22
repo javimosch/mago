@@ -129,6 +129,29 @@ Claim a GitHub App installation (entitles your repos).
 Mode tokens: reactive | proactive[=secs] | review | verified | comms=on|off
              merge=review|verified|on | pr-cap=N | issue-cap=N | update=auto|manual
 `,
+	"update": `mago update [--check] [--force]
+
+Self-update this binary to the release the platform currently serves
+(cli-update-spec §3): fetch /version -> download -> verify hash -> smoke-test ->
+atomic swap. The previous binary is kept at <exe>.bak for manual rollback.
+
+  --check   report only; exit 5 when an update is available, 0 when current
+  --force   re-download and swap even when versions match (repair a corrupt binary)
+
+Exit 90 means the binary's directory isn't writable by this user — install to a
+writable prefix instead: mago install --prefix ~/.local/bin
+`,
+	"install": `mago install [--prefix DIR]
+
+Copy the running binary to <prefix>/mago (default ~/.local/bin) and mark it
+executable (cli-update-spec §6). Idempotent — installing twice succeeds. Never
+uses sudo: an unwritable --prefix fails with a typed permission error (exit 90).
+`,
+	"uninstall": `mago uninstall [--prefix DIR]
+
+Remove <prefix>/mago (default ~/.local/bin). A no-op success when the file is
+absent. Touches nothing but that one file — config and data stay put.
+`,
 	"feedback": `mago feedback "<message>" [--type bug|friction|feature|question] [--context "<what you were doing>"]
 
 Report friction, bugs, or ideas from the CLI. The default type is "feedback".
