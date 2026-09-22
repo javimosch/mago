@@ -96,13 +96,14 @@ func cmdGuide(args []string) error {
 			"mago digest [-C dir]         # what your company did",
 		},
 		"concepts": map[string]string{
-			"company":   "A directory with .mago/ config, STATE.md (world state), tasks/ (task files), workspace/ (agent working dir), and .mago/skills/ (lessons).",
-			"tick":      "One reconciliation cycle: route open tasks to best-fit agents, run each agent (brief -> tau -> reflect -> write back).",
-			"tau":       "The stateless LLM call per tick. Provider/model via MAGO_PROVIDER/MAGO_MODEL. Returns a structured response that gets written back.",
-			"hitl":      "Human-in-the-loop: tasks that need human input are parked; `mago answer <id> \"<text>\"` resumes them.",
-			"mode":      "Agent autonomy level: reactive, proactive, verified, comms. Switch live with `mago mode`.",
-			"github":    "GitHub-backed mode: MAGO_GH_REPO=owner/repo uses issues as tasks, labels as status. Webhook-driven via `mago serve`.",
-			"serve":     "Event-driven worker: GitHub webhooks wake a reconcile instead of polling. --daemon detaches a supervisor.",
+			"company": "A directory with .mago/ config, STATE.md (world state), tasks/ (task files), workspace/ (agent working dir), and .mago/skills/ (lessons).",
+			"tick":    "One reconciliation cycle: route open tasks to best-fit agents, run each agent (brief -> tau -> reflect -> write back).",
+			"tau":     "The stateless LLM call per tick. Provider/model via MAGO_PROVIDER/MAGO_MODEL. Returns a structured response that gets written back.",
+			"hitl":    "Human-in-the-loop: tasks that need human input are parked; `mago answer <id> \"<text>\"` resumes them.",
+			"mode":    "Agent autonomy level: reactive, proactive, verified, comms. Switch live with `mago mode`.",
+			"merge":   "Per-PR merge policy (mago mode merge=<value>): review (mago approves/comments, a HUMAN always merges -- default, safest), verified (auto-merges ONLY when the LLM approves AND a real build/test check passes -- set MAGO_VERIFY_CMD or rely on auto-detect for known stacks), on (auto-merges on LLM approval alone, no build/test gate -- highest autonomy, least safety net). verified is a STRICTER superset of on, not a step below it: it does everything `on` does plus requires a passing check first.",
+			"github":  "GitHub-backed mode: MAGO_GH_REPO=owner/repo uses issues as tasks, labels as status. Webhook-driven via `mago serve`.",
+			"serve":   "Event-driven worker: GitHub webhooks wake a reconcile instead of polling. --daemon detaches a supervisor.",
 		},
 		"commands": map[string]string{
 			"help-json": "Print the machine-readable command catalog",
@@ -136,6 +137,9 @@ func cmdGuide(args []string) error {
 			"Company dir defaults to cwd; use -C <dir> or MAGO_COMPANY to override",
 			"GitHub-backed mode needs MAGO_GH_REPO + gh auth; local mode needs nothing",
 			"serve --daemon detaches a supervisor with pidfile+log; use `mago serve stop` to stop",
+			"merge=on is LESS safe than merge=verified, not more autonomous in a good way -- on skips the build/test check entirely and merges on the LLM's opinion alone. verified still auto-merges (same autonomy) but only after a real build/test passes -- prefer verified over on once you have a working MAGO_VERIFY_CMD.",
+			"verify.go clones the PR branch into a SEPARATE dir (.mago/verify/<repo>), never the live workspace/ -- a build failure there reflects the PR/base branch, not whatever devin/tau is mid-editing in workspace/ right now.",
+			"A PR review (and its verification) only fires on webhook actions opened/reopened/ready_for_review -- NOT on synchronize (a new commit) and NOT retroactively for already-open PRs when you change merge/verify config. Close+reopen a PR to force a fresh pass.",
 			"This is a POC (0.0.2) — not production-ready",
 		},
 	}
@@ -176,10 +180,22 @@ result, write back to STATE.md and task files.
   status       Show state + pending HITL
   digest       What your company did
 
+## Merge modes (mago mode merge=<value>)
+
+- review    mago approves/comments, a HUMAN always merges (default, safest)
+- verified  auto-merges ONLY when the LLM approves AND a real build/test
+            check passes (set MAGO_VERIFY_CMD, or auto-detect for known stacks)
+- on        auto-merges on LLM approval alone, no build/test gate
+
+verified is a STRICTER superset of on, not a step below it.
+
 ## Gotchas
 
 - Agents are stateless per tick — all memory is in files
 - Company dir defaults to cwd; use -C <dir> or MAGO_COMPANY
+- merge=on is LESS safe than merge=verified, not more autonomous in a good way
+- A PR review only fires on opened/reopened/ready_for_review — never
+  retroactively when you change merge/verify config; close+reopen to force one
 - This is a POC (0.0.2) — not production-ready
 `)
 }
