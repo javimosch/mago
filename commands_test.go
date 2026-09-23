@@ -606,3 +606,39 @@ func TestCmdStatus_ParseCompanyDirError(t *testing.T) {
 		t.Errorf("error = %q, want '-C needs a directory value'", err.Error())
 	}
 }
+
+// TestStarterTeamCarriesGuardrails: every seeded persona must carry the account-level
+// boundaries, not just the one role someone remembered to edit. Repo creation is not
+// something merge:review can gate — an agent did create a repo unprompted on a one-line
+// task — so the constraint has to be in the persona itself, for all four roles.
+func TestStarterTeamCarriesGuardrails(t *testing.T) {
+	if len(starterTeam) == 0 {
+		t.Fatal("starterTeam is empty")
+	}
+	for file, body := range starterTeam {
+		if !strings.Contains(body, "NEVER create, delete, rename") {
+			t.Errorf("%s is missing the repository guardrail", file)
+		}
+		if !strings.Contains(body, "needs_human") {
+			t.Errorf("%s states the prohibition without the escape hatch (needs_human)", file)
+		}
+	}
+}
+
+// TestInitWritesGuardrails checks the rule survives the scaffold, not just the constant —
+// personas are assembled at write time, so a template change could drop it.
+func TestInitWritesGuardrails(t *testing.T) {
+	dir := t.TempDir()
+	if err := cmdInit([]string{dir}); err != nil {
+		t.Fatalf("cmdInit: %v", err)
+	}
+	for file := range starterTeam {
+		b, err := os.ReadFile(filepath.Join(dir, ".mago", "agents", file))
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		if !strings.Contains(string(b), "NEVER create, delete, rename") {
+			t.Errorf("scaffolded %s lost the repository guardrail", file)
+		}
+	}
+}
