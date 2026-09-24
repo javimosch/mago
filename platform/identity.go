@@ -63,6 +63,13 @@ func ssoEmailPlaceholder(provider, sub string) string {
 	return fmt.Sprintf("%s-%s@sso.invalid", provider, hex.EncodeToString(h[:])[:12])
 }
 
+// isPlaceholderEmail reports whether an address is one we invented because the IdP gave us
+// none. These exist only to satisfy the UNIQUE column; they are never deliverable and should
+// be replaced the moment a real address turns up.
+func isPlaceholderEmail(email string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(email)), "@sso.invalid")
+}
+
 // genClaimCode returns a short, human-transcribable single-use code: MG-XXXX-XXXX over an
 // alphabet with no 0/O/1/I, because this is read off a web page and typed into a terminal.
 // 32 bits of entropy is thin for a password and ample for a credential that lives 15 minutes,

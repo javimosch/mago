@@ -193,6 +193,22 @@ func (s *server) handlePortierCallback(w http.ResponseWriter, r *http.Request) {
 func (s *server) upsertSSOUser(id *portierIdentity) (*User, string, error) {
 	if ident := s.store.GetIdentity(id.Provider, id.Sub); ident != nil {
 		if u := s.store.GetByID(ident.UserID); u != nil {
+			// A first login can arrive with no email — GitHub only reveals one if the
+			// account made it public — and we store a placeholder so the UNIQUE column
+			// holds. Once the IdP does hand us a real address, adopt it, or the operator
+			// is stuck looking at "@sso.invalid" forever. Still never across accounts:
+			// only if the address is free.
+			if isPlaceholderEmail(u.Email) {
+				if real := strings.ToLower(strings.TrimSpace(id.Email)); real != "" {
+					if other := s.store.GetByEmail(real); other == nil {
+						if err := s.store.SetEmail(u.ID, real); err == nil {
+							s.store.LinkIdentity(id.Provider, id.Sub, u.ID, real) //nolint:errcheck
+							s.store.LogEvent("email_resolved", u.ID, "placeholder replaced by "+id.Provider+" address")
+							u = s.store.GetByID(u.ID)
+						}
+					}
+				}
+			}
 			return u, "", nil
 		}
 	}
