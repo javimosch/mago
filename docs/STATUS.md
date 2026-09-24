@@ -150,7 +150,7 @@ its progress log; lessons = `.mago/skills/<name>/SKILL.md` with an always-in-con
 
 - **`mago-platform`** (own Go module): accounts (email/password, bcrypt, JWT), **SQLite** store,
   **Stripe** checkout + webhook → activation + license, daemon `start/stop/status`. Deployed on
-  the dk1 VM behind Traefik at **https://mago.intrane.fr** (test-mode Stripe).
+  a VM behind Traefik at **https://mago.intrane.fr** (test-mode Stripe).
 - **GitHub App webhook relay**: the worker dials out (`mago serve --relay`, NDJSON over HTTP, no
   WebSocket dep); the platform owns one GitHub App ingress and streams matching repo events to
   the NAT'd worker — **removes the per-worker tunnel**. License-gated (`401`/`403`).

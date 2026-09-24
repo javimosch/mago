@@ -1,9 +1,8 @@
 /mago
+/mago-platform
 /poc/
 *.test
-platform/.env
 .env
-/mago-platform
 *.db
 *.db-wal
 *.db-shm
@@ -13,3 +12,4 @@ cover.html
 .devin/
 .claude/
 .am-summary
+.mago/config.json
