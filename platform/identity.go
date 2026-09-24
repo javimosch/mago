@@ -131,3 +131,65 @@ func (s *Store) RedeemClaimCode(code string) *User {
 func (s *Store) PurgeExpiredClaimCodes() {
 	s.db.Exec("DELETE FROM claim_codes WHERE expires_at < ?", time.Now().Add(-24*time.Hour).Unix()) //nolint:errcheck
 }
+
+// WorkerNode is one machine that has connected to the relay for an account.
+type WorkerNode struct {
+	Name      string // worker id, usually the machine's hostname
+	Repos     string // repos it was entitled to at connect time
+	LastSeen  int64  // unix seconds of the most recent connect or disconnect
+	Connected bool   // whether the most recent event was a connect
+}
+
+// WorkerNodes reconstructs the fleet from the event log rather than tracking live sockets, so
+// it survives a platform restart and reports the same thing the operator would read out of a
+// worker's own log. A machine that connected and never disconnected reads as connected; one
+// whose last event was a disconnect reads as offline with the time it went.
+func (s *Store) WorkerNodes(accountID int64, limit int) []WorkerNode {
+	// Tie-break on id: a connect and a disconnect can land in the SAME second (a restart, a
+	// flapping link), and with ts alone the row order is undefined — the panel would then show
+	// a machine as connected when its last act was to disconnect.
+	rows, err := s.db.Query(`SELECT kind, detail, ts FROM events
+	    WHERE user_id = ? AND kind IN ('worker_connect','worker_disconnect')
+	    ORDER BY ts DESC, id DESC LIMIT 500`, accountID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	at := map[string]int{} // name -> index in out
+	var out []WorkerNode
+	for rows.Next() {
+		var kind, detail string
+		var ts int64
+		if rows.Scan(&kind, &detail, &ts) != nil {
+			continue
+		}
+		// detail is "<worker> · repos=a,b" on connect and bare "<worker>" on disconnect.
+		name, repos := detail, ""
+		if i := strings.Index(detail, " · repos="); i >= 0 {
+			name, repos = detail[:i], strings.TrimPrefix(detail[i:], " · repos=")
+		}
+		name, repos = strings.TrimSpace(name), strings.TrimSpace(repos)
+		if name == "" {
+			continue
+		}
+		if i, ok := at[name]; ok {
+			// Already have this machine's current state from a newer row. Keep reading older
+			// ones only to recover the repo list: a disconnect carries no repos, so an offline
+			// machine would otherwise show a blank cell instead of what it last worked on.
+			if out[i].Repos == "" && repos != "" {
+				out[i].Repos = repos
+			}
+			continue
+		}
+		if len(out) >= limit {
+			continue // still scan, so an already-listed machine can pick up its repos
+		}
+		at[name] = len(out)
+		out = append(out, WorkerNode{
+			Name: name, Repos: repos, LastSeen: ts,
+			Connected: kind == "worker_connect",
+		})
+	}
+	return out
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // signup_page.go renders the three browser pages of the web-signup flow. They are built by
@@ -37,6 +38,13 @@ func (s *server) signupShell(title, body string) string {
   background: #0b0b12; border: 1px solid rgba(124,58,237,.4); border-radius: 0.8rem;
 }
 .note { border-left: 2px solid var(--acc); padding-left: 0.9rem; margin: 1.4rem 0; font-size: 0.92rem; }
+table.nodes { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1.4rem; font-size: 0.9rem; }
+table.nodes th { text-align: left; color: var(--mut); font-weight: 500; font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.04em; padding: 0.4rem 0.6rem 0.4rem 0; }
+table.nodes td { padding: 0.55rem 0.6rem 0.55rem 0; border-top: 1px solid var(--hairline); vertical-align: top; }
+table.nodes td:first-child { font-family: var(--font-mono); font-size: 0.86rem; }
+.on { color: #34d399; } .off { color: var(--mut); } .dim { color: var(--mut); }
+.warnrepo { color: #fbbf24; }
 .warn { border-left-color: #f87171; }
 </style></head><body>
 <div class="orb orb-a"></div><div class="orb orb-b"></div>
@@ -134,6 +142,8 @@ func (s *server) handleAccountPage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, s.signupShell("Your account", `<h1>Your account</h1>
 <p><strong>`+sanitizeForHTML(u.Email)+`</strong> · `+plan+` · `+linked+`</p>
 
+`+s.renderNodes(u)+`
+
 <h3 style="font-family:var(--font-display);margin-top:2rem">Attach a machine</h3>
 <p>Setup codes are single-use and expire after 15 minutes. Generate one whenever you install
 mago somewhere new.</p>
@@ -179,4 +189,52 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearSession(w)
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// renderNodes is the "is anything actually running?" panel — the first question an operator
+// has after installing, and until now answerable only by reading a log on the box.
+//
+// It also surfaces two failures that were previously invisible from the outside: a worker
+// connected with NO repos (entitlement missing, which is what a stolen installation used to
+// cause) and a worker that quietly stopped.
+func (s *server) renderNodes(u *User) string {
+	nodes := s.store.WorkerNodes(u.ID, 20)
+	if len(nodes) == 0 {
+		return `<h3 style="font-family:var(--font-display);margin-top:2rem">Connected machines</h3>
+<p class="note">No worker has connected yet. Once you run <code>mago serve --relay</code> on a
+machine, it appears here.</p>`
+	}
+	var b strings.Builder
+	b.WriteString(`<h3 style="font-family:var(--font-display);margin-top:2rem">Connected machines</h3>
+<table class="nodes"><thead><tr><th>Machine</th><th>Repos</th><th>Status</th></tr></thead><tbody>`)
+	for _, n := range nodes {
+		status := `<span class="off">last seen ` + relativeTime(n.LastSeen) + `</span>`
+		if n.Connected {
+			status = `<span class="on">connected</span> <span class="dim">· since ` + relativeTime(n.LastSeen) + `</span>`
+		}
+		repos := sanitizeForHTML(n.Repos)
+		if strings.TrimSpace(repos) == "" {
+			// Worth calling out rather than showing an empty cell: a worker with no repos is
+			// connected and idle forever, which looks like "working" from the outside.
+			repos = `<span class="warnrepo">none — run <code>mago link</code></span>`
+		}
+		b.WriteString(`<tr><td>` + sanitizeForHTML(n.Name) + `</td><td>` + repos + `</td><td>` + status + `</td></tr>`)
+	}
+	b.WriteString(`</tbody></table>`)
+	return b.String()
+}
+
+// relativeTime renders an age the way an operator reads it, not an ISO timestamp.
+func relativeTime(ts int64) string {
+	d := time.Since(time.Unix(ts, 0))
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }
