@@ -106,3 +106,77 @@ func (s *server) renderSignupError(w http.ResponseWriter, msg string) {
 <p>`+msg+`</p>
 <div class="sso"><a href="/signup">Try again</a></div>`))
 }
+
+// handleAccountPage is where a signed-in operator lands when they come back. Before this, the
+// callback rendered a setup code once and the site immediately forgot them: navigating to "/"
+// looked exactly like being signed out, and the code was unrecoverable without redoing SSO.
+func (s *server) handleAccountPage(w http.ResponseWriter, r *http.Request) {
+	u := s.sessionUser(r)
+	if u == nil {
+		http.Redirect(w, r, "/signup", http.StatusFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	plan := "48-hour trial"
+	switch u.Plan {
+	case "founding":
+		plan = "Founding operator — free during beta"
+	case "pro", "active":
+		plan = "Subscribed — €20/month"
+	}
+	linked := "not yet connected"
+	if u.LicenseKey != "" {
+		linked = "licence issued"
+	}
+	tok := s.formToken(r)
+
+	fmt.Fprint(w, s.signupShell("Your account", `<h1>Your account</h1>
+<p><strong>`+sanitizeForHTML(u.Email)+`</strong> · `+plan+` · `+linked+`</p>
+
+<h3 style="font-family:var(--font-display);margin-top:2rem">Attach a machine</h3>
+<p>Setup codes are single-use and expire after 15 minutes. Generate one whenever you install
+mago somewhere new.</p>
+<form method="POST" action="/account/code">
+  <input type="hidden" name="t" value="`+tok+`">
+  <button class="btn-primary" type="submit" style="border:0;cursor:pointer">Generate a setup code</button>
+</form>
+
+<p class="note">On the new machine:
+<code>curl -fsSL `+s.appURL+`/install.sh | sh</code> then <code>mago claim &lt;code&gt;</code>.</p>
+
+<form method="POST" action="/logout" style="margin-top:2.5rem">
+  <input type="hidden" name="t" value="`+tok+`">
+  <button class="btn-ghost" type="submit" style="border:1px solid var(--hairline);cursor:pointer">Sign out</button>
+</form>`))
+}
+
+// handleAccountCode mints a fresh setup code for the signed-in account.
+func (s *server) handleAccountCode(w http.ResponseWriter, r *http.Request) {
+	u := s.sessionUser(r)
+	if u == nil {
+		http.Redirect(w, r, "/signup", http.StatusFound)
+		return
+	}
+	if r.Method != "POST" || !s.checkFormToken(r) {
+		s.renderSignupError(w, "That request could not be verified. Please try again from your account page.")
+		return
+	}
+	code, err := s.store.MintClaimCode(u.ID)
+	if err != nil {
+		s.renderSignupError(w, "Could not issue a setup code. Please try again.")
+		return
+	}
+	s.renderClaim(w, u, code, "")
+}
+
+// handleLogout drops the browser session. The CLI credentials on any attached machine are
+// unaffected — signing out of the site is not signing out your workers.
+func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" || !s.checkFormToken(r) {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	s.clearSession(w)
+	http.Redirect(w, r, "/", http.StatusFound)
+}

@@ -181,6 +181,9 @@ func (s *server) handlePortierCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.store.PurgeExpiredClaimCodes()
+	// Keep the browser signed in, so "/" and a later visit recognise them and a fresh setup
+	// code is one click away instead of another trip through the IdP.
+	s.setSession(w, jwtSign(s.jwtSecret, u.ID, u.Email))
 	s.renderClaim(w, u, claim, note)
 }
 

@@ -42,6 +42,15 @@ func (s *server) handleLanding(w http.ResponseWriter, r *http.Request) {
 	// stray % in marketing copy must not be able to corrupt the render.
 	page := strings.ReplaceAll(siteIndex, "{{FOUNDING}}", foundingBanner(s.store.FoundingSlotsLeft()))
 	page = strings.ReplaceAll(page, "{{APP_URL}}", s.appURL)
+	// A signed-in visitor should not be told to sign in. Before this the site forgot them the
+	// moment they navigated away from the callback page.
+	navLink, navCTA := `<a href="/signup">Sign in</a>`, `<a class="nav-cta" href="/signup">Sign in with GitHub</a>`
+	if u := s.sessionUser(r); u != nil {
+		navLink = `<a href="/account">` + sanitizeForHTML(u.Email) + `</a>`
+		navCTA = `<a class="nav-cta" href="/account">Your account</a>`
+	}
+	page = strings.ReplaceAll(page, "{{NAV_LINK}}", navLink)
+	page = strings.ReplaceAll(page, "{{NAV_CTA}}", navCTA)
 	fmt.Fprint(w, page)
 }
 
