@@ -131,8 +131,12 @@ func runServer(host, port string) {
 	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
 	mux.HandleFunc("/version", s.handleVersion)  // cli-update-spec §2: what /dl/mago currently serves
 	mux.HandleFunc("/operators", s.handleOperators)
-	mux.HandleFunc("/llms.txt", s.handleLLMs)       // agent-readable onboarding (the operator "skill")
-	mux.HandleFunc("/subscribed", handleSubscribed) // Stripe success/cancel landing (CLI onboarding)
+	mux.HandleFunc("/llms.txt", s.handleLLMs)                         // agent-readable onboarding (the operator "skill")
+	mux.HandleFunc("/subscribed", handleSubscribed)                   // Stripe success/cancel landing (CLI onboarding)
+	mux.HandleFunc("/signup", s.handleSignupPage)                     // web signup: provider picker
+	mux.HandleFunc("/auth/portier/start", s.handlePortierStart)       // begin SSO (state cookie -> portier)
+	mux.HandleFunc("/auth/portier/callback", s.handlePortierCallback) // SSO return: verify, upsert, mint claim code
+	mux.HandleFunc("/api/claim", s.handleClaim)                       // `mago claim`: code -> token + license
 	mux.HandleFunc("/auth/signup", s.handleSignup)
 	mux.HandleFunc("/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/account", s.handleAccount)

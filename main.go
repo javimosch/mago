@@ -76,6 +76,8 @@ func main() {
 		err = cmdLink(os.Args[2:])
 	case "worker":
 		err = cmdWorker(os.Args[2:])
+	case "claim":
+		err = cmdClaim(os.Args[2:])
 	case "update":
 		err = cmdUpdate(os.Args[2:])
 	case "install":
@@ -167,6 +169,7 @@ Usage:
   mago feedback "<msg>" [--type bug|friction|feature|question]   report friction/bugs/requests to the mago team
 
   Binary (self-update, cli-update-spec):
+  mago claim <code>                 attach this machine to an account created at /signup
   mago update [--check] [--force]   self-update to the platform's latest release
                                     (--check exits 5 when an update is available)
   mago install [--prefix <dir>]     copy this binary into <dir>/mago (default ~/.local/bin)
