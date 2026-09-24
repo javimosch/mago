@@ -24,17 +24,46 @@ You ──(via your own agent, e.g. Claude Code)──▶ mago CLI
 Worker (your machine) ── runs agents via tau ──▶ your GitHub repos
    reads .mago/agents/*.md · takes issues · opens PRs · journals to mago-state
 
-Platform backend (ours) ── accounts + Stripe + webhook relay
+Platform backend (optional, hosted by us) ── accounts + Stripe + webhook relay
    GitHub webhook ──▶ platform ──▶ your worker (dials out, NAT-friendly)
+   Skip it: point a repo webhook straight at `mago serve` instead.
 ```
 
-## Status
+## Runs standalone — no account, no licence key
 
-Both halves are live: the **core loop** (agents shipping PRs over GitHub) and the
-**platform** (accounts, billing, license, GitHub App webhook relay) running at
-**https://mago.intrane.fr**. See [docs/STATUS.md](docs/STATUS.md) for exactly what's built.
+Everything in this repository works on its own. You need a GitHub token, `git`, and an
+LLM harness you already pay for. There is no licence check anywhere in this codebase and
+nothing phones home.
+
+```sh
+go build -o mago .
+./mago init myco
+./mago task add "Add a /health endpoint with a test" -C myco
+MAGO_PROVIDER=claude MAGO_MODEL=sonnet ./mago tick -C myco
+```
+
+For GitHub-backed work, point it at a repo and run the worker against your own webhook:
+
+```sh
+export MAGO_GH_REPO=owner/repo
+export MAGO_WEBHOOK_SECRET=$(openssl rand -hex 20)   # then set the same secret on the repo webhook
+./mago serve --port 8099 -C myco                     # POST /webhook/github
+```
+
+Label an issue `mago` and the team picks it up. Nothing above touches a hosted service.
+
+**The hosted platform is a convenience, not a requirement.** https://mago.intrane.fr sells
+accounts, billing, a GitHub App (so you skip webhook setup) and an outbound relay (so the
+worker needs no inbound port) for €20/month. `mago serve --relay` uses it. Every other
+command in this repo does not. See [NOTICE](NOTICE).
 
 ## Install
+
+```sh
+go install github.com/javimosch/mago@latest    # or: go build -o mago .
+```
+
+Or take a prebuilt binary from the hosted platform:
 
 ```sh
 curl -fsSL https://mago.intrane.fr/install.sh | sh
@@ -54,16 +83,6 @@ mago update                  # verify -> smoke-test -> atomic swap, keeping a .b
 Install it somewhere the running user can write. A root-owned prefix such as
 `/usr/local/bin` makes self-update fail for a non-root worker — see
 [docs/SELF-UPDATE.md](docs/SELF-UPDATE.md).
-
-## Quick start
-
-```sh
-go build -o mago .           # or use the installed binary
-./mago init myco
-./mago task add "Build a /health endpoint with a test" -C myco
-MAGO_PROVIDER=debri MAGO_MODEL=swe-2 ./mago run cto -C myco
-# GitHub mode: set MAGO_GH_REPO=owner/repo (tasks become issues, HITL via comments)
-```
 
 ## End-to-end examples
 
@@ -216,7 +235,7 @@ Frequent offenders:
 - **`undefined: X`** — a symbol in another file of the same package was renamed or removed;
   build the whole package with `go build ./...`, not a single file.
 - **Adding a third-party import to the core module** — this is rejected by design. The core
-  module (repo root) is **stdlib-only**; put dependency-using code in `platform/`. Verify
+  module is **stdlib-only** — it has no third-party dependencies at all. Verify
   with `go list -m all` — the root must show only `mago`. See [AGENTS.md](AGENTS.md).
 
 Reproduce exactly what the merge gate sees by enabling verification on a checkout:
@@ -268,3 +287,8 @@ Docs:
 ## Pricing
 
 Single plan, €20/month. BYOK — your LLM provider bills you for tokens directly.
+
+## Licence
+
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Use it, fork it, run it, sell
+what you build with it.

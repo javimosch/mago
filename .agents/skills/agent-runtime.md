@@ -55,7 +55,7 @@ platform) wakes it. `classifyEvent` decides whether to wake and how: `issues ope
 → reconcile; `issue_comment` by a human → wake the owning agent; `pull_request opened` →
 `reviewPR`; a **merged `mago/task-*` PR** → the CMO drafts a release note (the "beyond code" loop,
 opt-in `MAGO_COMMS=1`; `comms.go`). `--relay` makes the worker dial out to the platform instead of
-needing a public tunnel (see saas-platform.md). `--heartbeat <secs>` adds a fallback cadence.
+needing a public tunnel. `--heartbeat <secs>` adds a fallback cadence.
 
 ## Beyond code (non-engineering loops)
 
@@ -98,7 +98,8 @@ requested (overrides an LLM approve); **auto-merge requires approve AND green** 
 
 ## Provider
 
-Agents run via a **harness**. Default is **tau** (`opencode-go` / `deepseek-v4-flash` — matches the
+Agents run via a **harness**. There is no default: set `MAGO_PROVIDER`/`MAGO_MODEL` (or a
+`provider:` line in the persona). Options include **tau** (`opencode-go` / `deepseek-v4-flash` — matching the
 documented BYOK key + tau's default). Override per run/harness with `MAGO_PROVIDER` / `MAGO_MODEL`
 (tick.go `applyModelOverrides`) or per-agent frontmatter. Role flags: implementer (CTO)
 `implements: true`, planner `plans: true`, reviewer `reviews: true`.

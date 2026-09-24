@@ -1,21 +1,25 @@
 # Status — what's actually built
 
 This tracks the working system versus the design in [ARCHITECTURE.md](ARCHITECTURE.md).
-Both halves are now real: the **core loop** (agents shipping PRs over GitHub) AND the **SaaS
-platform** (accounts, billing, license, GitHub App webhook relay) — deployed live at
-**https://mago.intrane.fr** and validated end to end through it (see
-[SAAS.md](SAAS.md) / [DEPLOY.md](DEPLOY.md)). Only the live-Stripe switch (`sk_live_`) remains.
 
-## The binaries
+The **core loop** — agents routing tasks, driving a harness, and shipping pull requests over
+GitHub — is real and is what this repository contains. It runs standalone: no account, no
+licence, nothing to phone home to.
 
-Two Go modules / binaries (see `.agents/skills/core-vs-platform.md`): **`mago`** (client +
-worker, open-source core, no third-party Go modules) and **`mago-platform`** (operator-private control plane,
-own module). `mago` commands:
+A **hosted platform** (accounts, billing, licence, GitHub App webhook relay) also exists at
+https://mago.intrane.fr. It is a separate, private codebase and an optional convenience: it
+saves you configuring a repo webhook and opening a port. The commands marked *hosted* below are
+the only ones that touch it.
+
+## The binary
+
+**`mago`** — one static binary, stdlib-only, no third-party Go modules
+(see `.agents/skills/core-vs-platform.md`). Commands:
 
 | Command | What it does |
 |---|---|
-| `mago register` / `login` / `subscribe` / `billing` / `account status` | platform account (token+license in `~/.mago/config.json`) |
-| `mago link --installation <id>` / `link list` | claim a GitHub App installation (entitles your repos) |
+| `mago register` / `login` / `subscribe` / `billing` / `account status` | *hosted* — platform account (token+license in `~/.mago/config.json`) |
+| `mago link --installation <id>` / `link list` | *hosted* — claim a GitHub App installation (entitles your repos) |
 | `mago init [dir]` | scaffold a company: `.mago/` (agents, skills, runs, inbox), `STATE.md`, `tasks/`, `workspace/`, `projects/` |
 | `mago task add "<title>" [--project p]` | create a task (local file or GitHub issue) |
 | `mago project add <name> --repo owner/repo [--mirror]` / `add owner/repo` / `project list` | register/inspect a project (maps to a GitHub repo for clone→PR) |
@@ -38,11 +42,12 @@ own module). `mago` commands:
 | `mago guide [--human]` / `mago help-json` | embedded agent guide + machine-readable command catalog (cli-guide-spec / cli-output-spec) |
 
 Env knobs (BYOK — keys stay on this machine, used by tau):
-`MAGO_PROVIDER` / `MAGO_MODEL` (override the agent's tau provider/model),
-the tau provider key for `opencode-go` — set it in `~/.config/tau/config.json` (`keys`, tau#30)
+`MAGO_PROVIDER` / `MAGO_MODEL` (choose the harness/model — **no default; an unset provider fails
+the tick rather than guessing**), the harness's own provider key — for tau, set it in
+`~/.config/tau/config.json` (`keys`, tau#30)
 or export `OPENCODE_API_KEY`; without either, tau uses a rate-limited keyless path and heavy ticks
 fail with `code 110` (`mago serve` warns), `MAGO_GH_REPO=owner/repo` (switch the task backend to GitHub),
-`-C <dir>` / `$MAGO_COMPANY` (company directory). Requires `tau` and `gh` on `PATH`.
+`-C <dir>` / `$MAGO_COMPANY` (company directory). Requires `gh` and one harness on `PATH`.
 
 ## The tick (as built)
 
@@ -104,7 +109,7 @@ its progress log; lessons = `.mago/skills/<name>/SKILL.md` with an always-in-con
 `INDEX.md` and an LLM selector that injects only relevant full skills; episodic =
 `.mago/runs/<agent>/`. Each tick re-grounds from these files (the session is not trusted).
 
-## Verified end to end (real models, opencode-go/deepseek-v4-flash)
+## Verified end to end (real models)
 
 - No-redo, resume across stateless ticks, build-on-prior-work.
 - Claims / no-overlap; reviewer refuses another agent's in-progress task.

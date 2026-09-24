@@ -6,14 +6,13 @@ rationale, see [`../../docs/`](../../docs/).
 
 | Skill | Read it when you need to… |
 |---|---|
-| [core-vs-platform.md](core-vs-platform.md) | understand the two-module split, what lives where, and the stdlib-only-core rule |
+| [core-vs-platform.md](core-vs-platform.md) | understand the core/platform split, what lives where, and the stdlib-only-core rule |
 | [agent-runtime.md](agent-runtime.md) | understand how the worker + agent team actually run (ticks, tau, GitHub-native state, relay, routing, review) |
-| [saas-platform.md](saas-platform.md) | understand the platform: accounts, Stripe, license, GitHub App webhook relay, repo entitlement, the live deployment |
-| [cli-usage.md](cli-usage.md) | drive the `mago` / `mago-platform` CLIs (commands, config, env vars) |
-| [live-testing.md](live-testing.md) | run things for real: build, local platform, operator simulation, the live ship-code capstone |
-| [metrics.md](metrics.md) | answer "stats on mago prod/live/dk1 activity" — `mago-platform activity`, SQLite queries, health, agent throughput |
+| [cli-usage.md](cli-usage.md) | drive the `mago` CLI (commands, config, env vars) |
+| [live-testing.md](live-testing.md) | run things for real: build, operator simulation, the live ship-code capstone |
 
 **One-line mental model:** mago is a CLI platform where the operator (CEO) files GitHub issues
 and an autonomous AI agent team (CTO/CMO/Head of Product/Head of Org Engineering) ships PRs to
-their repos. The operator runs a **worker** (BYOK, on their machine); the operator-private
-**platform** handles billing + license + relaying GitHub webhooks to the NAT'd worker.
+their repos. The operator runs a **worker** (BYOK, on their machine). Optionally, a hosted
+**platform** (separate private repo) handles billing + licence + relaying GitHub webhooks to a
+NAT'd worker — everything here works without it.

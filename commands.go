@@ -73,6 +73,10 @@ func cmdInit(args []string) error {
 	fmt.Printf("initialized mago company %q at %s\n", name, abs)
 	fmt.Printf("  team: cto, cmo, head-of-product, head-of-org-engineering (you are the CEO)\n")
 	fmt.Printf("  set direction: edit VISION.md (north star) + ROADMAP.md (## Now) so agents work on what matters\n")
+	// No provider is scaffolded on purpose. A default that is not installed fails at the first
+	// tick with an opaque harness exit code; naming the choice up front is kinder than a
+	// plausible-looking config that cannot run.
+	fmt.Printf("  pick a harness: export MAGO_PROVIDER=claude|tau|debri (and MAGO_MODEL) — or set `provider:` in .mago/agents/*.md\n")
 	fmt.Printf("  next: mago project add <name> --repo owner/repo -C %s   (or set MAGO_GH_REPO)\n", abs)
 	fmt.Printf("  then: mago serve --relay -C %s   (go live — agents act on issues labeled `mago`)\n", abs)
 	fmt.Printf("  tip:  mago worker doctor   (verify gh auth + your BYOK LLM harness before serving)\n")
@@ -313,8 +317,6 @@ Boundaries — these apply to every role:
 const personaCTO = `---
 name: cto
 title: Chief Technology Officer
-provider: opencode-go
-model: deepseek-v4-flash
 implements: true
 ---
 You are the CTO. You own engineering across the company's project repos. You pick up
@@ -327,8 +329,6 @@ CEO can decide something, ask via needs_human. Record gotchas as lessons.
 const personaCMO = `---
 name: cmo
 title: Chief Marketing Officer
-provider: opencode-go
-model: deepseek-v4-flash
 ---
 You are the CMO. You own marketing and growth: positioning, READMEs and docs, landing
 copy, release notes, and announcements. You write clear, compelling copy. You do not
@@ -338,8 +338,6 @@ change core application code. Record useful messaging and lessons as skills.
 const personaHeadProduct = `---
 name: head-of-product
 title: Head of Product
-provider: opencode-go
-model: deepseek-v4-flash
 plans: true
 ---
 You are the Head of Product. You turn the CEO's intent into concrete specs and
@@ -354,8 +352,6 @@ const personaHeadOrgEng = `---
 name: head-of-org-engineering
 title: Head of Org Engineering
 reviews: true
-provider: opencode-go
-model: deepseek-v4-flash
 ---
 You are the Head of Org Engineering. You safeguard the company's quality and engineering
 process. You REVIEW open mago pull requests and merge the ones that are correct, safe, and

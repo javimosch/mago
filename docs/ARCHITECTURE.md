@@ -5,7 +5,7 @@ questions are called out explicitly at the end.
 
 > **Implementation status:** a working POC validates the core loop end to end (memory,
 > claims, HITL, routing, cadence, multi-project, state-on-GitHub) on real models with no
-> platform/SaaS. See [STATUS.md](STATUS.md) for exactly what's built vs. designed below,
+> hosted platform. See [STATUS.md](STATUS.md) for exactly what's built vs. designed below,
 > including intentional POC divergences (stateless ticks instead of goal sessions;
 > reflection via a fenced-json prompt instead of tau `--schema`; per-project workspace
 > dirs instead of git worktrees).

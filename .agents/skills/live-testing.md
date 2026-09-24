@@ -1,8 +1,8 @@
 # Live testing
 
 How to exercise mago for real. Prereqs: `tau` + `gh` on PATH and authenticated; for agent ticks
-use `MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash` (the personas' `deepseek` provider
-needs an API key and otherwise fails with tau code 110).
+set `MAGO_PROVIDER`/`MAGO_MODEL` explicitly — there is no default, and an unset provider fails
+the tick rather than guessing (e.g. `MAGO_PROVIDER=claude MAGO_MODEL=sonnet`).
 
 > **Configure your provider key or you'll get throttled.** mago's `runTau` passes no `--api-key`,
 > so tau resolves the key itself (after tau#30, precedence is: `--api-key` → config
@@ -23,21 +23,14 @@ needs an API key and otherwise fails with tau code 110).
 ## Build
 
 ```sh
-go build -o mago .                                   # core
-cd platform && go build -o ../mago-platform . && cd ..
+go build -o mago .
 ```
 
 ## Local platform smoke
 
-```sh
-cp platform/.env.example platform/.env   # fill secrets (real sk_test_ reusable from AM's .env)
-./mago-platform start --port 9100        # or: start --daemon
-curl -s localhost:9100/healthz           # ok
-# signup → account(free) → checkout(real Stripe test URL); a SIGNED stripe webhook activates:
-#   t=$(date +%s); body='{"id":"evt_x","type":"checkout.session.completed","data":{"object":{"metadata":{"user_id":"1","plan":"mago"}}}}'
-#   sig=$(printf '%s.%s' "$t" "$body" | openssl dgst -sha256 -hmac "$STRIPE_WEBHOOK_SECRET" | sed 's/.* //')
-#   curl -X POST localhost:9100/stripe/webhook -H "Stripe-Signature: t=$t,v1=$sig" --data-raw "$body"
-```
+The platform server is in the private `javimosch/mago-platform` repo; its smoke test lives
+there. Nothing below this line needs it except the capstone, which exercises the hosted path
+on purpose.
 
 ## Operator simulation (does the CLI drive itself?)
 
@@ -53,7 +46,7 @@ list` were found.)
    `mago link`, or a `repo_grant`).
 2. Start the worker against the repo, persistent, on the live relay:
    ```sh
-   MAGO_GH_REPO=javimosch/<repo> MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash \
+   MAGO_GH_REPO=javimosch/<repo> MAGO_PROVIDER=claude MAGO_MODEL=sonnet \
      MAGO_PLATFORM_URL=https://mago.intrane.fr ./mago serve --relay -C <company>
    ```
    Look for `[relay] connected to https://mago.intrane.fr for repos [...]`.

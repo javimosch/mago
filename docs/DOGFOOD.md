@@ -2,7 +2,7 @@
 
 The cheapest proof of the north star ("agents that run companies") is to let a mago company operate
 **mago's own repo**: the planner proposes improvements, the CTO ships them as PRs, the reviewer
-judges them, and the CMO announces what merges. This is real activity on `javimosch/mago` (private),
+judges them, and the CMO announces what merges. This is real activity on `javimosch/mago`,
 scoped so it's safe to leave running.
 
 ## Safety posture (current)

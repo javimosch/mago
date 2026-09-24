@@ -65,7 +65,7 @@ Env: `MAGO_COMPANY` (default `-C`), `MAGO_GH_REPO` (GitHub-backed company), `MAG
 (default `http://localhost:9100`), `MAGO_PASSWORD`, `MAGO_WEBHOOK_SECRET` (webhook HMAC for
 `mago serve`; same as `--secret`), `MAGO_UPDATE=auto` (self-update the worker binary when the
 platform advertises a newer release), `MAGO_PROVIDER`/`MAGO_MODEL` (override the
-agents' provider/model — `opencode-go`/`deepseek-v4-flash` for tau, **`claude`/`sonnet`** to run
+agents' provider/model — **required**, there is no default; **`claude`/`sonnet`** to run
 agents on Claude Code (local subscription, no API key — see agent-runtime.md "Claude Code harness"),
 or **`debri`/`SWE-1.6`** to run agents on devin via debri (local devin login, no API key — see
 agent-runtime.md "Devin harness"; requires debri v1.1.0+ and tmux)).
@@ -75,15 +75,6 @@ chmod 600) — used automatically (tau#30). Or export `OPENCODE_API_KEY` (`DEEPS
 
 ## `mago-platform` (operator)
 
-```
-mago-platform start [--port N] [--daemon]   # run the server (hotify cmd / daemon); --daemon detaches
-mago-platform stop | status                 # pidfile lifecycle (~/.mago-platform/)
-mago-platform setup-github --url https://<host> [--org <org>]   # create the GitHub App (1 click)
-mago-platform webhook add  --repo owner/repo --url https://<host> [--account <email>]   # operator-token hook
-mago-platform webhook list|rm|ping --repo owner/repo [--id N]
-```
-
-Config: `platform/.env` (gitignored) or `.env` beside the binary, or `$MAGO_PLATFORM_ENV`. Keys:
-`APP_URL`, `PORT`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MAGO`,
-`GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_ID` (+ slug/key/client from setup-github),
-`GITHUB_ENFORCE_ENTITLEMENT`, `GITHUB_TOKEN_FILE` (default `~/.github/token`), `DB_PATH`.
+The platform server lives in the private `javimosch/mago-platform` repo and is not needed to
+run anything in this one. The client side of it is `mago register/login/subscribe/account/link`
+above, plus `mago serve --relay`.

@@ -2,25 +2,25 @@
 
 How to write code in this repo. For **how mago actually works** (architecture, usage, live
 testing, SaaS vs core), read the skills in [`.agents/skills/`](.agents/skills/) and the design
-docs in [`docs/`](docs/) — start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
-[`docs/VISION.md`](docs/VISION.md), [`docs/SAAS.md`](docs/SAAS.md), [`docs/DEPLOY.md`](docs/DEPLOY.md).
+docs in [`docs/`](docs/) — start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
+[`docs/VISION.md`](docs/VISION.md).
 
 ## The one rule that matters most: core stays stdlib-only
 
-This repo is **two Go modules**, and the boundary is load-bearing:
+mago is **two Go modules in two repos**, and the boundary is load-bearing:
 
-| Module | Path | `go` | Deps | Visibility |
+| Module | Repo | `go` | Deps | Visibility |
 |---|---|---|---|---|
-| **core** (`mago`) | repo root | 1.22 | **zero external** (stdlib only) | open-sourceable |
-| **platform** (`mago-platform`) | `platform/` (own `go.mod`) | 1.25 | bcrypt, modernc sqlite | operator-private |
+| **core** (`mago`) | this one | 1.22 | **zero external** (stdlib only) | public, Apache-2.0 |
+| **platform** (`mago-platform`) | `javimosch/mago-platform` | 1.25 | bcrypt, modernc sqlite | operator-private |
 
 - **Never add a third-party dependency to the core module.** If you reach for one, either use
-  the stdlib or put the code in `platform/`. The core's value is that it's auditable, dependency-free,
-  and publishable. `go list -m all` in the root must show only `mago`.
-- The core never imports `platform/`. The platform is a separate binary + module; removing the
-  `platform/` directory must leave a clean, buildable core.
-- Build: `go build -o mago .` (core, from root) · `cd platform && go build -o ../mago-platform .`
-  (platform). Static deploy build: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`.
+  the stdlib or put the code in the platform repo. The core's value is that it's auditable,
+  dependency-free, and publishable. `go list -m all` must show only `mago`.
+- The core never imports the platform. It talks to it over HTTP, through `account.go`, and only
+  for the hosted features (account, licence, relay). Every other command works with the platform
+  absent and unreachable.
+- Build: `go build -o mago .` (from the repo root).
 
 ## Agent-first CLI
 
@@ -69,7 +69,7 @@ re-executed `mago.test` binary mid-suite.
 ## Daemon / process surface
 
 `mago-platform` (operator) has the daemon lifecycle: `start [--daemon] [--port]`, `stop`,
-`status` (`platform/daemon.go`). Keep daemon/Stripe/webhook-relay/secret logic in `platform/`
+`status`. Keep daemon/Stripe/webhook-relay/secret logic in the platform repo
 only — the `mago` client binary must never expose a platform control surface.
 
 ## Semantic exit codes
@@ -88,10 +88,10 @@ Scripts/agents branch on `$?`; keep the mapping stable.
 
 - **BYOK invariant:** the client's LLM provider key never leaves the worker and is never sent to
   the platform.
-- Client config `~/.mago/config.json` (`0600`); platform secrets in `platform/.env` (gitignored,
+- Client config `~/.mago/config.json` (`0600`); platform secrets live in the platform repo (
   never committed) and on the server beside the binary.
 - Never log or commit tokens/keys. Before every commit, scan the staged diff for `sk_`, `whsec_`,
-  `ghp_`, `-----BEGIN`, etc. `platform/.env`, `.env`, and `*.db` are gitignored — keep them so.
+  `ghp_`, `-----BEGIN`, etc. `.env` and `*.db` are gitignored — keep them so.
 
 ## External tools
 
@@ -109,16 +109,9 @@ authenticated; fail with a clear `100–109` integration error, not a crash, whe
 ## Docs discipline
 
 - Every feature ships a short doc under `docs/` (kebab-case). Keep `docs/ARCHITECTURE.md` and
-  `docs/SAAS.md` authoritative; update them when a locked decision changes.
+  `docs/STATUS.md` authoritative; update them when a locked decision changes.
 - When mago's behavior changes in a way that affects how agents operate it, update the matching
   skill in `.agents/skills/`.
-
-## Metrics / observability
-
-- Asked for **stats on prod/live/dk1 activity**? Start with `mago-platform activity` on dk1
-  (accounts breakdown + signup/subscribe/worker-connect timeline), then SQLite queries on
-  `platform.db` for anything ad-hoc. Full playbook: [`.agents/skills/metrics.md`](.agents/skills/metrics.md).
-  Read-only on prod; never print secrets.
 
 ## Runtime invariants
 

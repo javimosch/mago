@@ -1,0 +1,15 @@
+mago
+Copyright 2026 Javier Arancibia / Intrane
+
+This product includes software developed at Intrane (https://intrane.fr).
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+mago is the open-source core: the agent runtime, company model, task routing,
+skills, review/merge policy and the GitHub-backed worker. It runs standalone —
+no account, no licence key, no hosted service. You bring your own GitHub token
+and your own LLM harness.
+
+The hosted control plane at https://mago.intrane.fr (accounts, billing, the
+GitHub App and the outbound relay) is a separate, private component. It is a
+convenience, not a requirement: everything in this repository works without it.
