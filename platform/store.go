@@ -289,6 +289,13 @@ func (s *Store) Create(email, hash string) (*User, error) {
 	return s.GetByID(id), nil
 }
 
+// SetEmail replaces a user's address. Used when an SSO placeholder is upgraded to the real
+// address the IdP later supplies. Separate from Update, which only writes plan/billing.
+func (s *Store) SetEmail(id int64, email string) error {
+	_, err := s.db.Exec("UPDATE users SET email=? WHERE id=?", email, id)
+	return err
+}
+
 // SetPassword replaces a user's bcrypt hash (the operator reset path, see resetpw.go). Kept
 // separate from Update, which only writes the plan/billing columns and would silently drop a
 // password change.

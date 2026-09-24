@@ -302,3 +302,50 @@ func newTestServer(t *testing.T) *server {
 	t.Cleanup(func() { st.Close() })
 	return &server{store: st, jwtSecret: "test-secret", appURL: "https://mago.example"}
 }
+
+// TestPlaceholderEmailUpgrades: GitHub only reveals an address if the account made it public,
+// so a first login can legitimately arrive with none and we store a placeholder to satisfy the
+// UNIQUE column. When the IdP later supplies a real address, the account must adopt it —
+// otherwise the operator stares at "@sso.invalid" forever.
+func TestPlaceholderEmailUpgrades(t *testing.T) {
+	s := newTestServer(t)
+
+	first, _, err := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-100", Email: ""})
+	if err != nil {
+		t.Fatalf("first login: %v", err)
+	}
+	if !isPlaceholderEmail(first.Email) {
+		t.Fatalf("an email-less login should get a placeholder, got %q", first.Email)
+	}
+
+	second, _, err := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-100", Email: "real@corp.com"})
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("must stay the same account: %d then %d", first.ID, second.ID)
+	}
+	if second.Email != "real@corp.com" {
+		t.Errorf("placeholder should have been replaced, got %q", second.Email)
+	}
+}
+
+// TestPlaceholderUpgradeNeverStealsAnAddress: upgrading must not take an address that already
+// belongs to someone else — that would be the email-merge takeover by another route.
+func TestPlaceholderUpgradeNeverStealsAnAddress(t *testing.T) {
+	s := newTestServer(t)
+
+	owner, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-owner", Email: "taken@corp.com"})
+	ghost, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-ghost", Email: ""})
+	if !isPlaceholderEmail(ghost.Email) {
+		t.Fatalf("setup: expected a placeholder, got %q", ghost.Email)
+	}
+
+	after, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-ghost", Email: "taken@corp.com"})
+	if after.Email == "taken@corp.com" {
+		t.Error("ACCOUNT TAKEOVER: a placeholder upgrade claimed an address owned by another account")
+	}
+	if got := s.store.GetByID(owner.ID); got == nil || got.Email != "taken@corp.com" {
+		t.Error("the original owner must keep its address")
+	}
+}
