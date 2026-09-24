@@ -335,3 +335,36 @@ func TestHandleLLMs(t *testing.T) {
 		t.Errorf("body missing appURL, got: %q", body)
 	}
 }
+
+// TestInstallScriptSeedsPlatformURL guards a blocker found in live testing: the CLI's compiled
+// default platform is localhost, so a freshly installed binary sent `mago claim` to
+// http://localhost:9100 and failed with "connection refused" — then told the user to sign in
+// again at a localhost URL. The installer knows the real base; it has to write it down.
+func TestInstallScriptSeedsPlatformURL(t *testing.T) {
+	s := &server{appURL: "https://mago.example"}
+	rec := httptest.NewRecorder()
+	s.handleInstall(rec, httptest.NewRequest("GET", "/install.sh", nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, `"platform_url"`) {
+		t.Error("the installer must record which platform the binary came from")
+	}
+	if !strings.Contains(body, `$HOME/.mago/config.json`) {
+		t.Error("the seeded config should land at the path the CLI reads")
+	}
+	// Must not clobber someone who already has credentials.
+	if !strings.Contains(body, `if [ ! -f "$CFG" ]`) {
+		t.Error("seeding must be conditional on there being no existing config")
+	}
+	if !strings.Contains(body, "chmod 600") {
+		t.Error("a config that will hold a token should not be world-readable")
+	}
+	// The Go template escaping is easy to get wrong: a literal %s must survive for the shell's
+	// printf, while the platform URL is substituted by Go.
+	if !strings.Contains(body, `printf '{"platform_url":"%s"}\n' "$BASE"`) {
+		t.Errorf("the printf line did not render correctly:\n%s", body)
+	}
+	if !strings.Contains(body, `BASE="https://mago.example"`) {
+		t.Error("BASE should be the serving platform")
+	}
+}

@@ -190,6 +190,18 @@ chmod +x "$DEST/mago"
 echo "Installed: $DEST/mago"
 case ":$PATH:" in *":$DEST:"*) ;; *) echo "NOTE: add $DEST to your PATH";; esac
 "$DEST/mago" version 2>/dev/null || true
+
+# Record which platform this binary came from. Without it the CLI falls back to its compiled
+# default (localhost), so the very next command the user runs — the one printed below — fails
+# with "connection refused" and points them at a localhost signup page. Only written when no
+# config exists, so an existing install is never clobbered.
+CFG="$HOME/.mago/config.json"
+if [ ! -f "$CFG" ]; then
+  mkdir -p "$HOME/.mago"
+  printf '{"platform_url":"%%s"}\n' "$BASE" > "$CFG"
+  chmod 600 "$CFG"
+fi
+
 echo ""
 echo "Next:"
 echo "  Signed up at $BASE/signup?  Run:  mago claim <your setup code>"
