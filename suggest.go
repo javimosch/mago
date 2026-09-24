@@ -9,7 +9,7 @@ var knownCommands = []string{
 	"init", "task", "project", "run", "loop", "tick", "serve", "daemon", "status",
 	"answer", "digest", "skills", "mode", "feedback", "register", "login",
 	"subscribe", "billing", "account", "link", "worker", "update", "install",
-	"uninstall", "version", "help", "help-json", "guide",
+	"uninstall", "claim", "version", "help", "help-json", "guide",
 }
 
 // levenshtein returns the edit distance between a and b (insertions, deletions,
