@@ -22,9 +22,10 @@
     <a href="#proof">What it ships</a>
     <a href="#uses">Use cases</a>
     <a href="#start">Get started</a>
+    <a href="/signup">Sign in</a>
     <a href="#pricing">Pricing</a>
   </nav>
-  <a class="nav-cta" href="#start">Start free</a>
+  <a class="nav-cta" href="/signup">Sign in with GitHub</a>
 </header>
 
 {{FOUNDING}}
@@ -40,7 +41,7 @@
     writing the code, reviewing it, and waiting for your approval to merge.
   </p>
   <div class="cta-row">
-    <a class="btn-primary" href="#start">Start free — 48 hours, no card</a>
+    <a class="btn-primary" href="/signup">Start free with GitHub — no card</a>
     <a class="btn-ghost" href="#proof">See what it actually shipped ↓</a>
   </div>
   <p class="hero-note">
@@ -160,18 +161,23 @@
     </ul>
     <p class="fineprint">
       You do not need to "use AI agents" already. If you can copy two commands into a
-      terminal, you can run this.
+      terminal, you can run this. Prefer to stay in the terminal entirely?
+      <code>mago register</code> creates the account without the browser.
     </p>
   </div>
 
   <ol class="steps-list">
     <li>
-      <span>Install it</span>
+      <span><a href="/signup">Create your account with GitHub</a> — 48 hours free, no card.
+      You get a short setup code.</span>
+    </li>
+    <li>
+      <span>Install the CLI</span>
       <code class="cmd">curl -fsSL {{APP_URL}}/install.sh | sh</code>
     </li>
     <li>
-      <span>Create your account — 48 hours free, no card</span>
-      <code class="cmd">mago register</code>
+      <span>Attach this machine to your account, using the code from step 1</span>
+      <code class="cmd">mago claim MG-XXXX-XXXX</code>
     </li>
     <li>
       <span>Connect your repositories, then start the worker</span>
@@ -188,7 +194,7 @@
   </p>
 
   <div class="cta-row">
-    <a class="btn-primary" href="{{APP_URL}}/install.sh">Get the installer</a>
+    <a class="btn-primary" href="/signup">Sign in with GitHub</a>
     <a class="btn-ghost" href="{{APP_URL}}/operators">Read the full guide</a>
   </div>
 </section>
@@ -267,7 +273,7 @@
       <li>Bring your own LLM key — we never charge per token</li>
       <li>Cancel from the terminal, any time</li>
     </ul>
-    <a class="btn-primary" href="#start">Start the trial</a>
+    <a class="btn-primary" href="/signup">Start the trial</a>
   </div>
 </section>
 
