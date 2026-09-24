@@ -349,3 +349,101 @@ func TestPlaceholderUpgradeNeverStealsAnAddress(t *testing.T) {
 		t.Error("the original owner must keep its address")
 	}
 }
+
+// TestSessionSurvivesNavigation is the gap this fixes: signing in, then visiting "/", used to
+// look exactly like being signed out — the callback rendered one page and the site forgot you.
+func TestSessionSurvivesNavigation(t *testing.T) {
+	s := newTestServer(t)
+	u, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-sess", Email: "sess@corp.com"})
+
+	rec := httptest.NewRecorder()
+	s.setSession(rec, jwtSign(s.jwtSecret, u.ID, u.Email))
+	var c *http.Cookie
+	for _, k := range rec.Result().Cookies() {
+		if k.Name == sessionCookie {
+			c = k
+		}
+	}
+	if c == nil {
+		t.Fatal("no session cookie was set")
+	}
+	if !c.HttpOnly || c.SameSite != http.SameSiteLaxMode {
+		t.Error("the session cookie must be HttpOnly and SameSite=Lax")
+	}
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(c)
+	if got := s.sessionUser(req); got == nil || got.ID != u.ID {
+		t.Fatalf("the session should identify the account, got %v", got)
+	}
+
+	// and the landing page should say so rather than inviting them to sign in again
+	rec2 := httptest.NewRecorder()
+	s.handleLanding(rec2, req)
+	body := rec2.Body.String()
+	if !strings.Contains(body, "/account") {
+		t.Error("a signed-in visitor should be offered their account")
+	}
+	if strings.Contains(body, "{{NAV_") {
+		t.Error("nav placeholders were left unsubstituted")
+	}
+}
+
+// TestSessionIsNotAPIAuth: the cookie must never authenticate the JSON API. Keeping the two
+// separate is what removes CSRF from the API surface rather than defending against it.
+func TestSessionIsNotAPIAuth(t *testing.T) {
+	s := newTestServer(t)
+	u, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-api", Email: "api@corp.com"})
+
+	req := httptest.NewRequest("GET", "/api/account", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: jwtSign(s.jwtSecret, u.ID, u.Email)})
+	rec := httptest.NewRecorder()
+	s.handleAccount(rec, req)
+
+	if rec.Code != 401 {
+		t.Errorf("a session cookie must not authenticate the API, got %d", rec.Code)
+	}
+}
+
+// TestAccountActionsRequireFormToken: minting credentials and signing out are state-changing,
+// so a bare cross-site POST must not drive them.
+func TestAccountActionsRequireFormToken(t *testing.T) {
+	s := newTestServer(t)
+	u, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-csrf", Email: "csrf@corp.com"})
+	cookie := &http.Cookie{Name: sessionCookie, Value: jwtSign(s.jwtSecret, u.ID, u.Email)}
+
+	// no token -> refused, and no code minted
+	req := httptest.NewRequest("POST", "/account/code", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	s.handleAccountCode(rec, req)
+	if strings.Contains(rec.Body.String(), "MG-") {
+		t.Error("a setup code was minted without a form token")
+	}
+
+	// with the token -> works
+	tokReq := httptest.NewRequest("GET", "/account", nil)
+	tokReq.AddCookie(cookie)
+	tok := s.formToken(tokReq)
+	if tok == "" {
+		t.Fatal("no form token derived from the session")
+	}
+	req2 := httptest.NewRequest("POST", "/account/code", strings.NewReader("t="+tok))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req2.AddCookie(cookie)
+	rec2 := httptest.NewRecorder()
+	s.handleAccountCode(rec2, req2)
+	if !strings.Contains(rec2.Body.String(), "MG-") {
+		t.Errorf("a valid request should mint a code, got: %s", rec2.Body.String()[:200])
+	}
+}
+
+// TestAccountRedirectsWhenSignedOut: no session, no account page.
+func TestAccountRedirectsWhenSignedOut(t *testing.T) {
+	s := newTestServer(t)
+	rec := httptest.NewRecorder()
+	s.handleAccountPage(rec, httptest.NewRequest("GET", "/account", nil))
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/signup" {
+		t.Errorf("expected a redirect to /signup, got %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+}
