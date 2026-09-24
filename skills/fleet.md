@@ -124,4 +124,5 @@ No keepalive loop, no stop script, no `sleep` wrapper — the daemon supervises 
 
 ## Check in
 - Per company: `mago digest -C <company>` — backlog, PRs (24h), **shipped by mago**, HITL, budget usage.
-- Across all your workers (platform side, operator): `mago-platform activity`.
+- Across all your workers, if you use the hosted platform: the account dashboard at
+  https://mago.intrane.fr/account lists connected machines and the repos each one serves.

@@ -53,7 +53,8 @@ mago uninstall [--prefix <dir>]                 remove <prefix>/mago (no-op if a
 - `MAGO_STATE_SYNC=1` — opt-in: publish the company's STATE.md + agent-defs into the repo (mago-state /
   default branch) for cross-machine sync. OFF by default so mago never writes its own files into a
   user's project repo when operating label-scoped. State always persists locally either way.
-- Harness: `MAGO_PROVIDER` / `MAGO_MODEL` (`claude`/`sonnet`|`opus`, or `opencode-go`/`deepseek-v4-flash`);
+- Harness: `MAGO_PROVIDER` / `MAGO_MODEL` — **required, no default** (`claude`/`sonnet`|`opus`,
+  `debri`/`SWE-1.6`, or a tau provider such as `opencode-go`/`deepseek-v4-flash`);
   `OPENCODE_API_KEY` for tau; `CLAUDE_CONFIG_DIR` for Claude Code under a custom HOME.
 - Autonomy (see the `fleet` skill): `MAGO_PROACTIVE`, `MAGO_PROACTIVE_MAX`, `MAGO_COMMS`, `MAGO_NO_MERGE`,
   `MAGO_VERIFY` / `MAGO_VERIFY_CMD`, `MAGO_MERGE_UNVERIFIED`, `MAGO_DAILY_BUDGET`, `MAGO_PR_CAP`,
