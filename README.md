@@ -30,16 +30,38 @@ Platform backend (ours) ── accounts + Stripe + webhook relay
 
 ## Status
 
-**Working POC.** A single `mago` binary runs the core loop end to end on real models —
-memory/progression, claims, HITL (local + GitHub), role routing, adaptive cadence,
-multi-project, and state pushed to a `mago-state` branch — with no platform, accounts, or
-billing yet. See [docs/STATUS.md](docs/STATUS.md) for exactly what's built.
+Both halves are live: the **core loop** (agents shipping PRs over GitHub) and the
+**platform** (accounts, billing, license, GitHub App webhook relay) running at
+**https://mago.intrane.fr**. See [docs/STATUS.md](docs/STATUS.md) for exactly what's built.
+
+## Install
 
 ```sh
-go build -o mago .
+curl -fsSL https://mago.intrane.fr/install.sh | sh
+```
+
+`mago` is a single static binary, but it drives tools you supply: **`gh`** (authenticated),
+**`git`**, and one **LLM harness** — `mago worker doctor` checks all three before you serve.
+
+Already have the binary somewhere? Relocate it without sudo, and keep it current:
+
+```sh
+mago install                 # copy it to ~/.local/bin/mago (--prefix to override)
+mago update --check          # exits 5 when a newer build is published
+mago update                  # verify -> smoke-test -> atomic swap, keeping a .bak
+```
+
+Install it somewhere the running user can write. A root-owned prefix such as
+`/usr/local/bin` makes self-update fail for a non-root worker — see
+[docs/SELF-UPDATE.md](docs/SELF-UPDATE.md).
+
+## Quick start
+
+```sh
+go build -o mago .           # or use the installed binary
 ./mago init myco
 ./mago task add "Build a /health endpoint with a test" -C myco
-MAGO_PROVIDER=opencode-go MAGO_MODEL=deepseek-v4-flash ./mago run cto -C myco
+MAGO_PROVIDER=debri MAGO_MODEL=swe-2 ./mago run cto -C myco
 # GitHub mode: set MAGO_GH_REPO=owner/repo (tasks become issues, HITL via comments)
 ```
 

@@ -47,6 +47,7 @@ func cmdHelpJSON(args []string) error {
 			{"name": "loop", "description": "Run ticks on adaptive cadence"},
 			{"name": "tick", "description": "Route open tasks to best-fit agents, then run"},
 			{"name": "serve", "description": "Event-driven worker: GitHub webhooks wake a reconcile"},
+			{"name": "daemon", "description": "Daemon lifecycle: start|stop|status over /_health and /_shutdown"},
 			{"name": "status", "description": "Show STATE.md, tasks, and pending HITL"},
 			{"name": "digest", "description": "What your company did: backlog, PRs, HITL, autonomy budget"},
 			{"name": "answer", "description": "Answer a needs_human task so it resumes"},
@@ -108,6 +109,7 @@ func cmdGuide(args []string) error {
 			"merge":   "Per-PR merge policy (mago mode merge=<value>): review (mago approves/comments, a HUMAN always merges -- default, safest), verified (auto-merges ONLY when the LLM approves AND a real build/test check passes -- set MAGO_VERIFY_CMD or rely on auto-detect for known stacks), on (auto-merges on LLM approval alone, no build/test gate -- highest autonomy, least safety net). verified is a STRICTER superset of on, not a step below it: it does everything `on` does plus requires a passing check first.",
 			"github":  "GitHub-backed mode: MAGO_GH_REPO=owner/repo uses issues as tasks, labels as status. Webhook-driven via `mago serve`.",
 			"serve":   "Event-driven worker: GitHub webhooks wake a reconcile instead of polling. --daemon detaches a supervisor.",
+			"daemon":  "Daemon lifecycle per cli-daemon-spec: start|stop|status, idempotent, over /_health and /_shutdown.",
 		},
 		"commands": map[string]string{
 			"help-json": "Print the machine-readable command catalog",
@@ -120,6 +122,7 @@ func cmdGuide(args []string) error {
 			"loop":      "Run ticks on adaptive cadence",
 			"tick":      "Route open tasks to best-fit agents, then run",
 			"serve":     "Event-driven worker (webhooks)",
+			"daemon":    "Daemon lifecycle (start|stop|status)",
 			"status":    "Show state + pending HITL",
 			"digest":    "What your company did",
 			"answer":    "Answer a needs_human task",
