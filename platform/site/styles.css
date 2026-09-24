@@ -1,0 +1,250 @@
+/* mago landing — OLED black, purple mesh orbs, hairline cards.
+   Zero build step: plain CSS, system fallbacks behind the CDN fonts. */
+
+:root {
+  --bg: #050505;
+  --fg: #f2f2f7;
+  --mut: #9b9bb0;
+  --acc: #7c3aed;
+  --acc-deep: #5319e7;
+  --ok: #34d399;
+  --warn: #f87171;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --shell: rgba(255, 255, 255, 0.04);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --font-display: "Space Grotesk", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+
+.orb { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; }
+.orb-a {
+  width: 44rem; height: 44rem; top: -18rem; left: -12rem;
+  background: radial-gradient(circle, rgba(83, 25, 231, 0.32), transparent 65%);
+}
+.orb-b {
+  width: 38rem; height: 38rem; bottom: -20rem; right: -14rem;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.2), transparent 65%);
+}
+
+/* --- header --- */
+header {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  background: rgba(5, 5, 5, 0.72);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--hairline);
+}
+.brand {
+  font-family: var(--font-display); font-weight: 700; font-size: 1.15rem;
+  text-decoration: none; letter-spacing: -0.01em;
+}
+.nav-links { display: flex; gap: 1.4rem; margin-left: auto; }
+.nav-links a { color: var(--mut); text-decoration: none; font-size: 0.9rem; transition: color 0.4s var(--ease); }
+.nav-links a:hover { color: var(--fg); }
+
+.nav-cta, .btn-primary {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--acc-deep), var(--acc));
+  color: #fff; text-decoration: none; font-weight: 600;
+  transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease);
+  box-shadow: 0 4px 24px rgba(83, 25, 231, 0.35);
+}
+.nav-cta { font-size: 0.88rem; padding: 0.5rem 1.1rem; }
+.btn-primary { font-size: 1rem; padding: 0.85rem 1.7rem; }
+.nav-cta:hover, .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(83, 25, 231, 0.5); }
+.btn-ghost {
+  display: inline-flex; align-items: center; border-radius: 999px;
+  border: 1px solid var(--hairline); color: var(--mut); text-decoration: none;
+  font-size: 0.95rem; padding: 0.85rem 1.4rem;
+  transition: color 0.4s var(--ease), border-color 0.4s var(--ease);
+}
+.btn-ghost:hover { color: var(--fg); border-color: rgba(255, 255, 255, 0.25); }
+
+/* --- founding banner (injected) --- */
+.founding {
+  position: relative; z-index: 1;
+  margin: 0; padding: 0.7rem 1.5rem;
+  text-align: center; font-size: 0.9rem;
+  color: var(--fg);
+  background: linear-gradient(90deg, rgba(83, 25, 231, 0.22), rgba(124, 58, 237, 0.12));
+  border-bottom: 1px solid var(--hairline);
+}
+.founding a { color: #fff; }
+
+/* --- layout --- */
+main { position: relative; z-index: 1; }
+.hero, .band {
+  max-width: 68rem; margin: 0 auto; padding: 5rem 1.5rem;
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+.hero.in, .band.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .hero, .band { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* --- hero --- */
+.hero { padding-top: 6rem; padding-bottom: 3rem; text-align: center; }
+.hero h1 {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(2.4rem, 6.5vw, 4.2rem);
+  line-height: 1.04; letter-spacing: -0.03em; margin: 0 0 1.4rem;
+}
+.lede {
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+  color: var(--mut); max-width: 44rem; margin: 0 auto 2.2rem;
+}
+.lede strong, .hero-note strong { color: var(--fg); font-weight: 600; }
+.cta-row { display: flex; gap: 0.9rem; justify-content: center; flex-wrap: wrap; }
+.hero-note { margin-top: 1.8rem; font-size: 0.92rem; color: var(--mut); }
+
+/* --- sections --- */
+.band h2 {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: clamp(1.6rem, 3.4vw, 2.3rem);
+  letter-spacing: -0.02em; margin: 0 0 0.9rem;
+}
+.section-lede { color: var(--mut); max-width: 46rem; margin: 0 0 2.2rem; }
+.section-lede a, .proof-kicker a, .faq a, .foot-dim a, .need a { color: var(--acc); }
+
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.1rem; }
+@media (max-width: 860px) {
+  .grid-3, .grid-2 { grid-template-columns: 1fr; }
+  .nav-links { display: none; }
+}
+
+.card, .use {
+  background: var(--shell); border: 1px solid var(--hairline);
+  border-radius: 1rem; padding: 1.4rem;
+}
+.card h3, .use h3 {
+  font-family: var(--font-display); font-size: 1.05rem; font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+.card p, .use p { margin: 0; color: var(--mut); font-size: 0.94rem; }
+
+/* proof cards */
+.pr-card { display: block; text-decoration: none; transition: border-color 0.4s var(--ease), transform 0.4s var(--ease); }
+.pr-card:hover { border-color: rgba(124, 58, 237, 0.5); transform: translateY(-2px); }
+.pr-diff { font-family: var(--font-mono); font-size: 0.8rem; display: block; margin-bottom: 0.6rem; }
+.pr-diff .add { color: var(--ok); }
+.pr-diff .del { color: var(--warn); }
+.proof-kicker { margin-top: 1.4rem; color: var(--mut); font-size: 0.94rem; }
+
+/* steps */
+.step-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.9rem; height: 1.9rem; border-radius: 50%;
+  background: rgba(124, 58, 237, 0.18); color: var(--acc);
+  font-family: var(--font-mono); font-size: 0.85rem; margin-bottom: 0.8rem;
+}
+
+/* get started */
+.need { background: var(--shell); border: 1px solid var(--hairline); border-radius: 1rem; padding: 1.4rem 1.6rem; margin-bottom: 2rem; }
+.need h3 { font-family: var(--font-display); margin: 0 0 0.7rem; font-size: 1.05rem; }
+.need ul { margin: 0 0 0.9rem; padding-left: 1.1rem; color: var(--mut); }
+.need li { margin-bottom: 0.3rem; }
+.fineprint { margin: 0; font-size: 0.9rem; color: var(--fg); opacity: 0.85; }
+
+.steps-list { list-style: none; counter-reset: s; margin: 0 0 1.4rem; padding: 0; }
+.steps-list li { counter-increment: s; margin-bottom: 1.2rem; padding-left: 2.4rem; position: relative; }
+.steps-list li::before {
+  content: counter(s); position: absolute; left: 0; top: 0.1rem;
+  width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(124, 58, 237, 0.18); color: var(--acc);
+  font-family: var(--font-mono); font-size: 0.8rem;
+}
+.steps-list span { display: block; margin-bottom: 0.45rem; }
+.cmd {
+  display: block; font-family: var(--font-mono); font-size: 0.88rem;
+  background: #0b0b12; border: 1px solid var(--hairline); border-radius: 0.6rem;
+  padding: 0.7rem 0.9rem; color: var(--fg); cursor: pointer;
+  overflow-x: auto; white-space: nowrap;
+}
+.cmd:hover { border-color: rgba(124, 58, 237, 0.45); }
+.cmd[data-copied]::after { content: " ✓ copied"; color: var(--ok); }
+.check { color: var(--mut); font-size: 0.92rem; margin-bottom: 1.8rem; }
+code { font-family: var(--font-mono); font-size: 0.86em; color: var(--fg); }
+
+.tag {
+  font-family: var(--font-mono); font-size: 0.7rem; font-weight: 400;
+  color: var(--acc); background: rgba(124, 58, 237, 0.14);
+  padding: 0.15rem 0.5rem; border-radius: 999px; margin-left: 0.45rem;
+  vertical-align: middle;
+}
+
+/* faq */
+.faq details {
+  border-bottom: 1px solid var(--hairline); padding: 1rem 0;
+}
+.faq summary {
+  cursor: pointer; font-weight: 600; font-family: var(--font-display);
+  font-size: 1rem; list-style: none;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before { content: "+ "; color: var(--acc); font-family: var(--font-mono); }
+.faq details[open] summary::before { content: "− "; }
+.faq p { color: var(--mut); margin: 0.7rem 0 0; font-size: 0.95rem; }
+
+/* pricing */
+.pricing { text-align: center; }
+.price-card {
+  max-width: 24rem; margin: 1.6rem auto 0; text-align: left;
+  background: var(--shell); border: 1px solid rgba(124, 58, 237, 0.35);
+  border-radius: 1.2rem; padding: 2rem;
+}
+.price { font-family: var(--font-display); font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; }
+.price span { font-size: 1rem; color: var(--mut); font-weight: 400; }
+.price-card ul { list-style: none; padding: 0; margin: 1.2rem 0 1.6rem; }
+.price-card li { color: var(--mut); padding: 0.4rem 0; border-bottom: 1px solid var(--hairline); font-size: 0.94rem; }
+.price-card li:last-child { border-bottom: 0; }
+.price-card strong { color: var(--fg); }
+.price-card .btn-primary { width: 100%; }
+
+/* footer */
+footer {
+  position: relative; z-index: 1;
+  max-width: 68rem; margin: 0 auto; padding: 3rem 1.5rem 4rem;
+  border-top: 1px solid var(--hairline); color: var(--mut); font-size: 0.9rem;
+}
+.foot-row { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.foot-links { display: flex; gap: 1.2rem; }
+footer a { color: var(--mut); text-decoration: none; }
+footer a:hover { color: var(--fg); }
+.foot-dim { margin: 1rem 0 0; opacity: 0.7; font-size: 0.85rem; }
+
+/* --- founding banner (markup comes from foundingBanner() in founding.go) --- */
+.banner {
+  position: relative; z-index: 1;
+  padding: 0.85rem 1.5rem; text-align: center;
+  background: linear-gradient(90deg, rgba(83, 25, 231, 0.24), rgba(124, 58, 237, 0.12));
+  border-bottom: 1px solid var(--hairline);
+}
+.banner .flag { font-weight: 600; font-size: 0.95rem; }
+.banner .sub { color: var(--mut); font-size: 0.88rem; margin-top: 0.15rem; }
+.banner b { color: var(--fg); }
+.banner code {
+  display: inline-block; margin-top: 0.5rem;
+  font-family: var(--font-mono); font-size: 0.82rem;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid var(--hairline);
+  border-radius: 0.5rem; padding: 0.35rem 0.7rem; color: var(--fg);
+}

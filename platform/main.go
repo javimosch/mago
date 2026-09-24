@@ -124,6 +124,8 @@ func runServer(host, port string) {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok\n") }) // legacy, kept for existing deploy verify
 	mux.HandleFunc("/_health", handleHealth)                                                               // cli-daemon-spec §2
 	mux.HandleFunc("/_shutdown", handleShutdown(host, shutdownToken))                                      // cli-daemon-spec §3
+	mux.HandleFunc("/favicon.svg", s.handleFavicon)                                                        // site icon
+	mux.HandleFunc("/static/site.css", s.handleSiteCSS)                                                    // landing stylesheet
 	mux.HandleFunc("/", s.handleLanding)                                                                   // public landing (also catches unmatched -> 404)
 	mux.HandleFunc("/install.sh", s.handleInstall)
 	mux.HandleFunc("/dl/mago", s.handleDownload) // prebuilt CLI binary
