@@ -1,12 +1,25 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+)
+
+// The landing page lives in platform/site/ as plain files rather than a Go string literal:
+// it is marketing copy that changes often, and a 300-line const is hostile to edit. Embedded
+// so the binary stays self-contained (no assets to deploy alongside it).
+var (
+	//go:embed site/index.html
+	siteIndex string
+	//go:embed site/styles.css
+	siteCSS string
+	//go:embed site/favicon.svg
+	siteIcon string
 )
 
 // supportedPlatforms is the set of client builds published at /dl/mago (os-arch).
@@ -25,7 +38,26 @@ func (s *server) handleLanding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, landingHTML, foundingBanner(s.store.FoundingSlotsLeft()), s.appURL, s.appURL, s.appURL)
+	// Named placeholders, not fmt verbs: the page is full of CSS percentages and URLs, and a
+	// stray % in marketing copy must not be able to corrupt the render.
+	page := strings.ReplaceAll(siteIndex, "{{FOUNDING}}", foundingBanner(s.store.FoundingSlotsLeft()))
+	page = strings.ReplaceAll(page, "{{APP_URL}}", s.appURL)
+	fmt.Fprint(w, page)
+}
+
+// handleSiteCSS serves the landing stylesheet. Kept as its own route (not under the CLI
+// download tree) so it can be cached independently of the page.
+func (s *server) handleSiteCSS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	fmt.Fprint(w, siteCSS)
+}
+
+// handleFavicon serves the site icon. Without it every page load logs a 404 for /favicon.svg.
+func (s *server) handleFavicon(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	fmt.Fprint(w, siteIcon)
 }
 
 // handleInstall serves a POSIX sh installer that pulls the binary from this host.
@@ -132,55 +164,6 @@ const css = `<style>
   .banner .sub{opacity:.93;margin:.25rem 0 .65rem;font-size:.98rem}
   .banner code{background:rgba(255,255,255,.16);color:#fff;padding:.25rem .55rem;border-radius:6px;font-size:.92rem}
 </style>`
-
-const landingHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<title>mago — autonomous agents that run your company</title>` + css + `</head><body>
-%s
-<h1>mago</h1>
-<p class=tag>Cheap autonomous AI agent teams that ship code over GitHub. <b>BYOK · CLI-only · €20/month.</b></p>
-<p><span class=pill>no dashboard</span><span class=pill>BYOK — your key</span><span class=pill>Claude Code or tau</span><span class=pill>GitHub-native</span><span class=pill>agent-driven</span></p>
-<p class=muted>Prefer a managed dashboard over the CLI? <a href="https://automaintainer.intrane.fr/">Automaintainer</a> is the premium, UI-driven alternative.</p>
-
-<h2>What it is</h2>
-<p>You file work as GitHub issues; an autonomous executive team — <b>CTO, CMO, Head of Product, Head of
-Org Engineering</b> — picks them up, implements them as pull requests, reviews and merges. You're the
-<b>CEO</b>. The agents run on <b>your</b> machine via your own agent harness — <b>Claude Code</b> (Sonnet,
-on your Claude subscription) or <b><a href="https://github.com/javimosch/tau">tau</a></b> (with your
-provider key) — so it's <b>BYOK</b> and mago never resells completions. There is no web panel: you (or
-your own agent) drive everything from the <code>mago</code> CLI.</p>
-
-<h2>How it works</h2>
-<ol>
-<li>Install the CLI (below) and pick your harness — <b>Claude Code</b> (Sonnet) or <a href="https://github.com/javimosch/tau">tau</a> + your provider key.</li>
-<li><code>mago register</code> → <code>mago subscribe</code> (€20/month).</li>
-<li>Install the mago GitHub App on your repos, then <code>mago link</code>.</li>
-<li><code>mago serve --relay</code> — the worker dials out; GitHub events flow to your agents.</li>
-<li>File issues (or label them <code>mago</code>); optionally <code>mago:clarify</code> for a plan-first pass, then <code>mago:go</code>. PRs ship.</li>
-</ol>
-
-<h2>Choosing a harness</h2>
-<ul>
-<li><b>Claude Code</b> — simplest if you already have a Claude subscription. Runs your agents on
-<b>Sonnet</b>, no API key: <code>MAGO_PROVIDER=claude MAGO_MODEL=sonnet</code>.</li>
-<li><b><a href="https://github.com/javimosch/tau">tau</a></b> — bring any provider key (opencode-go,
-DeepSeek, OpenAI…). Think <b>pi</b>, but more lightweight and <b>agent-first</b> — built for agents to
-drive, not humans.</li>
-</ul>
-
-<h2>Get started</h2>
-<pre>curl -fsSL %s/install.sh | sh</pre>
-<p>Then read the <a href="%s/operators">operator guide</a> — written for the agent that will drive mago.</p>
-
-<h2>Pricing</h2>
-<p class=price>€20 / month.</p>
-<p class=muted>One flat plan. BYOK (your LLM key, your compute) — no per-token charges from us, no tiers.</p>
-<p><b>48-hour free trial — no card.</b> <code>mago register</code> and your agents can ship a real PR before you ever pay.</p>
-
-<p class=muted style="margin-top:3rem">mago · operated at <a href="%s">mago.intrane.fr</a> · onboarding is agent-driven, CLI-only.</p>
-<p class=muted>🤖 AI agents: start at <a href="/llms.txt">/llms.txt</a> · humans: the <a href="/operators">operator guide</a>.</p>
-<p class=muted>By <a href="https://automaintainer.intrane.fr/">Automaintainer</a> · Part of the <a href="https://intrane.fr">Intrane ecosystem</a>.</p>
-</body></html>`
 
 const installScript = `#!/bin/sh
 # mago CLI installer — downloads the prebuilt binary from the platform.

@@ -49,9 +49,16 @@ func foundingBanner(left int) string {
   <code>curl -fsSL mago.intrane.fr/install.sh | sh</code>
 </div>`
 	}
+	// Only show the count once the cohort has actually started filling. "10 of 10 slots left"
+	// is scarcity messaging that doubles as proof nobody has signed up — the opposite of what
+	// the banner is for. Below the cap it is real social proof and worth stating.
+	headline := "🏁 Founding operators — free during beta"
+	if left < foundingCap {
+		headline = fmt.Sprintf("🏁 Founding operators — %d of %d slots left", left, foundingCap)
+	}
 	return fmt.Sprintf(`<div class=banner>
-  <div class=flag>🏁 Founding operators — %d of %d slots left</div>
-  <div class=sub>Run your autonomous company <b>free during beta</b>, with a direct line to the founder. Shape the product that runs your company.</div>
+  <div class=flag>%s</div>
+  <div class=sub>Ship with the full team <b>free while we are in beta</b>, with a direct line to the founder.</div>
   <code>curl -fsSL mago.intrane.fr/install.sh | sh</code>
-</div>`, left, foundingCap)
+</div>`, headline)
 }

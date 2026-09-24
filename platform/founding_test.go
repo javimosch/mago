@@ -16,8 +16,18 @@ func TestFoundingBanner(t *testing.T) {
 	if !strings.Contains(left, "3 of 10 slots left") {
 		t.Errorf("banner should show remaining slots, got: %q", left)
 	}
-	if !strings.Contains(left, "free during beta") {
-		t.Errorf("banner should mention free beta, got: %q", left)
+	if !strings.Contains(left, "free") || !strings.Contains(left, "beta") {
+		t.Errorf("banner should pitch the free beta, got: %q", left)
+	}
+
+	// At the cap nobody has joined yet, so "10 of 10 slots left" would advertise zero uptake
+	// rather than scarcity. The offer is still pitched; only the count is withheld.
+	untouched := foundingBanner(foundingCap)
+	if strings.Contains(untouched, "slots left") {
+		t.Errorf("an empty cohort must not publish its count, got: %q", untouched)
+	}
+	if !strings.Contains(untouched, "Founding operators") || !strings.Contains(untouched, "free") {
+		t.Errorf("banner should still pitch the founding offer, got: %q", untouched)
 	}
 }
 

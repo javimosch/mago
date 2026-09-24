@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mago — your backlog, shipped overnight</title>
+<meta name="description" content="File a GitHub issue. Wake up to a reviewed pull request. mago runs an AI engineering team inside your repos, on your own API key. €20/month, 48-hour free trial.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+
+<div class="orb orb-a"></div>
+<div class="orb orb-b"></div>
+
+<header>
+  <a class="brand" href="/">mago</a>
+  <nav class="nav-links">
+    <a href="#proof">What it ships</a>
+    <a href="#uses">Use cases</a>
+    <a href="#start">Get started</a>
+    <a href="#pricing">Pricing</a>
+  </nav>
+  <a class="nav-cta" href="#start">Start free</a>
+</header>
+
+{{FOUNDING}}
+
+<main>
+
+<!-- ---------- HERO: outcome first, architecture later ---------- -->
+<section class="hero">
+  <h1>Your backlog, shipped overnight.</h1>
+  <p class="lede">
+    File a GitHub issue. Come back to a <strong>reviewed pull request</strong>.
+    mago runs a small AI engineering team inside your repositories — reading the issue,
+    writing the code, reviewing it, and waiting for your approval to merge.
+  </p>
+  <div class="cta-row">
+    <a class="btn-primary" href="#start">Start free — 48 hours, no card</a>
+    <a class="btn-ghost" href="#proof">See what it actually shipped ↓</a>
+  </div>
+  <p class="hero-note">
+    Runs on <strong>your</strong> machine with <strong>your</strong> LLM key. Your code never
+    passes through us, and we never resell tokens.
+  </p>
+</section>
+
+<!-- ---------- PROOF: real merged PRs, before any explanation ---------- -->
+<section id="proof" class="band">
+  <h2>Real pull requests, written by mago</h2>
+  <p class="section-lede">
+    Every one of these was opened, reviewed and merged in a public repository
+    (<a href="https://github.com/javimosch/memgraph">javimosch/memgraph</a>) from a GitHub issue,
+    by an agent reading the codebase. Nobody wrote the code by hand.
+  </p>
+
+  <div class="grid-3">
+    <a class="card pr-card" href="https://github.com/javimosch/memgraph/pull/17">
+      <span class="pr-diff"><span class="add">+297</span> <span class="del">−31</span></span>
+      <h3>Fixed a silent data-routing bug</h3>
+      <p>A registry entry recorded the wrong scope, so writes landed in an unrelated project.
+      It found the cause, fixed both code paths, and added warnings for existing bad entries.</p>
+    </a>
+    <a class="card pr-card" href="https://github.com/javimosch/memgraph/pull/23">
+      <span class="pr-diff"><span class="add">+366</span> <span class="del">−54</span></span>
+      <h3>Turned warning spam into a repair command</h3>
+      <p>Nine warnings on every single command. It narrowed them to real problems and added
+      <code>projects --repair</code> — refusing to auto-fix the ambiguous case.</p>
+    </a>
+    <a class="card pr-card" href="https://github.com/javimosch/memgraph/pull/24">
+      <span class="pr-diff"><span class="add">+144</span> <span class="del">−21</span></span>
+      <h3>Fixed an argument parser</h3>
+      <p><code>--version</code> exited with an error code. So did any flag placed before the
+      command. One fix closed two separate issues.</p>
+    </a>
+  </div>
+
+  <p class="proof-kicker">
+    It also <a href="https://github.com/javimosch/memgraph/releases/tag/v1.11.1">cut the release</a>
+    — version bump, changelog, tag, published binary and checksum.
+  </p>
+</section>
+
+<!-- ---------- WHAT YOU ACTUALLY DO ---------- -->
+<section class="band">
+  <h2>Three things you do. That's the whole job.</h2>
+  <div class="grid-3 steps">
+    <div class="card">
+      <span class="step-n">1</span>
+      <h3>Describe the work</h3>
+      <p>Open a GitHub issue like you would for a teammate. One line is enough.
+      Add the label <code>mago</code>.</p>
+    </div>
+    <div class="card">
+      <span class="step-n">2</span>
+      <h3>Let it work</h3>
+      <p>An agent picks it up, reads your codebase, writes the change, and opens a pull
+      request. A second agent reviews it against your tests.</p>
+    </div>
+    <div class="card">
+      <span class="step-n">3</span>
+      <h3>Review and merge</h3>
+      <p>You get a normal PR with a normal diff. Comment on it, ask for changes, or merge
+      it. <strong>Nothing reaches your main branch without your say-so.</strong></p>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- USE CASES: concrete, not abstract ---------- -->
+<section id="uses" class="band">
+  <h2>What people actually point it at</h2>
+  <div class="grid-2">
+    <div class="use">
+      <h3>The bug backlog nobody gets to</h3>
+      <p>Small, well-understood bugs that have sat open for months because they are never
+      the most important thing. This is where it earns its keep.</p>
+    </div>
+    <div class="use">
+      <h3>Test coverage</h3>
+      <p>"Cover the error branches in this file." Tedious, mechanical, valuable, and easy
+      to verify — the shape of task it is best at.</p>
+    </div>
+    <div class="use">
+      <h3>Papercuts</h3>
+      <p>The confusing error message. The flag that does not work. The thing everyone works
+      around and nobody schedules.</p>
+    </div>
+    <div class="use">
+      <h3>Docs that drifted</h3>
+      <p>READMEs describing a version you shipped two releases ago, command tables missing
+      half the commands.</p>
+    </div>
+    <div class="use">
+      <h3>Release chores</h3>
+      <p>Version bump, changelog, tag, publish. It can run the whole sequence and stop if
+      the build fails.</p>
+    </div>
+    <div class="use">
+      <h3>Small, specified features</h3>
+      <p>Where you can write the acceptance criteria in the issue. If you cannot describe
+      it, it will ask rather than guess.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- GET STARTED: the human funnel ---------- -->
+<section id="start" class="band start">
+  <h2>Get started in about five minutes</h2>
+
+  <div class="need">
+    <h3>What you need</h3>
+    <ul>
+      <li>A GitHub repository you can install an app on</li>
+      <li><code>git</code> and the <a href="https://cli.github.com/">GitHub CLI</a>, signed in</li>
+      <li>An LLM you already pay for — a Claude subscription, or any provider API key</li>
+    </ul>
+    <p class="fineprint">
+      You do not need to "use AI agents" already. If you can copy two commands into a
+      terminal, you can run this.
+    </p>
+  </div>
+
+  <ol class="steps-list">
+    <li>
+      <span>Install it</span>
+      <code class="cmd">curl -fsSL {{APP_URL}}/install.sh | sh</code>
+    </li>
+    <li>
+      <span>Create your account — 48 hours free, no card</span>
+      <code class="cmd">mago register</code>
+    </li>
+    <li>
+      <span>Connect your repositories, then start the worker</span>
+      <code class="cmd">mago link &amp;&amp; mago serve --relay</code>
+    </li>
+    <li>
+      <span>Label any issue <code>mago</code> — and watch the pull request arrive</span>
+    </li>
+  </ol>
+
+  <p class="check">
+    Stuck? <code>mago worker doctor</code> checks every prerequisite and tells you exactly
+    what is missing.
+  </p>
+
+  <div class="cta-row">
+    <a class="btn-primary" href="{{APP_URL}}/install.sh">Get the installer</a>
+    <a class="btn-ghost" href="{{APP_URL}}/operators">Read the full guide</a>
+  </div>
+</section>
+
+<!-- ---------- THE TEAM ---------- -->
+<section class="band">
+  <h2>The team you get</h2>
+  <p class="section-lede">
+    Four roles, each a plain markdown file you can read and edit. They share notes on what
+    they learn about your codebase, so the work gets cheaper and sharper over time.
+  </p>
+  <div class="grid-2 team">
+    <div class="use"><h3>CTO <span class="tag">writes the code</span></h3>
+      <p>Picks up engineering tasks and ships them as tested pull requests. Never merges its
+      own work — that separation is enforced, not suggested.</p></div>
+    <div class="use"><h3>Head of Org Engineering <span class="tag">reviews</span></h3>
+      <p>Reviews every pull request and runs your build and tests before approving.</p></div>
+    <div class="use"><h3>Head of Product <span class="tag">plans</span></h3>
+      <p>Turns a vague issue into a concrete spec, and asks you when something is genuinely
+      ambiguous instead of guessing.</p></div>
+    <div class="use"><h3>CMO <span class="tag">writes</span></h3>
+      <p>Release notes, README updates, announcements — the writing that never gets done.</p></div>
+  </div>
+</section>
+
+<!-- ---------- FAQ: the objections that stop people ---------- -->
+<section class="band">
+  <h2>The questions people actually ask</h2>
+  <div class="faq">
+    <details>
+      <summary>Can it merge to my main branch without me?</summary>
+      <p>Not by default. Out of the box it opens a pull request, reviews it, and stops —
+      you merge. If you later want it to merge on its own, you can turn that on, and even
+      then it only merges when your own build and tests pass.</p>
+    </details>
+    <details>
+      <summary>What if the code it writes is wrong?</summary>
+      <p>Then you close the pull request, the same as with any contributor. You are reading
+      a normal diff in GitHub before anything lands. A second agent reviews first, and your
+      test suite gates it.</p>
+    </details>
+    <details>
+      <summary>Does my source code get sent to you?</summary>
+      <p>No. The worker runs on your machine and talks to your LLM provider with your key.
+      We relay GitHub events to it and handle billing. We never see your code, and we never
+      resell tokens.</p>
+    </details>
+    <details>
+      <summary>What does it cost to run?</summary>
+      <p>€20/month for mago, plus whatever your LLM provider charges for the work it does.
+      When nothing is labelled, nothing runs, and the cost is effectively zero.</p>
+    </details>
+    <details>
+      <summary>Do I have to work from the terminal?</summary>
+      <p>Only to install it and start the worker — about three commands, once. After that
+      you live in GitHub: issues in, pull requests out.</p>
+    </details>
+    <details>
+      <summary>What if I want a dashboard instead?</summary>
+      <p>mago is deliberately GitHub-native, with no panel to babysit. If you would rather
+      have a managed UI, <a href="https://automaintainer.intrane.fr/">Automaintainer</a> is
+      the UI-driven alternative from the same workshop.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ---------- PRICING ---------- -->
+<section id="pricing" class="band pricing">
+  <h2>One plan. No tiers.</h2>
+  <div class="price-card">
+    <div class="price">€20<span>/month</span></div>
+    <ul>
+      <li><strong>48-hour free trial</strong> — no card</li>
+      <li>Unlimited repositories and projects</li>
+      <li>The whole team, every role</li>
+      <li>Bring your own LLM key — we never charge per token</li>
+      <li>Cancel from the terminal, any time</li>
+    </ul>
+    <a class="btn-primary" href="#start">Start the trial</a>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="foot-row">
+    <span>mago — operated at <a href="{{APP_URL}}">mago.intrane.fr</a></span>
+    <span class="foot-links">
+      <a href="{{APP_URL}}/operators">Guide</a>
+      <a href="https://github.com/javimosch/mago">Source</a>
+      <a href="{{APP_URL}}/llms.txt">llms.txt</a>
+    </span>
+  </div>
+  <p class="foot-dim">
+    Part of the <a href="https://intrane.fr">Intrane</a> workshop.
+    Driving this with your own coding agent? Point it at
+    <a href="{{APP_URL}}/llms.txt">llms.txt</a>.
+  </p>
+</footer>
+
+<script>
+// Reveal on scroll — IntersectionObserver only, never scroll listeners.
+const io = new IntersectionObserver((es) => {
+  for (const e of es) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}, { threshold: 0.1 });
+document.querySelectorAll('.band, .hero').forEach((el) => io.observe(el));
+
+// Click-to-copy on any command line.
+document.querySelectorAll('.cmd').forEach((el) => {
+  el.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(el.textContent.trim());
+      el.dataset.copied = 'yes';
+      setTimeout(() => delete el.dataset.copied, 1400);
+    } catch { /* clipboard blocked — the text is selectable anyway */ }
+  });
+});
+</script>
+
+</body>
+</html>
