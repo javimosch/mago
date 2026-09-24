@@ -191,8 +191,12 @@ echo "Installed: $DEST/mago"
 case ":$PATH:" in *":$DEST:"*) ;; *) echo "NOTE: add $DEST to your PATH";; esac
 "$DEST/mago" version 2>/dev/null || true
 echo ""
-echo "Next: read the operator guide -> $BASE/operators"
-echo "Then: mago register   (set your LLM key first; see the guide)"
+echo "Next:"
+echo "  Signed up at $BASE/signup?  Run:  mago claim <your setup code>"
+echo "  Prefer the terminal?        Run:  mago register"
+echo ""
+echo "Then: mago link && mago serve --relay      (mago worker doctor checks your setup)"
+echo "Guide: $BASE/operators"
 `
 
 const operatorsHTML = `<!doctype html><html lang=en><head><meta charset=utf-8>
