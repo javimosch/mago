@@ -447,3 +447,59 @@ func TestAccountRedirectsWhenSignedOut(t *testing.T) {
 		t.Errorf("expected a redirect to /signup, got %d %s", rec.Code, rec.Header().Get("Location"))
 	}
 }
+
+// TestWorkerNodesReconstructsFleet: the panel is derived from the event log rather than live
+// sockets, so it survives a platform restart. Newest event per machine wins.
+func TestWorkerNodesReconstructsFleet(t *testing.T) {
+	s := newTestServer(t)
+	u, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-nodes", Email: "nodes@corp.com"})
+
+	s.store.LogEvent("worker_connect", u.ID, "alpha · repos=acme/one,acme/two")
+	s.store.LogEvent("worker_connect", u.ID, "beta · repos=")
+	s.store.LogEvent("worker_disconnect", u.ID, "alpha")
+
+	nodes := s.store.WorkerNodes(u.ID, 10)
+	byName := map[string]WorkerNode{}
+	for _, n := range nodes {
+		byName[n.Name] = n
+	}
+	if len(byName) != 2 {
+		t.Fatalf("expected two machines, got %d: %+v", len(byName), nodes)
+	}
+	if byName["alpha"].Connected {
+		t.Error("alpha's last event was a disconnect; it should read as offline")
+	}
+	if !byName["beta"].Connected {
+		t.Error("beta never disconnected; it should read as connected")
+	}
+	if byName["alpha"].Repos != "acme/one,acme/two" {
+		t.Errorf("repos not parsed off the connect detail: %q", byName["alpha"].Repos)
+	}
+	if byName["beta"].Repos != "" {
+		t.Errorf("beta should have no repos, got %q", byName["beta"].Repos)
+	}
+}
+
+// TestAccountPageShowsNodes: a worker with no repos is connected and idle forever, which looks
+// like "working" from outside. The panel has to say so.
+func TestAccountPageShowsNodes(t *testing.T) {
+	s := newTestServer(t)
+	u, _, _ := s.upsertSSOUser(&portierIdentity{Provider: "github", Sub: "gh-panel", Email: "panel@corp.com"})
+	s.store.LogEvent("worker_connect", u.ID, "laptop-01 · repos=")
+
+	req := httptest.NewRequest("GET", "/account", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: jwtSign(s.jwtSecret, u.ID, u.Email)})
+	rec := httptest.NewRecorder()
+	s.handleAccountPage(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Connected machines") {
+		t.Error("the account page should show the fleet panel")
+	}
+	if !strings.Contains(body, "laptop-01") {
+		t.Error("the connected machine should be listed")
+	}
+	if !strings.Contains(body, "mago link") {
+		t.Error("a worker with no repos should be told how to fix it, not shown an empty cell")
+	}
+}

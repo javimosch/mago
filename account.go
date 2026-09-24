@@ -255,6 +255,7 @@ func cmdBilling(args []string) error {
 func cmdLink(args []string) error {
 	cfg := loadConfig()
 	inst := ""
+	share := ""
 	list := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -265,6 +266,11 @@ func cmdLink(args []string) error {
 			}
 		case "list", "--list":
 			list = true
+		case "--share":
+			if i+1 < len(args) {
+				share = args[i+1]
+				i++
+			}
 		}
 	}
 	var out struct {
@@ -277,6 +283,22 @@ func cmdLink(args []string) error {
 	}
 	method, path := "GET", "/api/installations"
 	var body any
+	if share != "" {
+		// Give a second account access to the same repos — a test worker alongside a prod one.
+		// Only an account that already has the installation may share it.
+		if inst == "" {
+			return &cliErr{80, "usage: mago link --installation <id> --share <email>"}
+		}
+		var sh struct {
+			SharedWith string `json:"shared_with"`
+		}
+		if err := cfg.platformDo("POST", path,
+			map[string]any{"installation_id": atoiSafe64(inst), "share_with": share}, true, &sh); err != nil {
+			return err
+		}
+		fmt.Printf("installation %s now also entitles %s\n", inst, orDefault(sh.SharedWith, share))
+		return nil
+	}
 	if !list && inst != "" {
 		method = "POST"
 		body = map[string]int64{"installation_id": atoiSafe64(inst)}

@@ -410,13 +410,35 @@ func (s *server) handleInstallations(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == "POST" {
 		var in struct {
-			InstallationID int64 `json:"installation_id"`
+			InstallationID int64  `json:"installation_id"`
+			ShareWith      string `json:"share_with"`
 		}
 		if !readJSON(w, r, &in) {
 			return
 		}
 		if in.InstallationID <= 0 {
 			httpErr(w, 400, "installation_id required")
+			return
+		}
+		// Sharing: an installation's existing member grants a second account access to the same
+		// repos — the prod-worker / test-worker case. Only a member can share, so this cannot
+		// become a way to help yourself to someone else's repositories.
+		if email := strings.ToLower(strings.TrimSpace(in.ShareWith)); email != "" {
+			if !s.store.IsInstallationMember(in.InstallationID, uid) {
+				httpErr(w, 403, "only an account that already has this installation can share it")
+				return
+			}
+			target := s.store.GetByEmail(email)
+			if target == nil {
+				httpErr(w, 404, "no account with that email — they need to sign up first")
+				return
+			}
+			if err := s.store.AddInstallationMember(in.InstallationID, target.ID); err != nil {
+				httpErr(w, 500, err.Error())
+				return
+			}
+			s.store.LogEvent("installation_shared", uid, fmt.Sprintf("installation %d -> %s", in.InstallationID, email))
+			writeJSON(w, 200, map[string]any{"ok": true, "installation_id": in.InstallationID, "shared_with": email})
 			return
 		}
 		if err := s.store.ClaimInstallation(in.InstallationID, uid); err != nil {

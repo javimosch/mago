@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS users (
   trial_ends      INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS installation_members (
+  installation_id INTEGER NOT NULL,
+  account_id      INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL,
+  PRIMARY KEY (installation_id, account_id)
+);
 CREATE TABLE IF NOT EXISTS identities (
   provider   TEXT NOT NULL,            -- github | google | intrane | oidc
   sub        TEXT NOT NULL,            -- the IdP's stable subject id, NOT the email
@@ -116,6 +122,11 @@ CREATE INDEX IF NOT EXISTS idx_gh_events_acct_ts ON gh_events (account_id, ts);`
 	}
 	// Migrate pre-trial DBs: add trial_ends if the users table predates it (ignore "duplicate column").
 	db.Exec("ALTER TABLE users ADD COLUMN trial_ends INTEGER NOT NULL DEFAULT 0")
+	// Entitlement moved from "installations.account_id owns it" to a membership table, so one
+	// installation can entitle several accounts (a prod worker and a test worker on the same
+	// repos). Backfill the existing single owner so nothing loses access on upgrade.
+	db.Exec(`INSERT OR IGNORE INTO installation_members (installation_id, account_id, created_at)
+	         SELECT installation_id, account_id, updated_at FROM installations WHERE account_id != 0`)
 	return &Store{db: db}, nil
 }
 
@@ -466,16 +477,68 @@ func (s *Store) DeleteInstallation(id int64) error {
 
 // ClaimInstallation binds an installation to a mago account. Errors if the installation is
 // unknown (the App must be installed first, so its webhook has registered it).
+// ClaimInstallation gives an account access to an installation's repos.
+//
+// This used to be an unconditional UPDATE of installations.account_id, which SILENTLY MOVED
+// the installation: the previous owner's workers stayed connected and simply went blind, with
+// repos=[] and no error anywhere. Claiming is now additive, and an installation someone else
+// already holds is refused rather than stolen — sharing is the owner's call, via ShareInstallation.
 func (s *Store) ClaimInstallation(id, accountID int64) error {
-	res, err := s.db.Exec("UPDATE installations SET account_id=?, updated_at=? WHERE installation_id=?",
-		accountID, time.Now().Unix(), id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	var n int
+	if s.db.QueryRow("SELECT COUNT(*) FROM installations WHERE installation_id=?", id).Scan(&n); n == 0 {
 		return fmt.Errorf("installation %d not found — install the GitHub App on your repos first", id)
 	}
-	return nil
+	var members int
+	s.db.QueryRow("SELECT COUNT(*) FROM installation_members WHERE installation_id=?", id).Scan(&members)
+	if members > 0 && !s.IsInstallationMember(id, accountID) {
+		return fmt.Errorf("installation %d already belongs to another account — ask its owner to run `mago link --share <your email>`", id)
+	}
+	return s.AddInstallationMember(id, accountID)
+}
+
+// AddInstallationMember grants an account access to an installation. Idempotent.
+func (s *Store) AddInstallationMember(id, accountID int64) error {
+	_, err := s.db.Exec(
+		"INSERT OR IGNORE INTO installation_members (installation_id, account_id, created_at) VALUES (?,?,?)",
+		id, accountID, time.Now().Unix())
+	if err == nil {
+		// Keep installations.account_id meaningful for older reads: first member wins, and it is
+		// never reassigned, so "who claimed this first" stays answerable.
+		s.db.Exec("UPDATE installations SET account_id=?, updated_at=? WHERE installation_id=? AND account_id=0",
+			accountID, time.Now().Unix(), id)
+	}
+	return err
+}
+
+// RemoveInstallationMember revokes an account's access.
+func (s *Store) RemoveInstallationMember(id, accountID int64) error {
+	_, err := s.db.Exec("DELETE FROM installation_members WHERE installation_id=? AND account_id=?", id, accountID)
+	return err
+}
+
+// IsInstallationMember reports whether an account already has access.
+func (s *Store) IsInstallationMember(id, accountID int64) bool {
+	var n int
+	s.db.QueryRow("SELECT COUNT(*) FROM installation_members WHERE installation_id=? AND account_id=?",
+		id, accountID).Scan(&n)
+	return n > 0
+}
+
+// InstallationsFor lists the installations an account can receive events for.
+func (s *Store) InstallationsFor(accountID int64) []int64 {
+	var out []int64
+	rows, err := s.db.Query("SELECT installation_id FROM installation_members WHERE account_id=?", accountID)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // EntitledRepos is the set of repos an account may receive relayed events for: the union of
@@ -483,7 +546,9 @@ func (s *Store) ClaimInstallation(id, accountID int64) error {
 // (operator-provisioned webhook path).
 func (s *Store) EntitledRepos(accountID int64) map[string]bool {
 	out := map[string]bool{}
-	if rows, err := s.db.Query("SELECT repos_json FROM installations WHERE account_id = ?", accountID); err == nil {
+	if rows, err := s.db.Query(`SELECT i.repos_json FROM installations i
+	    JOIN installation_members m ON m.installation_id = i.installation_id
+	    WHERE m.account_id = ?`, accountID); err == nil {
 		for rows.Next() {
 			var raw string
 			if rows.Scan(&raw) == nil {
