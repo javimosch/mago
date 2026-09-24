@@ -9,7 +9,7 @@ platform** (accounts, billing, license, GitHub App webhook relay) — deployed l
 ## The binaries
 
 Two Go modules / binaries (see `.agents/skills/core-vs-platform.md`): **`mago`** (client +
-worker, open-source core, zero deps) and **`mago-platform`** (operator-private control plane,
+worker, open-source core, no third-party Go modules) and **`mago-platform`** (operator-private control plane,
 own module). `mago` commands:
 
 | Command | What it does |
@@ -32,6 +32,10 @@ own module). `mago` commands:
 | `mago serve stop` / `serve status` | control/inspect a `--daemon` worker |
 | `mago skills [<name>]` | embedded operator guides (cli, fleet, operating), version-matched to the binary |
 | `mago feedback "<msg>" [--type t]` | report friction/bugs/requests to the mago team |
+| `mago update [--check] [--force]` | self-update to the platform's published build; `--check` exits **5** when one is available (cli-update-spec) |
+| `mago install [--prefix d]` / `uninstall` | copy this binary to `<prefix>/mago` (default `~/.local/bin`, no sudo); exits **90** on an unwritable prefix |
+| `mago daemon start\|stop\|status` | daemon lifecycle over `/_health` + `/_shutdown` (cli-daemon-spec) |
+| `mago guide [--human]` / `mago help-json` | embedded agent guide + machine-readable command catalog (cli-guide-spec / cli-output-spec) |
 
 Env knobs (BYOK — keys stay on this machine, used by tau):
 `MAGO_PROVIDER` / `MAGO_MODEL` (override the agent's tau provider/model),
