@@ -58,6 +58,7 @@ func cmdHelpJSON(args []string) error {
 			{"name": "update", "description": "Self-update this binary to the platform's latest release (--check, --force)"},
 			{"name": "install", "description": "Copy this binary into <prefix>/mago (default ~/.local/bin)"},
 			{"name": "uninstall", "description": "Remove the installed binary (no-op if absent)"},
+			{"name": "claim", "description": "Attach this machine to an account created in the browser at /signup"},
 		},
 		"exit_codes": map[string]string{
 			"0":   "success",
@@ -133,6 +134,7 @@ func cmdGuide(args []string) error {
 			"update":    "Self-update this binary (--check exits 5 when an update is available)",
 			"install":   "Copy this binary into <prefix>/mago (default ~/.local/bin)",
 			"uninstall": "Remove the installed binary",
+			"claim":     "Attach this machine to a browser-created account",
 		},
 		"examples": []string{
 			"mago init mycompany  # scaffold",
