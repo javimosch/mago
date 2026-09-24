@@ -115,3 +115,32 @@ func TestBackfillKeepsExistingOwnerEntitled(t *testing.T) {
 		t.Errorf("the pre-existing owner lost entitlement on upgrade: %v", got)
 	}
 }
+
+// TestSharedInstallationIsListed guards an inconsistency found in live testing: entitlement
+// moved to the membership table but the LISTING still read installations.account_id, so a
+// shared account received events for repos while `mago link` told it nothing was linked.
+func TestSharedInstallationIsListed(t *testing.T) {
+	st := shareTestStore(t)
+	st.UpsertInstallation(4242, "acme", []string{"acme/one"})
+	if err := st.ClaimInstallation(4242, 1); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if err := st.AddInstallationMember(4242, 2); err != nil {
+		t.Fatalf("share: %v", err)
+	}
+
+	for _, acct := range []int64{1, 2} {
+		list := st.InstallationsForAccount(acct)
+		if len(list) != 1 || list[0].ID != 4242 {
+			t.Errorf("account %d should see the installation, got %+v", acct, list)
+		}
+		if got := st.EntitledRepos(acct); !got["acme/one"] {
+			t.Errorf("account %d entitlement disagrees with its listing", acct)
+		}
+	}
+	// and a revoked account sees neither
+	st.RemoveInstallationMember(4242, 2)
+	if list := st.InstallationsForAccount(2); len(list) != 0 {
+		t.Errorf("revoked account should not list the installation, got %+v", list)
+	}
+}

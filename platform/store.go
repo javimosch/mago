@@ -586,7 +586,14 @@ func (s *Store) RevokeRepo(accountID int64, repo string) error {
 
 func (s *Store) InstallationsForAccount(accountID int64) []Installation {
 	var out []Installation
-	rows, err := s.db.Query("SELECT installation_id, account_id, github_login, repos_json FROM installations WHERE account_id = ? ORDER BY installation_id", accountID)
+	// Membership, not installations.account_id — otherwise an account that was SHARED an
+	// installation is entitled to its repos (EntitledRepos reads membership) but `mago link`
+	// reports "no GitHub App installation linked yet". The listing and the entitlement have to
+	// answer the same question.
+	rows, err := s.db.Query(`SELECT i.installation_id, i.account_id, i.github_login, i.repos_json
+	    FROM installations i
+	    JOIN installation_members m ON m.installation_id = i.installation_id
+	    WHERE m.account_id = ? ORDER BY i.installation_id`, accountID)
 	if err != nil {
 		return out
 	}
